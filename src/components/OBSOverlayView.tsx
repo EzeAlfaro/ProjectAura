@@ -8,6 +8,7 @@ interface OBSOverlayViewProps {
   selectedLang: SupportedLanguage;
   onSelectLang?: (lang: SupportedLanguage) => void;
   onExit?: () => void;
+  interimText?: string;
 }
 
 export const OBSOverlayView: React.FC<OBSOverlayViewProps> = ({
@@ -15,6 +16,7 @@ export const OBSOverlayView: React.FC<OBSOverlayViewProps> = ({
   chunks,
   selectedLang,
   onExit,
+  interimText,
 }) => {
   const [urlParams, setUrlParams] = useState({
     theme: 'dark-bar', // 'dark-bar' or 'floating'
@@ -146,6 +148,14 @@ export const OBSOverlayView: React.FC<OBSOverlayViewProps> = ({
                   </p>
                 );
               })}
+            </div>
+          )}
+
+          {/* Real-time speculative interim preview from Gemini 3.5 Live */}
+          {interimText && (
+            <div className="mt-3 pt-2 border-t border-amber-500/20 text-amber-300 font-mono italic text-lg sm:text-xl drop-shadow-md animate-pulse">
+              <span className="text-amber-400 text-sm font-sans mr-2">▶</span>
+              {interimText}
             </div>
           )}
         </div>

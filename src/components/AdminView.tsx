@@ -124,6 +124,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
   // Audio Recording & Speech Refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const soundCheckStreamRef = useRef<MediaStream | null>(null);
   const soundCheckAudioCtxRef = useRef<AudioContext | null>(null);
@@ -559,7 +560,34 @@ export const AdminView: React.FC<AdminViewProps> = ({
         setIsClipping(db >= -1);
       }, 80);
 
-      // 2. Launch resilient speech recognition
+      // 2. Launch high-fidelity 16kHz PCM AudioWorklet for Gemini 3.5 Live streaming
+      if (audioCtx.audioWorklet) {
+        try {
+          await audioCtx.audioWorklet.addModule('/worklets/pcm-processor.js');
+          const workletNode = new AudioWorkletNode(audioCtx, 'streaming-pcm-resampler');
+          workletNode.port.onmessage = (event) => {
+            if (event.data?.type === 'pcm_chunk' && event.data.buffer) {
+              const bytes = new Uint8Array(event.data.buffer);
+              let binary = '';
+              const len = bytes.byteLength;
+              for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(bytes[i]);
+              }
+              const base64 = window.btoa(binary);
+              if (wsClient) {
+                wsClient.sendPcmChunk(selectedStageId, base64);
+              }
+            }
+          };
+          source.connect(workletNode);
+          workletNodeRef.current = workletNode;
+          console.log('[AdminView] High-fidelity 16kHz PCM AudioWorklet connected to Gemini 3.5 Live pipeline');
+        } catch (e) {
+          console.warn('[AdminView] AudioWorklet init warning (fallback to WebSpeech/MediaRecorder):', e);
+        }
+      }
+
+      // 3. Launch resilient speech recognition
       createAndStartAdminRecognition();
 
       // 3. MediaRecorder chunk backup
@@ -614,6 +642,13 @@ export const AdminView: React.FC<AdminViewProps> = ({
         recognitionRef.current.abort();
       } catch (e) {}
       recognitionRef.current = null;
+    }
+
+    if (workletNodeRef.current) {
+      try {
+        workletNodeRef.current.disconnect();
+      } catch (e) {}
+      workletNodeRef.current = null;
     }
 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {

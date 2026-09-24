@@ -45,6 +45,7 @@ interface AudienceViewProps {
   intelModelUsed?: string;
   onTriggerDeepIntel?: () => void;
   isGeneratingIntel?: boolean;
+  interimText?: string;
 }
 
 export const AudienceView: React.FC<AudienceViewProps> = ({
@@ -61,6 +62,7 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
   intelModelUsed,
   onTriggerDeepIntel,
   isGeneratingIntel,
+  interimText,
 }) => {
   const [autoScroll, setAutoScroll] = useState(true);
   const [fontSize, setFontSize] = useState<'normal' | 'large' | 'cinema'>('large');
@@ -417,6 +419,19 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
                   </div>
                 );
               })
+            )}
+
+            {/* Real-time Speculative Interim Preview from Gemini 3.5 Live */}
+            {interimText && (
+              <div className="border-l-2 border-amber-400 bg-amber-400/5 rounded-r pl-3 py-2 animate-pulse transition-all">
+                <div className="flex items-center gap-2 mb-1 text-[10px] font-mono text-amber-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+                  <span className="font-bold uppercase tracking-wider">GEMINI 3.5 LIVE // PREVIEW EN TIEMPO REAL:</span>
+                </div>
+                <div className="text-amber-200 font-mono italic text-sm sm:text-base leading-relaxed">
+                  {interimText}
+                </div>
+              </div>
             )}
           </div>
 

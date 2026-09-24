@@ -110,6 +110,10 @@ export class GeminiService {
     return this.client !== null && !!this.apiKey;
   }
 
+  public getApiKey(): string | null {
+    return this.apiKey;
+  }
+
   /**
    * Process a real-time live text transcript (e.g. from browser SpeechRecognition)
    * Enriches it with Gemini translation and glossary, or fast local translation.

@@ -243,6 +243,15 @@ wss.on('connection', (ws: WebSocket) => {
           break;
         }
 
+        case 'pcm_audio_chunk': {
+          // High-precision raw 16kHz Int16 Linear PCM from AudioWorklet
+          if (message.stageId && message.pcmBase64) {
+            const buffer = Buffer.from(message.pcmBase64, 'base64');
+            await stageManager.pushPcmChunk(message.stageId, buffer);
+          }
+          break;
+        }
+
         case 'live_transcript': {
           // Direct real-time speech recognition transcript from operator microphone
           if (message.stageId && message.text) {

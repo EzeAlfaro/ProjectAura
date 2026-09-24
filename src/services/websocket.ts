@@ -11,6 +11,7 @@ export interface WSCallbacks {
   onChunkDeleted?: (chunkId: string) => void;
   onRemoteReload?: (stageId: string) => void;
   onDeepIntel?: (data: { stageId: string; takeaways: StageTakeaway[]; suggestedQuestions: StageQA[]; executiveSummary: string; intelModelUsed: string }) => void;
+  onInterim?: (data: { stageId: string; text: string }) => void;
 }
 
 export class WSClient {
@@ -85,6 +86,9 @@ export class WSClient {
             case 'remote_reload':
               this.callbacks.onRemoteReload?.(msg.stageId);
               break;
+            case 'interim':
+              this.callbacks.onInterim?.(msg);
+              break;
           }
         } catch (err) {
           console.error('[WSClient] Error parsing message:', err);
@@ -132,6 +136,14 @@ export class WSClient {
       stageId,
       base64Audio,
       mimeType
+    });
+  }
+
+  public sendPcmChunk(stageId: string, pcmBase64: string) {
+    this.send({
+      type: 'pcm_audio_chunk',
+      stageId,
+      pcmBase64
     });
   }
 

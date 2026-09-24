@@ -23,6 +23,7 @@ export function App() {
   const [executiveSummary, setExecutiveSummary] = useState<string>('');
   const [intelModelUsed, setIntelModelUsed] = useState<string>('gemini-2.5-pro');
   const [isGeneratingIntel, setIsGeneratingIntel] = useState<boolean>(false);
+  const [interimText, setInterimText] = useState<string>('');
   
   const [geminiConfigured, setGeminiConfigured] = useState<boolean>(false);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false);
@@ -81,7 +82,13 @@ export function App() {
         if ((data as any).executiveSummary) setExecutiveSummary((data as any).executiveSummary);
         if ((data as any).intelModelUsed) setIntelModelUsed((data as any).intelModelUsed);
       },
+      onInterim: (data) => {
+        if (data.stageId === selectedStageId) {
+          setInterimText(data.text);
+        }
+      },
       onCaption: (newChunk) => {
+        setInterimText('');
         setChunks((prev) => {
           // Avoid duplicate ids
           if (prev.some((c) => c.id === newChunk.id)) return prev;
@@ -143,6 +150,7 @@ export function App() {
     setTakeaways([]);
     setSuggestedQuestions([]);
     setExecutiveSummary('');
+    setInterimText('');
     wsClientRef.current?.setStage(stageId, selectedLang);
   };
 
@@ -164,6 +172,7 @@ export function App() {
           selectedLang={selectedLang}
           onSelectLang={handleSelectLang}
           onExit={() => setCurrentView('admin')}
+          interimText={interimText}
         />
       </div>
     );
@@ -219,6 +228,7 @@ export function App() {
             intelModelUsed={intelModelUsed}
             onTriggerDeepIntel={handleTriggerDeepIntel}
             isGeneratingIntel={isGeneratingIntel}
+            interimText={interimText}
           />
         )}
 

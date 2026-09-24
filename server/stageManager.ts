@@ -3,6 +3,7 @@ import { Stage, SubtitleChunk, StageTakeaway, StageQA, StageData, SupportedLangu
 import { geminiService } from './geminiService.js';
 import { SAMPLE_TALKS, SampleTalk } from './sampleAudios.js';
 import { extractTechTerms } from './glossary.js';
+import { LiveStageTranscriptionSession } from './geminiLiveTranscriber.js';
 
 export class StageManager {
   private stages: Map<string, Stage> = new Map();
@@ -13,6 +14,7 @@ export class StageManager {
   private stageIntelModel: Map<string, string> = new Map();
   private subscribers: Map<string, Set<{ ws: WebSocket; lang: SupportedLanguage }>> = new Map();
   private activeDemoTimers: Map<string, NodeJS.Timeout> = new Map();
+  private liveSessions: Map<string, LiveStageTranscriptionSession> = new Map();
 
   constructor() {
     this.initializeDefaultStages();
@@ -258,6 +260,62 @@ export class StageManager {
     stage.detectedLang = chunk.sourceLang as 'es' | 'en' | 'pt';
 
     this.addChunkToStage(stageId, chunk);
+  }
+
+  public async pushPcmChunk(stageId: string, pcmChunk: Buffer) {
+    let stage = this.stages.get(stageId);
+    if (!stage) {
+      stage = this.createStage({
+        id: stageId,
+        name: `Sala ${stageId.replace('stage-', '').toUpperCase()}`,
+        track: 'Track General',
+        speaker: 'Orador en Vivo',
+        talkTitle: 'Transmisión de Conferencia'
+      });
+    }
+
+    this.stopDemo(stageId);
+    stage.isLive = true;
+    stage.currentAudioSource = 'mic';
+
+    let session = this.liveSessions.get(stageId);
+    if (!session) {
+      const apiKey = geminiService.getApiKey();
+      if (!apiKey) {
+        // Fallback: convert/send via audio chunk if no live API key
+        return;
+      }
+
+      session = new LiveStageTranscriptionSession({
+        apiKey,
+        stageId,
+        mode: 'SMART',
+        onInterim: (text: string) => {
+          this.broadcastToStage(stageId, {
+            type: 'interim',
+            stageId,
+            text
+          });
+        },
+        onFinal: (chunk: SubtitleChunk) => {
+          this.addChunkToStage(stageId, chunk);
+        },
+        onError: (err) => {
+          console.warn(`[StageManager:${stageId}] Gemini Live error:`, err);
+        }
+      });
+
+      this.liveSessions.set(stageId, session);
+      try {
+        await session.connect();
+      } catch (e) {
+        console.error(`[StageManager:${stageId}] Failed to connect Gemini Live session:`, e);
+        this.liveSessions.delete(stageId);
+        return;
+      }
+    }
+
+    session.sendPcmChunk(pcmChunk);
   }
 
   public addChunkToStage(stageId: string, chunk: SubtitleChunk) {
