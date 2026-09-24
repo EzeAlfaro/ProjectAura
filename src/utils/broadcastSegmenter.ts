@@ -19,7 +19,7 @@ const ENGLISH_CONNECTORS = new Set([
 ]);
 
 export const BROADCAST_STANDARDS = {
-  MAX_CHARS_PER_LINE: 37, // CEA-708 & BBC standard limit
+  MAX_CHARS_PER_LINE: 42, // CEA-708 & BBC standard limit (2 lines ~80 chars)
   MAX_LINES: 2,
   READING_CPS: 16,        // 16 characters per second (~170 WPM)
   AUTO_CLEAR_TIMEOUT_MS: 5500, // 5.5s silence = fade out
@@ -32,10 +32,65 @@ export interface SegmenterConfig {
 }
 
 const DEFAULT_CONFIG: Required<SegmenterConfig> = {
-  maxWords: 7,
-  maxChars: 44,
-  minWordsBeforeCut: 4,
+  maxWords: 13,
+  maxChars: 75,
+  minWordsBeforeCut: 7,
 };
+
+/**
+ * Phonetic Tech Normalizer (Spanglish IT Auto-Corrector)
+ * Corrects Spanish phonetic misrecognitions of English IT technical terms
+ * (e.g. "hitlab" -> "GitLab", "jijab" -> "GitHub", "cobernetes" -> "Kubernetes", "diploy" -> "deploy").
+ */
+export const PHONETIC_TECH_RULES: Array<{ pattern: RegExp; replacement: string }> = [
+  // Git & DevOps Platforms
+  { pattern: /\b(hitlab|jitlab|git\s*lab|guid\s*lab|jit\s*lab|jilab|hit\s*lab)\b/gi, replacement: 'GitLab' },
+  { pattern: /\b(jijab|gijab|git\s*jab|hit\s*hub|guid\s*hub|jit\s*hub)\b/gi, replacement: 'GitHub' },
+  { pattern: /\b(gitops|git\s*ops)\b/gi, replacement: 'GitOps' },
+  { pattern: /\b(pul\s*riquest|purriquest|pul\s*request|pull\s*riquest|pulrequest)\b/gi, replacement: 'Pull Request' },
+  { pattern: /\b(merch|mersh|mergear|mergeado)\b/gi, replacement: 'merge' },
+  { pattern: /\b(comit|comits)\b/gi, replacement: 'commit' },
+  { pattern: /\b(reposs|repos|repoz)\b/gi, replacement: 'repositorio' },
+
+  // Containers, Cloud & Infrastructure
+  { pattern: /\b(cobernetes|cuvernetes|cuvernetis|kubernetis|covernetes|cobernetis)\b/gi, replacement: 'Kubernetes' },
+  { pattern: /\b(doquer|docte|docter|doquers)\b/gi, replacement: 'Docker' },
+  { pattern: /\b(diploy|de\s*ploy|diployar|deployar|diploye|deploye)\b/gi, replacement: 'deploy' },
+  { pattern: /\b(claster|clastes)\b/gi, replacement: 'cluster' },
+  { pattern: /\b(claud|clau)\b/gi, replacement: 'Cloud' },
+  { pattern: /\b(paiplain|pai\s*plain|payplain|pay\s*plain)\b/gi, replacement: 'pipeline' },
+  { pattern: /\b(evepefe|e\s*b\s*p\s*f|e\s*ve\s*pe\s*fe)\b/gi, replacement: 'eBPF' },
+  { pattern: /\b(ansibl|ansible|anzible)\b/gi, replacement: 'Ansible' },
+  { pattern: /\b(terrafom|terrafor|terrafon)\b/gi, replacement: 'Terraform' },
+  { pattern: /\b(promitius|promitiu|prometeus)\b/gi, replacement: 'Prometheus' },
+  { pattern: /\b(grefana|grafana)\b/gi, replacement: 'Grafana' },
+
+  // Architecture, Web & DBs
+  { pattern: /\b(baquen|vaquend|baquend|back\s*end)\b/gi, replacement: 'backend' },
+  { pattern: /\b(fronen|fronten|front\s*end)\b/gi, replacement: 'frontend' },
+  { pattern: /\b(posgres|posgre|posgrez|postgre)\b/gi, replacement: 'PostgreSQL' },
+  { pattern: /\b(rredis|rediss)\b/gi, replacement: 'Redis' },
+  { pattern: /\b(grafql|graf\s*ql|grefql)\b/gi, replacement: 'GraphQL' },
+  { pattern: /\b(nobase|node\s*js|no\s*yes|nout\s*yes)\b/gi, replacement: 'Node.js' },
+  { pattern: /\b(paiton|paitom|paito)\b/gi, replacement: 'Python' },
+  { pattern: /\b(ras|rasta)\s+(lang|lenguaje|código)?\b/gi, replacement: 'Rust' },
+  { pattern: /\b(tai\s*escript|taiescript|type\s*script)\b/gi, replacement: 'TypeScript' },
+
+  // AI & Community
+  { pattern: /\b(llm|yeleeme|ele\s*ele\s*eme)\b/gi, replacement: 'LLM' },
+  { pattern: /\b(open\s*sors|opensors|open\s*sor)\b/gi, replacement: 'Open Source' },
+  { pattern: /\b(sisarmy|sis\s*armi|sisarmi|cissarmy)\b/gi, replacement: 'Sysarmy' },
+  { pattern: /\b(nerdiarla|nerdear\s*la|nerd\s*arla|nerd\s*diarla)\b/gi, replacement: 'Nerdearla' }
+];
+
+export function normalizePhoneticTechTerms(text: string): string {
+  if (!text) return '';
+  let normalized = text;
+  for (const rule of PHONETIC_TECH_RULES) {
+    normalized = normalized.replace(rule.pattern, rule.replacement);
+  }
+  return normalized;
+}
 
 /**
  * Finds a natural break point in speech text.

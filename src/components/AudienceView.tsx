@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { getExportUrl } from '../services/api.js';
 import { RackUnit, HexScrew } from './HardwareControls.js';
+import { normalizePhoneticTechTerms } from '../utils/broadcastSegmenter.js';
 
 interface AudienceViewProps {
   stages: Stage[];
@@ -95,17 +96,23 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
   }, [chunks]);
 
   const getDisplayText = (chunk: SubtitleChunk): string => {
+    let raw = '';
     switch (selectedLang) {
       case 'es':
-        return chunk.esText || chunk.originalText;
+        raw = chunk.esText || chunk.originalText;
+        break;
       case 'en':
-        return chunk.enText || chunk.originalText;
+        raw = chunk.enText || chunk.originalText;
+        break;
       case 'pt':
-        return chunk.ptText || chunk.esText || chunk.originalText;
+        raw = chunk.ptText || chunk.esText || chunk.originalText;
+        break;
       case 'original':
       default:
-        return chunk.originalText;
+        raw = chunk.originalText;
+        break;
     }
+    return normalizePhoneticTechTerms(raw);
   };
 
   const getFontSizeClass = () => {
@@ -374,33 +381,40 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
               chunks.map((chunk, index) => {
                 const isLatest = index === chunks.length - 1;
                 const displayText = getDisplayText(chunk);
+                const prevChunk = index > 0 ? chunks[index - 1] : null;
+                // Group thoughts that happened within 8 seconds of each other
+                const isContinuation = prevChunk !== null && (chunk.timestamp - prevChunk.timestamp < 8000);
 
                 return (
                   <div
                     key={chunk.id}
-                    className={`transition-all duration-200 border-l-2 pl-3 py-1 ${
+                    className={`transition-all duration-200 pl-3 py-1 ${
                       isLatest
-                        ? 'border-[#00f5ff] bg-[#00f5ff]/5 rounded-r'
-                        : 'border-[#1b2230] opacity-80 hover:opacity-100'
+                        ? 'border-l-2 border-[#00f5ff] bg-[#00f5ff]/5 rounded-r mt-2'
+                        : isContinuation
+                        ? 'border-l-2 border-transparent mt-1'
+                        : 'border-l-2 border-[#1b2230] opacity-85 hover:opacity-100 mt-3 pt-1.5'
                     }`}
                   >
-                    {/* Timestamp & Speaker Tag */}
-                    <div className="flex items-center gap-2 mb-1 text-[10px] font-mono text-[#64748b]">
-                      <span className="text-[#00f5ff]">
-                        [{new Date(chunk.timestamp).toLocaleTimeString()}]
-                      </span>
-                      <span>SPEAKER: {currentStage?.speaker || 'TALK'}</span>
-                      {chunk.sourceLang && (
-                        <span className="px-1 py-0.2 bg-[#121622] rounded text-[#8b5cf6] border border-[#232b3d]">
-                          {chunk.sourceLang.toUpperCase()}
+                    {/* Timestamp & Speaker Tag (Only shown at start of a new speech block) */}
+                    {!isContinuation && (
+                      <div className="flex items-center gap-2 mb-1 text-[10px] font-mono text-[#64748b]">
+                        <span className="text-[#00f5ff]">
+                          [{new Date(chunk.timestamp).toLocaleTimeString()}]
                         </span>
-                      )}
-                      {chunk.confidence && (
-                        <span className="text-[#00ff66]">
-                          {Math.round(chunk.confidence * 100)}% CONF
-                        </span>
-                      )}
-                    </div>
+                        <span>SPEAKER: {currentStage?.speaker || 'TALK'}</span>
+                        {chunk.sourceLang && (
+                          <span className="px-1 py-0.2 bg-[#121622] rounded text-[#8b5cf6] border border-[#232b3d]">
+                            {chunk.sourceLang.toUpperCase()}
+                          </span>
+                        )}
+                        {chunk.confidence && (
+                          <span className="text-[#00ff66]">
+                            {Math.round(chunk.confidence * 100)}% CONF
+                          </span>
+                        )}
+                      </div>
+                    )}
 
                     {/* Main Rendered Text with Spanglish Glossary Highlights */}
                     <div className={`${getFontSizeClass()} text-white font-sans tracking-wide leading-relaxed`}>
@@ -409,11 +423,11 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
 
                     {/* Dual View: Display original speech alongside translation */}
                     {showOriginal && selectedLang !== 'original' && chunk.originalText && (
-                      <div className="mt-1.5 pt-1.5 border-t border-[#1b2230]/60 flex items-baseline gap-2 text-xs font-mono text-[#94a3b8] italic">
+                      <div className="mt-1 pt-1 border-t border-[#1b2230]/40 flex items-baseline gap-2 text-xs font-mono text-[#94a3b8] italic">
                         <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-[#161d2a] text-[#38bdf8] font-bold not-italic shrink-0 border border-[#243046]">
                           SRC ({chunk.sourceLang.toUpperCase()})
                         </span>
-                        <span className="leading-snug">{chunk.originalText}</span>
+                        <span className="leading-snug">{normalizePhoneticTechTerms(chunk.originalText)}</span>
                       </div>
                     )}
                   </div>

@@ -54,7 +54,7 @@ import {
   HexScrew 
 } from './HardwareControls.js';
 import { WSClient } from '../services/websocket.js';
-import { findBroadcastSplitIndex, formatBroadcastSubtitle } from '../utils/broadcastSegmenter.js';
+import { findBroadcastSplitIndex, formatBroadcastSubtitle, normalizePhoneticTechTerms } from '../utils/broadcastSegmenter.js';
 import { AddStageModal } from './AddStageModal.js';
 
 interface AdminViewProps {
@@ -348,8 +348,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
   };
 
   const commitAdminPhrase = (phrase: string, lang: 'es' | 'en') => {
-    const clean = phrase.trim();
-    if (!clean) return;
+    const raw = phrase.trim();
+    if (!raw) return;
+    const clean = normalizePhoneticTechTerms(raw);
 
     if (onPushLiveTranscript) {
       onPushLiveTranscript(clean, lang);
@@ -364,8 +365,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
   /**
    * Broadcast-Grade SpeechRecognition factory for Mesa Técnica.
-   * Chunks long continuous speech into bite-sized 6-8 word broadcast subtitles.
-   * Flushes on 550ms acoustic pauses so fast speakers never generate monster paragraphs.
+   * Chunks long continuous speech into coherent 10-14 word broadcast subtitles.
+   * Natural breath pause timer (1200ms) prevents fragmented single-word cards.
    */
   const createAndStartAdminRecognition = (overrideLang?: 'es' | 'en') => {
     if (!isRecordingRef.current) return;
@@ -419,15 +420,15 @@ export const AdminView: React.FC<AdminViewProps> = ({
               committedCharsRef.current = 0;
             }
 
-            // Rapid broadcast phrase chunking: cut at 7-8 words or natural conjunctions
+            // Broadcast phrase chunking: 10-14 words for natural subtitle reading rhythm
             while (true) {
               const uncommitted = transcript.substring(committedCharsRef.current).trimStart();
               if (!uncommitted) break;
 
               const splitPos = findBroadcastSplitIndex(uncommitted, {
-                maxWords: 8,
-                maxChars: 50,
-                minWordsBeforeCut: 5,
+                maxWords: 13,
+                maxChars: 75,
+                minWordsBeforeCut: 7,
               });
 
               if (splitPos === null) break;
@@ -448,9 +449,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
             }
 
             const remaining = transcript.substring(committedCharsRef.current).trim();
-            setLiveInterimText(remaining);
+            setLiveInterimText(normalizePhoneticTechTerms(remaining));
 
-            // Fast acoustic pause detection: 550ms of silence flushes any remaining speech immediately!
+            // Natural acoustic pause detection: 1200ms of silence flushes any finished thought
             if (remaining.length > 0) {
               silenceFlushTimerRef.current = setTimeout(() => {
                 const toFlush = transcript.substring(committedCharsRef.current).trim();
@@ -459,7 +460,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   committedCharsRef.current = transcript.length;
                   setLiveInterimText('');
                 }
-              }, 550);
+              }, 1200);
             }
           }
         }

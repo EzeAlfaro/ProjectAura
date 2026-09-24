@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type, Schema } from '@google/genai';
 import { SubtitleChunk, TechTerm } from './types.js';
-import { extractTechTerms, TECH_GLOSSARY } from './glossary.js';
+import { extractTechTerms, TECH_GLOSSARY, normalizePhoneticTechTerms } from './glossary.js';
 
 const SYSTEM_INSTRUCTION = `
 You are the official real-time transcription, simultaneous translation, and technical glossary engine for the Nerdearla Tech Conference in Buenos Aires.
@@ -126,10 +126,11 @@ export class GeminiService {
   ): Promise<SubtitleChunk> {
     const chunkId = `live-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const timestamp = Date.now();
-    const cleanText = spokenText.trim();
+    const rawClean = spokenText.trim();
+    const cleanText = normalizePhoneticTechTerms(rawClean);
     const modelName = process.env.GEMINI_MODEL || 'gemini-3.5-transcribe-live';
 
-    // 1. Detect technical terms locally first
+    // 1. Detect technical terms locally first on the normalized text
     const detectedLocalTerms = extractTechTerms(cleanText);
 
     if (this.client && this.apiKey) {
