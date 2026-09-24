@@ -163,6 +163,35 @@ app.post('/api/stages/:id/remote-reload', (req: Request, res: Response) => {
   res.json({ success: true, message: `Remote reload triggered for ${req.params.id}` });
 });
 
+// Plaintext Live Subtitle Output (Direct polling for vMix Title / CasparCG / OBS Text GDI+)
+app.get('/api/stages/:id/live.txt', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const lang = (req.query.lang as SupportedLanguage) || 'es';
+  const stageData = stageManager.getStageData(id);
+  if (!stageData) {
+    return res.status(404).send('');
+  }
+  const recent = stageData.chunks.slice(-2);
+  if (recent.length === 0) {
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    return res.send('');
+  }
+
+  const lines = recent.map((c) => {
+    if (lang === 'en') return c.enText || c.originalText;
+    if (lang === 'pt') return c.ptText || c.originalText;
+    if (lang === 'original') return c.originalText;
+    return c.esText || c.originalText;
+  });
+
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.send(lines.join('\n'));
+});
+
 // Export Transcripts
 app.get('/api/stages/:id/export/:format', (req: Request, res: Response) => {
   const { id, format } = req.params;

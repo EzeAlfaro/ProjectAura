@@ -75,6 +75,33 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
   const currentStage = stages.find((s) => s.id === selectedStageId) || stages[0];
   const subtitlesContainerRef = useRef<HTMLDivElement>(null);
 
+  // Screen WakeLock: prevents attendee phone screen from sleeping while reading subtitles
+  useEffect(() => {
+    let wakeLock: any = null;
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await (navigator as any).wakeLock.request('screen');
+        }
+      } catch (e) {}
+    };
+    requestWakeLock();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wakeLock) {
+        wakeLock.release().catch(() => {});
+      }
+    };
+  }, []);
+
   // Auto-scroll to bottom as new captions arrive
   useEffect(() => {
     if (autoScroll && subtitlesContainerRef.current) {

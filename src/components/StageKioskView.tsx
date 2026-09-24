@@ -63,6 +63,7 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
     return localStorage.getItem('nerdsub_kiosk_device_id') || '';
   });
   const [audioError, setAudioError] = useState<string | null>(null);
+  const [inputSourceKind, setInputSourceKind] = useState<'mic' | 'tab'>('mic');
   const [currentDbfs, setCurrentDbfs] = useState(-60);
   const [isClipping, setIsClipping] = useState(false);
   const [liveInterimText, setLiveInterimText] = useState('');
@@ -138,6 +139,29 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
       localStorage.setItem('nerdsub_kiosk_device_id', selectedDeviceId);
     }
   }, [selectedDeviceId]);
+
+  // Screen WakeLock: Keeps Kiosk screen and Mini PC awake 24/7 during conference
+  useEffect(() => {
+    let wakeLock: any = null;
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await (navigator as any).wakeLock.request('screen');
+        }
+      } catch (e) {}
+    };
+    requestWakeLock();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') requestWakeLock();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wakeLock) wakeLock.release().catch(() => {});
+    };
+  }, []);
 
   // Auto-scroll in prompter mode
   useEffect(() => {
@@ -357,23 +381,34 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
     }
   };
 
-  const startIngest = async (deviceIdToUse?: string) => {
+  const startIngest = async (deviceIdToUse?: string, forceKind?: 'mic' | 'tab') => {
     try {
       setAudioError(null);
       setLiveInterimText('');
       isRecordingRef.current = true;
 
-      const deviceId = deviceIdToUse || selectedDeviceId;
-      const constraints: MediaStreamConstraints = {
-        audio: deviceId ? { deviceId: { ideal: deviceId } } : true,
-      };
-
+      const kind = forceKind || inputSourceKind;
       let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia(constraints);
-      } catch (err) {
-        console.warn('Could not grab specific device, falling back to default input:', err);
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      if (kind === 'tab') {
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        // Drop the video track: we only need pristine digital audio
+        stream.getVideoTracks().forEach((t) => t.stop());
+        if (stream.getAudioTracks().length === 0) {
+          throw new Error('No se detectó audio en la pestaña. Tildá la opción "Compartir audio de la pestaña" en la ventana de Chrome.');
+        }
+      } else {
+        const deviceId = deviceIdToUse || selectedDeviceId;
+        const constraints: MediaStreamConstraints = {
+          audio: deviceId ? { deviceId: { ideal: deviceId } } : true,
+        };
+
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (err) {
+          console.warn('Could not grab specific device, falling back to default input:', err);
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
       }
 
       mediaStreamRef.current = stream;
@@ -715,6 +750,40 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
         {/* Right: Stream Actions & Settings Toggle */}
         <div className="flex items-center gap-2 shrink-0">
           
+          {/* Audio Input Mode Toggle: Mic/Line vs Tab/Stream */}
+          <div className="flex items-center bg-[#07090e] p-0.5 rounded border border-[#1b2230] text-[10px] font-mono font-bold">
+            <button
+              onClick={() => {
+                if (isRecording) stopIngest();
+                setInputSourceKind('mic');
+              }}
+              className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
+                inputSourceKind === 'mic'
+                  ? 'bg-[#141b29] text-[#00f5ff] border border-[#00f5ff]/40 shadow-[0_0_8px_rgba(0,245,255,0.2)]'
+                  : 'text-[#64748b] hover:text-white'
+              }`}
+              title="Entrada física: Micrófono o Consola (Jack 3.5mm / USB Audio Interface)"
+            >
+              <Mic className="w-3 h-3" />
+              <span>MIC / JACK</span>
+            </button>
+            <button
+              onClick={() => {
+                if (isRecording) stopIngest();
+                setInputSourceKind('tab');
+              }}
+              className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
+                inputSourceKind === 'tab'
+                  ? 'bg-[#141b29] text-[#ffba00] border border-[#ffba00]/40 shadow-[0_0_8px_rgba(255,186,0,0.2)]'
+                  : 'text-[#64748b] hover:text-white'
+              }`}
+              title="Entrada digital: Pestaña del navegador / Video de YouTube de Nerdearla"
+            >
+              <Tv className="w-3 h-3" />
+              <span>PESTAÑA</span>
+            </button>
+          </div>
+
           {/* Main Ingest Start/Stop Button */}
           {isRecording ? (
             <button
@@ -729,8 +798,8 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
               onClick={() => startIngest()}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-[#00f5ff] hover:bg-[#00f5ff]/90 text-black font-mono text-xs font-black rounded shadow-[0_0_12px_rgba(0,245,255,0.4)] transition-all"
             >
-              <Mic className="w-3.5 h-3.5" />
-              <span>ARMAR_ENTRADA</span>
+              {inputSourceKind === 'tab' ? <Tv className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+              <span>{inputSourceKind === 'tab' ? 'CAPTURAR_PESTAÑA' : 'ARMAR_ENTRADA'}</span>
             </button>
           )}
 
@@ -985,6 +1054,37 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
+          </div>
+
+          {/* Audio Input Source Kind */}
+          <div className="space-y-1">
+            <label className="text-[10px] text-gray-400 uppercase">TIPO DE ENTRADA DE AUDIO:</label>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                onClick={() => {
+                  if (isRecording) stopIngest();
+                  setInputSourceKind('mic');
+                }}
+                className={`py-1.5 rounded border text-center uppercase font-bold flex items-center justify-center gap-1.5 ${
+                  inputSourceKind === 'mic' ? 'bg-[#141b29] border-[#00f5ff] text-[#00f5ff]' : 'bg-[#07090e] border-[#1e2535] text-gray-400'
+                }`}
+              >
+                <Mic className="w-3.5 h-3.5" />
+                Mic / Consola
+              </button>
+              <button
+                onClick={() => {
+                  if (isRecording) stopIngest();
+                  setInputSourceKind('tab');
+                }}
+                className={`py-1.5 rounded border text-center uppercase font-bold flex items-center justify-center gap-1.5 ${
+                  inputSourceKind === 'tab' ? 'bg-[#141b29] border-[#ffba00] text-[#ffba00]' : 'bg-[#07090e] border-[#1e2535] text-gray-400'
+                }`}
+              >
+                <Tv className="w-3.5 h-3.5" />
+                Pestaña / YouTube
+              </button>
+            </div>
           </div>
 
           {/* Audio Input Device Switcher */}
