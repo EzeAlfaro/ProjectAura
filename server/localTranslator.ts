@@ -88,7 +88,7 @@ async function fetchNeuralTranslation(text: string, fromLang: string, toLang: st
   const timeout = setTimeout(() => controller.abort(), 1800);
 
   try {
-    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${fromLang}|${toLang}`;
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${fromLang}|${toLang}&de=tech@sysarmy.com`;
     const res = await fetch(url, { signal: controller.signal });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data: any = await res.json();

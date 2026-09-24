@@ -129,7 +129,7 @@ export class GeminiService {
     const timestamp = Date.now();
     const rawClean = spokenText.trim();
     const cleanText = normalizePhoneticTechTerms(rawClean);
-    const modelName = process.env.GEMINI_MODEL || 'gemini-3.5-transcribe-live';
+    const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
     // 1. Detect technical terms locally first on the normalized text
     const detectedLocalTerms = extractTechTerms(cleanText);
@@ -213,7 +213,7 @@ export class GeminiService {
   ): Promise<SubtitleChunk> {
     const chunkId = `chunk-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const timestamp = Date.now();
-    const modelName = process.env.GEMINI_MODEL || 'gemini-3.5-transcribe-live';
+    const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
     if (!this.client || !this.apiKey) {
       // API Key not configured message - inform user honestly
