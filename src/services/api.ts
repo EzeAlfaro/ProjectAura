@@ -24,11 +24,11 @@ export async function fetchStageData(stageId: string): Promise<StageData> {
   return res.json();
 }
 
-export async function updateApiKey(apiKey: string): Promise<{ success: boolean; geminiConfigured: boolean }> {
+export async function updateApiKey(apiKey: string, modelName?: string): Promise<{ success: boolean; geminiConfigured: boolean; model?: string }> {
   const res = await fetch(`${API_BASE}/config/key`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ apiKey }),
+    body: JSON.stringify({ apiKey, modelName }),
   });
   return res.json();
 }

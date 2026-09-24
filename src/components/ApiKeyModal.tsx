@@ -15,6 +15,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   geminiConfigured,
   onKeyUpdated,
 }) => {
+  const [selectedModel, setSelectedModel] = useState<string>('gemini-3.5-transcribe-live');
   const [apiKey, setApiKey] = useState('');
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -29,9 +30,9 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     setStatusMsg(null);
 
     try {
-      const res = await updateApiKey(apiKey.trim());
+      const res = await updateApiKey(apiKey.trim(), selectedModel);
       if (res.success) {
-        setStatusMsg({ type: 'success', text: '¡API Key configurada correctamente con Gemini 2.5 Flash!' });
+        setStatusMsg({ type: 'success', text: `¡API Key configurada con éxito usando ${selectedModel}!` });
         onKeyUpdated(res.geminiConfigured);
         setTimeout(() => {
           onClose();
@@ -86,6 +87,31 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-[#f1f5f9] mb-1.5 flex items-center justify-between">
+              <span>Modelo Gemini Speech / Audio</span>
+              <span className="text-[10px] text-[#00f5ff] font-mono">Google Cloud 2026</span>
+            </label>
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-[#0c0f17] border border-[#2a344f] rounded-xl text-xs text-white focus:outline-none focus:border-[#00f0ff] font-mono"
+            >
+              <option value="gemini-3.5-transcribe-live">
+                ✨ gemini-3.5-transcribe-live (Agosto 2026 - Speech Flagship)
+              </option>
+              <option value="gemini-2.5-flash">
+                ⚡ gemini-2.5-flash (Multimodal Sub-segundo)
+              </option>
+              <option value="gemini-2.5-pro">
+                🧠 gemini-2.5-pro (Razonamiento Profundo)
+              </option>
+            </select>
+            <p className="text-[10px] text-[#64748b] mt-1 font-mono">
+              gemini-3.5-transcribe-live incluye code-switching automático en 85+ idiomas y vocabulario técnico personalizado.
+            </p>
+          </div>
+
           <div>
             <label className="block text-xs font-semibold text-[#f1f5f9] mb-1.5">
               API Key (AIzaSy...)

@@ -49,18 +49,23 @@ app.get('/api/status', (req: Request, res: Response) => {
 
 // Update or set GEMINI_API_KEY dynamically from Admin UI
 app.post('/api/config/key', (req: Request, res: Response) => {
-  const { apiKey } = req.body;
+  const { apiKey, modelName } = req.body;
   if (!apiKey || typeof apiKey !== 'string') {
     return res.status(400).json({ error: 'API key is required' });
   }
 
   process.env.GEMINI_API_KEY = apiKey.trim();
+  if (modelName && typeof modelName === 'string') {
+    process.env.GEMINI_MODEL = modelName.trim();
+    console.log(`[Config] Active Gemini speech model set to: ${modelName.trim()}`);
+  }
   geminiService.reloadKey();
 
   res.json({
     success: true,
     geminiConfigured: geminiService.isConfigured(),
-    message: 'API Key updated successfully'
+    model: process.env.GEMINI_MODEL || 'gemini-3.5-transcribe-live',
+    message: 'API Key and model updated successfully'
   });
 });
 
