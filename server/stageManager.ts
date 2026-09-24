@@ -22,16 +22,16 @@ export class StageManager {
         id: 'stage-1',
         name: 'Escenario Principal',
         track: 'Keynotes & Arquitectura (EN / ES)',
-        speaker: 'Alex Rivera (Staff SRE)',
-        talkTitle: 'Scaling Cloud Native Workloads with Kubernetes, eBPF & Zero-Trust',
-        description: 'Auditorio central para conferencias internacionales con traducción simultánea.',
-        isLive: true,
-        currentAudioSource: 'demo',
-        audioLevel: 78,
+        speaker: 'Micrófono de Operador en Vivo',
+        talkTitle: 'Transmisión de Audio y Subtitulado en Vivo',
+        description: 'Auditorio central para conferencias con transcripción en tiempo real y traducción simultánea.',
+        isLive: false,
+        currentAudioSource: 'idle',
+        audioLevel: 0,
         audienceCount: 142,
-        latencyMs: 380,
-        detectedLang: 'en',
-        startedAt: Date.now() - 600000
+        latencyMs: 0,
+        detectedLang: 'es',
+        startedAt: Date.now()
       },
       {
         id: 'stage-2',
@@ -40,13 +40,13 @@ export class StageManager {
         speaker: 'Valeria Gómez (Principal SRE)',
         talkTitle: 'Resiliencia, Observabilidad y Cultura de Sistemas en Producción',
         description: 'Charlas de infraestructura, resiliencia y vivencias reales en producción.',
-        isLive: true,
-        currentAudioSource: 'demo',
-        audioLevel: 65,
+        isLive: false,
+        currentAudioSource: 'idle',
+        audioLevel: 0,
         audienceCount: 89,
-        latencyMs: 410,
+        latencyMs: 0,
         detectedLang: 'es',
-        startedAt: Date.now() - 450000
+        startedAt: Date.now()
       },
       {
         id: 'stage-3',
@@ -71,12 +71,6 @@ export class StageManager {
       this.stageQuestions.set(stage.id, []);
       this.subscribers.set(stage.id, new Set());
     }
-
-    // Auto-launch demo in Stage 1 and Stage 2 so simultaneous multi-session is live out-of-the-box!
-    this.startDemo('stage-1', 'talk-en-k8s', false);
-    setTimeout(() => {
-      this.startDemo('stage-2', 'talk-es-devops', false);
-    }, 1500);
   }
 
   public getStages(): Stage[] {
@@ -191,10 +185,27 @@ export class StageManager {
     }
   }
 
+  public async pushLiveTranscript(stageId: string, text: string, sourceLang: string = 'es') {
+    const stage = this.stages.get(stageId);
+    if (!stage) return;
+
+    this.stopDemo(stageId);
+    stage.isLive = true;
+    stage.currentAudioSource = 'mic';
+    const startTime = Date.now();
+
+    const chunk = await geminiService.processLiveText(text, sourceLang, stageId);
+    stage.latencyMs = Math.max(40, Date.now() - startTime);
+    stage.detectedLang = chunk.sourceLang as any;
+
+    this.addChunkToStage(stageId, chunk);
+  }
+
   public async pushAudioChunk(stageId: string, audioBuffer: Buffer, mimeType: string) {
     const stage = this.stages.get(stageId);
     if (!stage) return;
 
+    this.stopDemo(stageId);
     stage.isLive = true;
     stage.currentAudioSource = 'mic';
     const startTime = Date.now();
@@ -210,6 +221,10 @@ export class StageManager {
   public addChunkToStage(stageId: string, chunk: SubtitleChunk) {
     const chunks = this.stageChunks.get(stageId) || [];
     chunks.push(chunk);
+    // Keep max 200 in memory to avoid heap leaks during 8-hour marathon
+    if (chunks.length > 200) {
+      chunks.shift();
+    }
     this.stageChunks.set(stageId, chunks);
 
     // Analyze if we should extract takeaways
@@ -219,6 +234,27 @@ export class StageManager {
     this.broadcastToStage(stageId, {
       type: 'caption',
       chunk
+    });
+  }
+
+  public deleteLastChunk(stageId: string): boolean {
+    const chunks = this.stageChunks.get(stageId) || [];
+    if (chunks.length > 0) {
+      const removed = chunks.pop();
+      this.stageChunks.set(stageId, chunks);
+      this.broadcastToStage(stageId, {
+        type: 'chunk_deleted',
+        chunkId: removed?.id
+      });
+      return true;
+    }
+    return false;
+  }
+
+  public remoteReloadStage(stageId: string) {
+    this.broadcastToStage(stageId, {
+      type: 'remote_reload',
+      stageId
     });
   }
 
@@ -305,9 +341,9 @@ export class StageManager {
         timestamp: Date.now(),
         originalText: item.originalText,
         sourceLang: talk.sourceLang,
-        esText: item.esText,
-        enText: item.enText,
-        ptText: item.ptText,
+        esText: item.esText || (item as any).es,
+        enText: item.enText || (item as any).en,
+        ptText: item.ptText || (item as any).pt,
         techTerms: terms,
         confidence: 0.98,
         isFinal: true
@@ -351,6 +387,14 @@ export class StageManager {
     this.broadcastSystemUpdate();
   }
 
+  public emergencyClear(stageId: string) {
+    this.stageChunks.set(stageId, []);
+    this.broadcastToStage(stageId, {
+      type: 'emergency_clear',
+      stageId
+    });
+  }
+
   private broadcastToStage(stageId: string, payload: any) {
     const subs = this.subscribers.get(stageId);
     if (!subs) return;
@@ -379,19 +423,29 @@ export class StageManager {
   }
 
   /**
-   * Export stage transcripts as SRT, VTT, or Markdown
+   * Export stage transcripts as SRT, VTT, or Markdown with true broadcast-standard epoch offsets
    */
   public exportTranscript(stageId: string, format: 'srt' | 'vtt' | 'txt' | 'md', lang: 'es' | 'en' | 'pt' | 'original' = 'es'): string {
     const stage = this.stages.get(stageId);
     const chunks = this.stageChunks.get(stageId) || [];
     const title = stage?.talkTitle || 'Nerdearla Session Transcript';
     const speaker = stage?.speaker || 'Speaker';
+    const stageStart = stage?.startedAt || (chunks[0]?.timestamp ?? Date.now());
 
     if (format === 'srt') {
       return chunks.map((chunk, index) => {
         const text = this.getTextForLang(chunk, lang);
-        const startTime = this.formatSRTTime(index * 4000);
-        const endTime = this.formatSRTTime((index + 1) * 4000);
+        const startOffsetMs = Math.max(0, chunk.timestamp - stageStart);
+        // Dynamic reading speed duration: 15 chars/second (CEA-708 standard), clamped 1.8s - 5.5s
+        let durationMs = Math.max(1800, Math.min(5500, Math.round((text.length / 15) * 1000)));
+        if (index < chunks.length - 1) {
+          const nextOffset = chunks[index + 1].timestamp - stageStart;
+          if (nextOffset > startOffsetMs) {
+            durationMs = Math.min(durationMs, nextOffset - startOffsetMs);
+          }
+        }
+        const startTime = this.formatSRTTime(startOffsetMs);
+        const endTime = this.formatSRTTime(startOffsetMs + durationMs);
         return `${index + 1}\n${startTime} --> ${endTime}\n${text}\n`;
       }).join('\n');
     }
@@ -400,8 +454,16 @@ export class StageManager {
       const lines = ['WEBVTT', `NOTE Title: ${title}`, `NOTE Speaker: ${speaker}`, ''];
       chunks.forEach((chunk, index) => {
         const text = this.getTextForLang(chunk, lang);
-        const startTime = this.formatVTTTime(index * 4000);
-        const endTime = this.formatVTTTime((index + 1) * 4000);
+        const startOffsetMs = Math.max(0, chunk.timestamp - stageStart);
+        let durationMs = Math.max(1800, Math.min(5500, Math.round((text.length / 15) * 1000)));
+        if (index < chunks.length - 1) {
+          const nextOffset = chunks[index + 1].timestamp - stageStart;
+          if (nextOffset > startOffsetMs) {
+            durationMs = Math.min(durationMs, nextOffset - startOffsetMs);
+          }
+        }
+        const startTime = this.formatVTTTime(startOffsetMs);
+        const endTime = this.formatVTTTime(startOffsetMs + durationMs);
         lines.push(`${startTime} --> ${endTime}`);
         lines.push(text);
         lines.push('');

@@ -59,6 +59,7 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
   const [activeSidebarTab, setActiveSidebarTab] = useState<'glossary' | 'takeaways' | 'qa' | 'export'>('glossary');
   const [selectedTerm, setSelectedTerm] = useState<TechTerm | null>(null);
   const [isFocusMode, setIsFocusMode] = useState(false);
+  const [showOriginal, setShowOriginal] = useState(false);
 
   const currentStage = stages.find((s) => s.id === selectedStageId) || stages[0];
   const subtitlesContainerRef = useRef<HTMLDivElement>(null);
@@ -256,7 +257,7 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
             </div>
             <div>
               <div className="text-[9px] uppercase tracking-wider text-[#475569]">IDIOMA IN</div>
-              <div className="text-[#00f5ff] font-bold uppercase">{currentStage.sourceLang}</div>
+              <div className="text-[#00f5ff] font-bold uppercase">{currentStage.detectedLang}</div>
             </div>
           </div>
         </div>
@@ -312,6 +313,18 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
                 {autoScroll ? 'SCROLL: ON' : 'SCROLL: OFF'}
               </button>
 
+              <button
+                onClick={() => setShowOriginal(!showOriginal)}
+                className={`hardware-btn px-2 py-1 rounded text-[10px] font-mono font-bold transition-all ${
+                  showOriginal
+                    ? 'hardware-btn-active text-[#00f5ff] border-[#00f5ff] bg-[#00f5ff]/10'
+                    : 'text-[#64748b] hover:text-white'
+                }`}
+                title="Mostrar transcripción original junto a la traducción (Modo Dual)"
+              >
+                DUAL: {showOriginal ? 'ON' : 'OFF'}
+              </button>
+
               {isFocusMode && (
                 <button
                   onClick={() => setIsFocusMode(false)}
@@ -327,6 +340,10 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
           {/* Teleprompter Display Glass with Dual Fade Mask */}
           <div
             ref={subtitlesContainerRef}
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions"
+            aria-label="Subtítulos en vivo para accesibilidad"
             className={`p-4 sm:p-6 overflow-y-auto dual-fade-mask space-y-4 transition-all ${
               isFocusMode ? 'h-[75vh]' : 'h-[500px]'
             }`}
@@ -362,10 +379,10 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
                       <span className="text-[#00f5ff]">
                         [{new Date(chunk.timestamp).toLocaleTimeString()}]
                       </span>
-                      <span>SPEAKER: {chunk.speaker || currentStage?.speaker || 'TALK'}</span>
-                      {chunk.detectedLanguage && (
+                      <span>SPEAKER: {currentStage?.speaker || 'TALK'}</span>
+                      {chunk.sourceLang && (
                         <span className="px-1 py-0.2 bg-[#121622] rounded text-[#8b5cf6] border border-[#232b3d]">
-                          {chunk.detectedLanguage.toUpperCase()}
+                          {chunk.sourceLang.toUpperCase()}
                         </span>
                       )}
                       {chunk.confidence && (
@@ -379,6 +396,16 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
                     <div className={`${getFontSizeClass()} text-white font-sans tracking-wide leading-relaxed`}>
                       {renderTextWithGlossaryHighlights(displayText, chunk.techTerms || [])}
                     </div>
+
+                    {/* Dual View: Display original speech alongside translation */}
+                    {showOriginal && selectedLang !== 'original' && chunk.originalText && (
+                      <div className="mt-1.5 pt-1.5 border-t border-[#1b2230]/60 flex items-baseline gap-2 text-xs font-mono text-[#94a3b8] italic">
+                        <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-[#161d2a] text-[#38bdf8] font-bold not-italic shrink-0 border border-[#243046]">
+                          SRC ({chunk.sourceLang.toUpperCase()})
+                        </span>
+                        <span className="leading-snug">{chunk.originalText}</span>
+                      </div>
+                    )}
                   </div>
                 );
               })
@@ -524,7 +551,7 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
                           PUNTO #{idx + 1}
                         </div>
                         <div className="text-white text-[11px] leading-relaxed">
-                          {item.text}
+                          {item.bullet}
                         </div>
                       </div>
                     ))

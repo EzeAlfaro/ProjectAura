@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Stage, 
-  TechTerm 
+  TechTerm,
+  SubtitleChunk 
 } from '../types.js';
 import { 
   Sliders, 
@@ -26,7 +27,13 @@ import {
   Gauge,
   Terminal,
   VolumeX,
-  Volume1
+  Volume1,
+  Send,
+  Trash2,
+  Tv,
+  MessageSquare,
+  Download,
+  ShieldAlert
 } from 'lucide-react';
 import { 
   triggerDemo, 
@@ -41,12 +48,18 @@ import {
   HardwareOscilloscope, 
   HexScrew 
 } from './HardwareControls.js';
+import { WSClient } from '../services/websocket.js';
+import { findBroadcastSplitIndex, formatBroadcastSubtitle } from '../utils/broadcastSegmenter.js';
 
 interface AdminViewProps {
   stages: Stage[];
   onSelectStage: (id: string) => void;
   geminiConfigured: boolean;
   onOpenApiKeyModal: () => void;
+  onOpenVMixModal?: () => void;
+  chunks?: SubtitleChunk[];
+  wsClient?: WSClient | null;
+  onPushLiveTranscript?: (text: string, sourceLang?: string) => void;
 }
 
 export const AdminView: React.FC<AdminViewProps> = ({
@@ -54,11 +67,17 @@ export const AdminView: React.FC<AdminViewProps> = ({
   onSelectStage,
   geminiConfigured,
   onOpenApiKeyModal,
+  onOpenVMixModal,
+  chunks = [],
+  wsClient,
+  onPushLiveTranscript,
 }) => {
   const [selectedStageId, setSelectedStageId] = useState<string>(stages[0]?.id || 'stage-1');
   const [isRecording, setIsRecording] = useState(false);
+  const [micSourceLang, setMicSourceLang] = useState<'es' | 'en'>('es');
   const [audioError, setAudioError] = useState<string | null>(null);
   const [glossaryTerms, setGlossaryTerms] = useState<TechTerm[]>([]);
+  const [remoteReloadFeedback, setRemoteReloadFeedback] = useState<string | null>(null);
   
   // Audio Devices & Hardware Diagnostics
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
@@ -89,16 +108,31 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [newCategory, setNewCategory] = useState<TechTerm['category']>('devops');
   const [formSuccess, setFormSuccess] = useState(false);
 
-  // Audio Recording Refs
+  // Real-time Voice Recognition & Prompter state
+  const [liveInterimText, setLiveInterimText] = useState('');
+  const [manualText, setManualText] = useState('');
+  const [isSendingManual, setIsSendingManual] = useState(false);
+  const [speechApiAvailable, setSpeechApiAvailable] = useState(false);
+
+  // Audio Recording & Speech Refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const soundCheckStreamRef = useRef<MediaStream | null>(null);
+  const soundCheckAudioCtxRef = useRef<AudioContext | null>(null);
+  const recognitionRef = useRef<any>(null);
+  const isRecordingRef = useRef(false);
+  const restartTimerRef = useRef<any>(null);
+  const committedCharsRef = useRef(0);
+  const silenceFlushTimerRef = useRef<any>(null);
 
   useEffect(() => {
     fetchGlossary().then(setGlossaryTerms);
     refreshAudioDevices();
     checkHardwareCompatibility();
+
+    const hasSpeech = typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+    setSpeechApiAvailable(hasSpeech);
 
     return () => {
       stopMicStreaming();
@@ -168,13 +202,14 @@ export const AdminView: React.FC<AdminViewProps> = ({
       setSoundCheckResult(null);
 
       const constraints: MediaStreamConstraints = {
-        audio: selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : true,
+        audio: selectedDeviceId ? { deviceId: { ideal: selectedDeviceId } } : true,
       };
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       soundCheckStreamRef.current = stream;
 
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      soundCheckAudioCtxRef.current = audioCtx;
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 512;
@@ -229,23 +264,197 @@ export const AdminView: React.FC<AdminViewProps> = ({
       soundCheckStreamRef.current.getTracks().forEach((t) => t.stop());
       soundCheckStreamRef.current = null;
     }
+    if (soundCheckAudioCtxRef.current) {
+      soundCheckAudioCtxRef.current.close().catch(() => {});
+      soundCheckAudioCtxRef.current = null;
+    }
+  };
+
+  const commitAdminPhrase = (phrase: string, lang: 'es' | 'en') => {
+    const clean = phrase.trim();
+    if (!clean) return;
+
+    if (onPushLiveTranscript) {
+      onPushLiveTranscript(clean, lang);
+    } else {
+      fetch(`/api/stages/${selectedStageId}/live-text`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: clean, sourceLang: lang })
+      }).catch(console.error);
+    }
+  };
+
+  /**
+   * Broadcast-Grade SpeechRecognition factory for Mesa Técnica.
+   * Chunks long continuous speech into bite-sized 6-8 word broadcast subtitles.
+   * Flushes on 550ms acoustic pauses so fast speakers never generate monster paragraphs.
+   */
+  const createAndStartAdminRecognition = (overrideLang?: 'es' | 'en') => {
+    if (!isRecordingRef.current) return;
+
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.onerror = null;
+        recognitionRef.current.onend = null;
+        recognitionRef.current.abort();
+      } catch (e) {}
+      recognitionRef.current = null;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    const targetLang = overrideLang || micSourceLang;
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = targetLang === 'en' ? 'en-US' : 'es-AR';
+
+      recognition.onresult = (event: any) => {
+        // Clear any pending silence timer
+        if (silenceFlushTimerRef.current) {
+          clearTimeout(silenceFlushTimerRef.current);
+          silenceFlushTimerRef.current = null;
+        }
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          const res = event.results[i];
+          const transcript = res[0]?.transcript || '';
+
+          if (res.isFinal) {
+            // Commit any remaining uncommitted words from this utterance
+            const finalRemaining = transcript.substring(committedCharsRef.current).trim();
+            if (finalRemaining) {
+              commitAdminPhrase(finalRemaining, targetLang);
+            }
+            committedCharsRef.current = 0;
+            setLiveInterimText('');
+            return;
+          }
+
+          if (transcript) {
+            // Guard against speech engine rewrites where transcript is shorter than committed
+            if (committedCharsRef.current > transcript.length) {
+              committedCharsRef.current = 0;
+            }
+
+            // Rapid broadcast phrase chunking: cut at 7-8 words or natural conjunctions
+            while (true) {
+              const uncommitted = transcript.substring(committedCharsRef.current).trimStart();
+              if (!uncommitted) break;
+
+              const splitPos = findBroadcastSplitIndex(uncommitted, {
+                maxWords: 8,
+                maxChars: 50,
+                minWordsBeforeCut: 5,
+              });
+
+              if (splitPos === null) break;
+
+              const chunkText = uncommitted.substring(0, splitPos).trim();
+              if (!chunkText) break;
+
+              // Commit this broadcast-ready phrase immediately!
+              commitAdminPhrase(chunkText, targetLang);
+
+              // Advance committed offset
+              const matchIdx = transcript.indexOf(chunkText, committedCharsRef.current);
+              if (matchIdx !== -1) {
+                committedCharsRef.current = matchIdx + chunkText.length;
+              } else {
+                committedCharsRef.current += splitPos;
+              }
+            }
+
+            const remaining = transcript.substring(committedCharsRef.current).trim();
+            setLiveInterimText(remaining);
+
+            // Fast acoustic pause detection: 550ms of silence flushes any remaining speech immediately!
+            if (remaining.length > 0) {
+              silenceFlushTimerRef.current = setTimeout(() => {
+                const toFlush = transcript.substring(committedCharsRef.current).trim();
+                if (toFlush) {
+                  commitAdminPhrase(toFlush, targetLang);
+                  committedCharsRef.current = transcript.length;
+                  setLiveInterimText('');
+                }
+              }, 550);
+            }
+          }
+        }
+      };
+
+      recognition.onerror = (e: any) => {
+        console.warn('[Admin SpeechRecognition Error]', e.error);
+        if (e.error === 'not-allowed') {
+          setAudioError('Permiso de micrófono no otorgado en el navegador');
+        }
+      };
+
+      recognition.onend = () => {
+        if (silenceFlushTimerRef.current) {
+          clearTimeout(silenceFlushTimerRef.current);
+          silenceFlushTimerRef.current = null;
+        }
+        committedCharsRef.current = 0;
+        setLiveInterimText('');
+
+        if (isRecordingRef.current) {
+          if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+          restartTimerRef.current = setTimeout(() => {
+            if (isRecordingRef.current) {
+              createAndStartAdminRecognition(targetLang);
+            }
+          }, 150);
+        }
+      };
+
+      recognition.start();
+      recognitionRef.current = recognition;
+    } catch (err: any) {
+      console.warn('Admin SpeechRecognition initialization error:', err);
+      if (isRecordingRef.current) {
+        if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = setTimeout(() => {
+          if (isRecordingRef.current) createAndStartAdminRecognition(targetLang);
+        }, 1000);
+      }
+    }
+  };
+
+  const handleMicSourceLangChange = (newLang: 'es' | 'en') => {
+    setMicSourceLang(newLang);
+    if (isRecordingRef.current) {
+      if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = setTimeout(() => {
+        if (isRecordingRef.current) createAndStartAdminRecognition(newLang);
+      }, 100);
+    }
   };
 
   const startMicStreaming = async () => {
     try {
       setAudioError(null);
+      setLiveInterimText('');
+      isRecordingRef.current = true;
+
+      // 1. Mic capture with ideal constraint and fallback
       const constraints: MediaStreamConstraints = {
-        audio: {
-          deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-          channelCount: 1,
-          sampleRate: 48000,
-        },
+        audio: selectedDeviceId ? { deviceId: { ideal: selectedDeviceId } } : true,
       };
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (err) {
+        console.warn('Could not grab exact mic device, fallback to default:', err);
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
@@ -274,6 +483,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
         setIsClipping(db >= -1);
       }, 80);
 
+      // 2. Launch resilient speech recognition
+      createAndStartAdminRecognition();
+
+      // 3. MediaRecorder chunk backup
       let mimeType = 'audio/webm;codecs=opus';
       if (!MediaRecorder.isTypeSupported(mimeType)) {
         mimeType = 'audio/webm';
@@ -283,7 +496,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
       mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = async (event) => {
-        if (event.data && event.data.size > 0) {
+        const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (event.data && event.data.size > 0 && !SpeechRec) {
           try {
             await uploadAudioChunk(selectedStageId, event.data);
           } catch (e: any) {
@@ -297,22 +511,112 @@ export const AdminView: React.FC<AdminViewProps> = ({
     } catch (err: any) {
       setAudioError(`No se pudo acceder al micrófono: ${err.message}`);
       setIsRecording(false);
+      isRecordingRef.current = false;
     }
   };
 
   const stopMicStreaming = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
+    isRecordingRef.current = false;
+    setLiveInterimText('');
+
+    if (silenceFlushTimerRef.current) {
+      clearTimeout(silenceFlushTimerRef.current);
+      silenceFlushTimerRef.current = null;
     }
+    committedCharsRef.current = 0;
+
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
+
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.onerror = null;
+        recognitionRef.current.onend = null;
+        recognitionRef.current.abort();
+      } catch (e) {}
+      recognitionRef.current = null;
+    }
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.stop();
+        mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
+      } catch (e) {}
+    }
+
     if (audioContextRef.current) {
       audioContextRef.current.close().catch(() => {});
       audioContextRef.current = null;
     }
+
     analyserRef.current = null;
     setIsRecording(false);
     setCurrentDbfs(-60);
     setIsClipping(false);
+  };
+
+  const handleSendManualText = (textToSend?: string) => {
+    const text = (textToSend || manualText).trim();
+    if (!text) return;
+    setIsSendingManual(true);
+
+    if (onPushLiveTranscript) {
+      onPushLiveTranscript(text);
+    } else {
+      fetch(`/api/stages/${selectedStageId}/live-text`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, sourceLang: 'es' })
+      }).catch(console.error);
+    }
+
+    if (!textToSend) setManualText('');
+    setTimeout(() => setIsSendingManual(false), 300);
+  };
+
+  const handleDeleteLastChunk = async () => {
+    try {
+      if (wsClient) {
+        wsClient.deleteLastChunk(selectedStageId);
+      } else {
+        await fetch(`/api/stages/${selectedStageId}/chunks/last`, {
+          method: 'DELETE'
+        });
+      }
+    } catch (err: any) {
+      console.warn('Failed to delete last chunk:', err);
+    }
+  };
+
+  const handleEmergencyClear = async () => {
+    try {
+      if (wsClient) {
+        wsClient.sendEmergencyClear(selectedStageId);
+      } else {
+        await fetch(`/api/stages/${selectedStageId}/emergency-clear`, {
+          method: 'POST'
+        });
+      }
+    } catch (err: any) {
+      console.warn('Failed to emergency clear:', err);
+    }
+  };
+
+  const handleRemoteReloadNode = async (stageId: string, stageName: string) => {
+    try {
+      if (wsClient) {
+        wsClient.sendRemoteReload(stageId);
+      } else {
+        await fetch(`/api/stages/${stageId}/remote-reload`, { method: 'POST' });
+      }
+      setRemoteReloadFeedback(`¡Comando F5 emitido a la Mini PC de ${stageName}!`);
+      setTimeout(() => setRemoteReloadFeedback(null), 3500);
+    } catch (err: any) {
+      console.warn('Remote reload error:', err);
+    }
   };
 
   const handleTriggerDemo = async (stageId: string, demoKey: string) => {
@@ -575,23 +879,51 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   </p>
                 </div>
 
-                {isRecording ? (
-                  <button
-                    onClick={stopMicStreaming}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#ff1744] hover:bg-[#ff1744]/90 text-white text-xs font-mono font-bold rounded transition-all animate-pulse shadow-[0_0_10px_#ff1744]"
-                  >
-                    <Square className="w-3.5 h-3.5" />
-                    <span>DETENER_AIRE</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={startMicStreaming}
-                    className="hardware-btn-active flex items-center gap-1.5 px-3 py-1.5 bg-[#141b29] text-[#00f5ff] text-xs font-mono font-bold rounded transition-all"
-                  >
-                    <Mic className="w-3.5 h-3.5" />
-                    <span>TRANSMITIR_MIC</span>
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {/* Spoken Language Toggle: ES vs EN */}
+                  <div className="flex items-center bg-[#07090e] p-0.5 rounded border border-[#1b2230] text-[10px] font-mono font-bold">
+                    <button
+                      onClick={() => handleMicSourceLangChange('es')}
+                      className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
+                        micSourceLang === 'es'
+                          ? 'bg-[#141b29] text-[#00f5ff] border border-[#00f5ff]/40 shadow-sm'
+                          : 'text-[#64748b] hover:text-white'
+                      }`}
+                      title="Orador habla en Español (transcripción es-AR)"
+                    >
+                      <span>🇪🇸 ES</span>
+                    </button>
+                    <button
+                      onClick={() => handleMicSourceLangChange('en')}
+                      className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
+                        micSourceLang === 'en'
+                          ? 'bg-[#141b29] text-[#00ff66] border border-[#00ff66]/40 shadow-sm'
+                          : 'text-[#64748b] hover:text-white'
+                      }`}
+                      title="Speaker speaks in English (transcription en-US)"
+                    >
+                      <span>🇬🇧 EN</span>
+                    </button>
+                  </div>
+
+                  {isRecording ? (
+                    <button
+                      onClick={stopMicStreaming}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#ff1744] hover:bg-[#ff1744]/90 text-white text-xs font-mono font-bold rounded transition-all animate-pulse shadow-[0_0_10px_#ff1744]"
+                    >
+                      <Square className="w-3.5 h-3.5" />
+                      <span>DETENER_AIRE</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={startMicStreaming}
+                      className="hardware-btn-active flex items-center gap-1.5 px-3 py-1.5 bg-[#141b29] text-[#00f5ff] text-xs font-mono font-bold rounded transition-all"
+                    >
+                      <Mic className="w-3.5 h-3.5" />
+                      <span>TRANSMITIR_MIC</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* CRT Phosphor Oscilloscope & Calibrated dBFS Bar */}
@@ -627,31 +959,49 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 DEMOS_OFICIALES_NERDEARLA (1-CLICK TEST)
               </span>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                <button
+                  onClick={() => handleTriggerDemo(currentStage.id, 'talk-es-midudev')}
+                  className="hardware-btn p-2 rounded text-left transition-all hover:border-[#00f5ff]"
+                >
+                  <div className="text-[9px] font-mono text-[#00f5ff] font-bold">KEYNOTE (ES)</div>
+                  <div className="text-xs font-bold text-white mt-0.5 truncate">IA & Programación</div>
+                  <div className="text-[9px] font-mono text-[#64748b]">midudev</div>
+                </button>
+
+                <button
+                  onClick={() => handleTriggerDemo(currentStage.id, 'talk-en-thor')}
+                  className="hardware-btn p-2 rounded text-left transition-all hover:border-[#38bdf8]"
+                >
+                  <div className="text-[9px] font-mono text-[#38bdf8] font-bold">AGENTS (EN)</div>
+                  <div className="text-xs font-bold text-white mt-0.5 truncate">Multilingual Agents</div>
+                  <div className="text-[9px] font-mono text-[#64748b]">Thor Schaeff</div>
+                </button>
+
                 <button
                   onClick={() => handleTriggerDemo(currentStage.id, 'talk-en-k8s')}
-                  className="hardware-btn p-2 rounded text-left transition-all"
+                  className="hardware-btn p-2 rounded text-left transition-all hover:border-[#00f5ff]"
                 >
-                  <div className="text-[9px] font-mono text-[#00f5ff] font-bold">KEYNOTE (EN)</div>
-                  <div className="text-xs font-bold text-white mt-0.5">K8s & eBPF</div>
-                  <div className="text-[9px] font-mono text-[#64748b]">Brendan Gregg</div>
+                  <div className="text-[9px] font-mono text-[#00f5ff] font-bold">CLOUD (EN)</div>
+                  <div className="text-xs font-bold text-white mt-0.5 truncate">K8s & eBPF</div>
+                  <div className="text-[9px] font-mono text-[#64748b]">Alex Rivera</div>
                 </button>
 
                 <button
                   onClick={() => handleTriggerDemo(currentStage.id, 'talk-es-devops')}
-                  className="hardware-btn p-2 rounded text-left transition-all"
+                  className="hardware-btn p-2 rounded text-left transition-all hover:border-[#00ff66]"
                 >
                   <div className="text-[9px] font-mono text-[#00ff66] font-bold">DEVOPS (ES)</div>
-                  <div className="text-xs font-bold text-white mt-0.5">Sysarmy CI/CD</div>
-                  <div className="text-[9px] font-mono text-[#64748b]">Eduardo Casarero</div>
+                  <div className="text-xs font-bold text-white mt-0.5 truncate">Sysarmy CI/CD</div>
+                  <div className="text-[9px] font-mono text-[#64748b]">Valeria Gómez</div>
                 </button>
 
                 <button
                   onClick={() => handleTriggerDemo(currentStage.id, 'talk-es-ai')}
-                  className="hardware-btn p-2 rounded text-left transition-all"
+                  className="hardware-btn p-2 rounded text-left transition-all hover:border-[#ffb800]"
                 >
                   <div className="text-[9px] font-mono text-[#ffb800] font-bold">DATA & AI (ES)</div>
-                  <div className="text-xs font-bold text-white mt-0.5">Gemini & Agents</div>
+                  <div className="text-xs font-bold text-white mt-0.5 truncate">Gemini Live Audio</div>
                   <div className="text-[9px] font-mono text-[#64748b]">Federico Balbi</div>
                 </button>
               </div>
@@ -779,6 +1129,374 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
         </div>
       )}
+
+      {/* 19" RACK UNIT 04: LIVE TELEPROMPTER & SUBTITLE MONITOR (BROADCAST CONFIDENCE MONITOR) */}
+      <RackUnit
+        unitId="RACK_04"
+        uHeight="2U"
+        title="MONITOR DE SUBTÍTULOS EN VIVO // CONTROL ROOM CONFIDENCE PROMPTER"
+        subTitle={`Visualización inmediata de la voz transcrita, traducción simultánea y emisión al aire • SALA: ${currentStage?.name.toUpperCase()}`}
+        rightBadge={
+          <div className="flex items-center gap-2 text-xs font-mono">
+            {isRecording ? (
+              <span className="px-2.5 py-1 rounded bg-[#ff1744]/20 border border-[#ff1744]/50 text-[#ff1744] flex items-center gap-1.5 font-bold animate-pulse">
+                <span className="w-2 h-2 rounded-full bg-[#ff1744] animate-ping" />
+                MIC EN EL AIRE
+              </span>
+            ) : (
+              <span className="px-2.5 py-1 rounded bg-[#10141e] border border-[#202738] text-gray-400 flex items-center gap-1.5">
+                MIC STANDBY
+              </span>
+            )}
+            <span className="px-2 py-1 rounded bg-[#07090e] border border-[#1b2230] text-[#00f5ff] text-[10px]">
+              {speechApiAvailable ? 'MOTOR: BROWSER SPEECH + GEMINI' : 'MOTOR: MULTIMODAL AUDIO'}
+            </span>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          
+          {/* REALTIME VOICE DETECTOR (ACTIVE HYPOTHESIS DISPLAY) */}
+          {isRecording && (
+            <div className={`p-3 rounded border transition-all ${
+              liveInterimText 
+                ? 'bg-[#00f5ff]/10 border-[#00f5ff]/50 shadow-[0_0_15px_rgba(0,245,255,0.15)]'
+                : 'bg-[#07090e] border-[#1b2230]'
+            }`}>
+              <div className="flex items-center justify-between mb-1 text-[10px] font-mono">
+                <span className="text-[#00f5ff] font-bold flex items-center gap-1.5">
+                  <Mic className="w-3.5 h-3.5 animate-pulse text-[#00f5ff]" />
+                  DETECTANDO VOZ EN TIEMPO REAL (&lt;50ms LATENCIA)
+                </span>
+                <span className="text-gray-400">IDIOMA: ES-AR // SALA {currentStage?.name}</span>
+              </div>
+              <div className="font-mono text-sm sm:text-base text-white min-h-[28px] flex items-center">
+                {liveInterimText ? (
+                  <span className="text-[#00f5ff] font-semibold">
+                    "{liveInterimText}"
+                    <span className="inline-block w-2 h-4 bg-[#00f5ff] ml-1 animate-pulse align-middle" />
+                  </span>
+                ) : (
+                  <span className="text-gray-500 italic text-xs">
+                    [ Hablá al micrófono ahora... tus palabras aparecerán aquí en vivo palabra por palabra ]
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* STREAM OF RECENT SUBTITLES */}
+          <div className="bg-[#07090e] border border-[#171b26] rounded p-3">
+            <div className="flex items-center justify-between border-b border-[#171b26] pb-2 mb-2 text-xs font-mono">
+              <span className="font-bold text-gray-300 flex items-center gap-1.5">
+                <Tv className="w-3.5 h-3.5 text-[#00ff66]" />
+                HISTORIAL DE SUBTÍTULOS EMITIDOS (ÚLTIMOS CHUNKS)
+              </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] text-gray-500">TOTAL: {chunks.length}</span>
+                {chunks.length > 0 && (
+                  <>
+                    <button
+                      onClick={handleDeleteLastChunk}
+                      className="px-2 py-0.5 rounded bg-[#ff1744]/15 hover:bg-[#ff1744]/30 border border-[#ff1744]/40 text-[#ff1744] text-[10px] font-bold flex items-center gap-1 transition-all"
+                      title="Borrar el último subtítulo emitido en caso de error o palabra indeseada"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      BORRAR ÚLTIMO
+                    </button>
+
+                    <button
+                      onClick={handleEmergencyClear}
+                      className="px-2 py-0.5 rounded bg-[#ff1744] hover:bg-[#ff1744]/80 text-white text-[10px] font-bold flex items-center gap-1 transition-all shadow-[0_0_8px_#ff1744]"
+                      title="Erase Displayed Memory (CEA-608): Borra inmediatamente todos los subtítulos en pantalla ante una contingencia"
+                    >
+                      <ShieldAlert className="w-3 h-3" />
+                      BLACKOUT PANTALLA
+                    </button>
+
+                    <div className="flex items-center gap-1 ml-1 border-l border-[#202738] pl-2">
+                      <a
+                        href={`/api/stages/${selectedStageId}/export/srt?lang=${micSourceLang}`}
+                        download={`nerdsub-${selectedStageId}.srt`}
+                        className="px-1.5 py-0.5 rounded bg-[#101520] hover:bg-[#1b2333] border border-[#232c3d] hover:border-[#00f5ff] text-[#00f5ff] text-[10px] font-bold flex items-center gap-0.5 transition-all"
+                        title="Descargar subtítulos .SRT sincronizados para YouTube"
+                      >
+                        <Download className="w-2.5 h-2.5" />
+                        SRT
+                      </a>
+                      <a
+                        href={`/api/stages/${selectedStageId}/export/vtt?lang=${micSourceLang}`}
+                        download={`nerdsub-${selectedStageId}.vtt`}
+                        className="px-1.5 py-0.5 rounded bg-[#101520] hover:bg-[#1b2333] border border-[#232c3d] hover:border-[#00ff66] text-[#00ff66] text-[10px] font-bold flex items-center gap-0.5 transition-all"
+                        title="Descargar subtítulos .VTT para reproductores web"
+                      >
+                        <Download className="w-2.5 h-2.5" />
+                        VTT
+                      </a>
+                      <a
+                        href={`/api/stages/${selectedStageId}/export/md?lang=${micSourceLang}`}
+                        download={`nerdsub-${selectedStageId}.md`}
+                        className="px-1.5 py-0.5 rounded bg-[#101520] hover:bg-[#1b2333] border border-[#232c3d] hover:border-[#ffb800] text-[#ffb800] text-[10px] font-bold flex items-center gap-0.5 transition-all"
+                        title="Descargar Minuta Ejecutiva en Markdown con resumen de Gemini"
+                      >
+                        <Download className="w-2.5 h-2.5" />
+                        MD
+                      </a>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {chunks.length === 0 ? (
+              <div className="py-6 text-center text-xs font-mono text-gray-500 space-y-1">
+                <div>(No hay subtítulos emitidos en esta sala aún)</div>
+                <div className="text-[11px] text-gray-600">
+                  Hacé clic en <span className="text-[#00f5ff]">"TRANSMITIR_MIC"</span> y hablá, o usá la barra de texto inferior para enviar una prueba.
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                {chunks.slice(-6).map((chunk, idx, arr) => {
+                  const isLatest = idx === arr.length - 1;
+                  return (
+                    <div
+                      key={chunk.id}
+                      className={`p-2.5 rounded border text-xs font-mono transition-all ${
+                        isLatest
+                          ? 'bg-[#0f172a] border-[#00f5ff]/40 shadow-sm'
+                          : 'bg-[#0a0d14] border-[#161c28] opacity-80'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-[10px] text-gray-500 mb-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[#00f5ff] font-bold">
+                            [{new Date(chunk.timestamp).toLocaleTimeString()}]
+                          </span>
+                          <span className="text-gray-400">ORIGINAL ({chunk.sourceLang.toUpperCase()}):</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {chunk.confidence && (
+                            <span className="text-[#00ff66]">
+                              {Math.round(chunk.confidence * 100)}% CONF
+                            </span>
+                          )}
+                          {isLatest && (
+                            <span className="px-1.5 py-0.2 rounded bg-[#00f5ff]/20 text-[#00f5ff] font-bold text-[9px]">
+                              ÚLTIMO
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Verbatim Spoken Text */}
+                      <div className="text-white font-bold text-sm mb-1 leading-snug">
+                        "{chunk.originalText}"
+                      </div>
+
+                      {/* Translations & Glossaries */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] pt-1 border-t border-[#1b2230]">
+                        <div className="text-gray-300">
+                          <span className="text-gray-500 font-bold">ES:</span> {chunk.esText || chunk.originalText}
+                        </div>
+                        <div className="text-[#94a3b8]">
+                          <span className="text-gray-500 font-bold">EN:</span> {chunk.enText || chunk.originalText}
+                        </div>
+                      </div>
+
+                      {/* Tech terms chips if detected */}
+                      {chunk.techTerms && chunk.techTerms.length > 0 && (
+                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                          <span className="text-[9px] text-gray-500">TÉRMINOS:</span>
+                          {chunk.techTerms.map((t) => (
+                            <span
+                              key={t.term}
+                              className="px-1.5 py-0.2 rounded bg-[#00f5ff]/10 border border-[#00f5ff]/30 text-[#00f5ff] text-[9px] font-bold"
+                            >
+                              {t.term}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* MANUAL TEXT OVERRIDE & QUICK TEST INJECTOR */}
+          <div className="bg-[#07090e] border border-[#171b26] rounded p-3 space-y-2">
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="font-bold text-[#ffb800] flex items-center gap-1.5">
+                <MessageSquare className="w-3.5 h-3.5 text-[#ffb800]" />
+                EMISIÓN DE TEXTO DIRECTA / ANUNCIO AL AIRE
+              </span>
+              <span className="text-[10px] text-gray-500">Presioná ENTER para enviar</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={manualText}
+                onChange={(e) => setManualText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSendManualText();
+                  }
+                }}
+                placeholder="Escribí una frase de prueba o anuncio oficial para enviar a todos los subtítulos..."
+                className="flex-1 px-3 py-2 bg-[#0c1017] border border-[#222a3d] rounded text-xs font-mono text-white focus:outline-none focus:border-[#00f5ff]"
+              />
+              <button
+                onClick={() => handleSendManualText()}
+                disabled={!manualText.trim() || isSendingManual}
+                className="hardware-btn flex items-center gap-1.5 px-4 py-2 bg-[#141b29] hover:bg-[#1a2336] text-[#00f5ff] text-xs font-mono font-bold rounded transition-all disabled:opacity-50"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>{isSendingManual ? 'ENVIANDO...' : 'ENVIAR_AL_AIRE'}</span>
+              </button>
+            </div>
+
+            {/* Quick 1-Click Test Phrases */}
+            <div className="pt-1 flex items-center gap-2 flex-wrap text-[10px] font-mono">
+              <span className="text-gray-500">FRASES RÁPIDAS DE PRUEBA:</span>
+              <button
+                onClick={() => handleSendManualText('Hola a todos, bienvenidos a la Vibeathon de Nerdearla 2026.')}
+                className="px-2 py-0.5 rounded bg-[#101520] border border-[#1f2738] hover:border-[#00f5ff] text-gray-300 hover:text-white transition-all"
+              >
+                "Hola a todos, bienvenidos a Nerdearla..."
+              </button>
+              <button
+                onClick={() => handleSendManualText('Estamos testeando la transcripción en vivo del micrófono sin latencia.')}
+                className="px-2 py-0.5 rounded bg-[#101520] border border-[#1f2738] hover:border-[#00f5ff] text-gray-300 hover:text-white transition-all"
+              >
+                "Testeando transcripción del micrófono..."
+              </button>
+              <button
+                onClick={() => handleSendManualText('El cluster de Kubernetes está corriendo los pods en producción con Cilium eBPF.')}
+                className="px-2 py-0.5 rounded bg-[#101520] border border-[#1f2738] hover:border-[#00f5ff] text-gray-300 hover:text-white transition-all"
+              >
+                "Cluster Kubernetes con Cilium eBPF..."
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </RackUnit>
+
+      {/* 19" RACK UNIT 05: MINI-PC STAGE MATRIX & ZERO-RUSTDESK REMOTE MANAGEMENT */}
+      <RackUnit
+        unitId="RACK_05"
+        uHeight="2U"
+        title="MATRIZ DE MINI-PCs DE SALA // GESTIÓN REMOTA ZERO-RUSTDESK (MESA TÉCNICA)"
+        subTitle="Control de hardware para las Mini PCs conectadas por Jack 3.5mm en cada escenario. Elimina la necesidad de acceder por RustDesk para reiniciar."
+        rightBadge={
+          <div className="flex items-center gap-2">
+            {onOpenVMixModal && (
+              <button
+                onClick={onOpenVMixModal}
+                className="px-2.5 py-1 rounded bg-[#ff1744]/15 hover:bg-[#ff1744]/25 border border-[#ff1744]/40 text-[#ff1744] text-xs font-mono font-bold flex items-center gap-1.5 transition-all"
+              >
+                <Tv className="w-3.5 h-3.5" />
+                <span>INTEGRACIÓN vMIX / OBS</span>
+              </button>
+            )}
+            <div className="px-2 py-1 rounded bg-[#07090e] border border-[#1b2230] text-[#00ff66] text-[10px] font-mono flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-[#00ff66] shadow-[0_0_6px_#00ff66]" />
+              <span>WATCHDOG MESA: ACTIVO</span>
+            </div>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          
+          {/* Remote Reload Feedback Toast */}
+          {remoteReloadFeedback && (
+            <div className="p-3 bg-[#00ff66]/15 border border-[#00ff66]/40 rounded text-[#00ff66] text-xs font-mono flex items-center justify-between animate-pulse">
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 shrink-0" />
+                <span className="font-bold">{remoteReloadFeedback}</span>
+              </div>
+              <span className="text-[10px] text-gray-400">Comando WebSocket emitido</span>
+            </div>
+          )}
+
+          {/* Grid of 3 Stage Mini PCs */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {stages.map((stg, i) => (
+              <div
+                key={stg.id}
+                className="bg-[#07090e] border border-[#171b26] rounded-xl p-3 flex flex-col justify-between space-y-3"
+              >
+                {/* Header */}
+                <div className="border-b border-[#171b26] pb-2 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#10141e] text-[#00f5ff] font-bold border border-[#202738]">
+                      MINI-PC 0{i + 1}
+                    </span>
+                    <span className="text-xs font-mono font-bold text-white uppercase">{stg.name}</span>
+                  </div>
+                  <span className="flex items-center gap-1 text-[9px] font-mono text-[#00ff66]">
+                    <span className="w-2 h-2 rounded-full bg-[#00ff66] animate-pulse" />
+                    ONLINE
+                  </span>
+                </div>
+
+                {/* Telemetry info */}
+                <div className="space-y-1 text-[10px] font-mono text-gray-400">
+                  <div className="flex items-center justify-between">
+                    <span>ENTRADA HARDWARE:</span>
+                    <span className="text-gray-200 font-bold">Jack 3.5mm Line-In</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>VÚMETRO DE ENTRADA:</span>
+                    <span className={stg.audioLevel > 0 ? 'text-[#00ff66] font-bold' : 'text-gray-500'}>
+                      {stg.audioLevel > 0 ? `${stg.audioLevel}% (ACTIVO)` : 'SILENCIO (0%)'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>PROYECTOR DE SALA:</span>
+                    <span className="text-gray-200">Confidence Display</span>
+                  </div>
+                </div>
+
+                {/* Action Buttons: F5 Remoto, Kiosk Link, vMix Overlay */}
+                <div className="pt-2 border-t border-[#171b26] space-y-1.5 font-mono text-[10px]">
+                  <button
+                    onClick={() => handleRemoteReloadNode(stg.id, stg.name)}
+                    className="w-full py-1.5 px-2 rounded bg-[#ff1744]/15 hover:bg-[#ff1744]/25 border border-[#ff1744]/40 text-[#ff1744] font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm"
+                    title="Emite una orden WebSocket a la Mini PC de esta sala para que refresque su navegador automáticamente, sin usar RustDesk"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>ENVIAR F5 REMOTO (REINICIAR NODO)</span>
+                  </button>
+
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      onClick={() => window.open(`/?view=kiosk&stage=${stg.id}`, '_blank')}
+                      className="py-1 px-2 rounded bg-[#10141e] hover:bg-[#161c28] border border-[#202738] text-gray-300 hover:text-white flex items-center justify-center gap-1"
+                    >
+                      <Radio className="w-3 h-3 text-[#00f5ff]" />
+                      <span>ABRIR KIOSK</span>
+                    </button>
+
+                    <button
+                      onClick={() => window.open(`/?view=overlay&stage=${stg.id}&lang=es&theme=vmix`, '_blank')}
+                      className="py-1 px-2 rounded bg-[#10141e] hover:bg-[#161c28] border border-[#202738] text-gray-300 hover:text-white flex items-center justify-center gap-1"
+                    >
+                      <Tv className="w-3 h-3 text-[#ff1744]" />
+                      <span>vMIX OVERLAY</span>
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            ))}
+          </div>
+
+        </div>
+      </RackUnit>
 
     </div>
   );

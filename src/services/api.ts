@@ -63,7 +63,25 @@ export async function fetchGlossary(): Promise<TechTerm[]> {
   return data.terms || [];
 }
 
-export async function addGlossaryTerm(term: string, definition: string, category: string = 'general'): Promise<any> {
+export async function addGlossaryTerm(
+  termOrObj: string | { term: string; definition: string; category?: string },
+  def?: string,
+  cat: string = 'general'
+): Promise<any> {
+  let term: string;
+  let definition: string;
+  let category: string;
+
+  if (typeof termOrObj === 'object') {
+    term = termOrObj.term;
+    definition = termOrObj.definition;
+    category = termOrObj.category || 'general';
+  } else {
+    term = termOrObj;
+    definition = def || '';
+    category = cat;
+  }
+
   const res = await fetch(`${API_BASE}/glossary`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

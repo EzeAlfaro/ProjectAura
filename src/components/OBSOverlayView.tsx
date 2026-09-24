@@ -1,52 +1,109 @@
 import React, { useEffect, useState } from 'react';
 import { SubtitleChunk, SupportedLanguage, Stage } from '../types.js';
+import { formatBroadcastSubtitle } from '../utils/broadcastSegmenter.js';
 
 interface OBSOverlayViewProps {
   stage?: Stage;
   chunks: SubtitleChunk[];
   selectedLang: SupportedLanguage;
   onSelectLang?: (lang: SupportedLanguage) => void;
+  onExit?: () => void;
 }
 
 export const OBSOverlayView: React.FC<OBSOverlayViewProps> = ({
   stage,
   chunks,
   selectedLang,
+  onExit,
 }) => {
   const [urlParams, setUrlParams] = useState({
     theme: 'dark-bar', // 'dark-bar' or 'floating'
     lines: 2,
     size: 'large', // 'normal', 'large', 'xl'
+    delayMs: 0,
   });
+
+  const [delayedChunks, setDelayedChunks] = useState<SubtitleChunk[]>([]);
+  const [isFadedOut, setIsFadedOut] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const theme = params.get('theme') || 'dark-bar';
     const lines = parseInt(params.get('lines') || '2', 10);
     const size = params.get('size') || 'large';
-    setUrlParams({ theme, lines, size });
+    const delayMs = Math.max(0, parseInt(params.get('delay') || '0', 10));
+    setUrlParams({ theme, lines, size, delayMs });
+
+    // Ensure OBS browser source background is 100% transparent
+    const prevBg = document.body.style.backgroundColor;
+    document.body.style.backgroundColor = 'transparent';
+    return () => {
+      document.body.style.backgroundColor = prevBg;
+    };
   }, []);
 
+  // Broadcast Delay Buffer (Caption.Ninja & StreamText pattern for video lip-sync)
+  // and Auto-Clear after 5.5s of acoustic silence (EIA-608 / CEA-708 standard)
+  useEffect(() => {
+    if (chunks.length === 0) {
+      setDelayedChunks([]);
+      return;
+    }
+
+    const delayTimer = setTimeout(() => {
+      setDelayedChunks(chunks);
+      setIsFadedOut(false);
+    }, urlParams.delayMs);
+
+    // Auto-clear after 5.5 seconds of silence so subtitles don't stay frozen on screen
+    const autoClearTimer = setTimeout(() => {
+      setIsFadedOut(true);
+    }, urlParams.delayMs + 5500);
+
+    return () => {
+      clearTimeout(delayTimer);
+      clearTimeout(autoClearTimer);
+    };
+  }, [chunks, urlParams.delayMs]);
+
   const getDisplayText = (chunk: SubtitleChunk): string => {
+    let raw = '';
     switch (selectedLang) {
       case 'es':
-        return chunk.esText || chunk.originalText;
+        raw = chunk.esText || chunk.originalText;
+        break;
       case 'en':
-        return chunk.enText || chunk.originalText;
+        raw = chunk.enText || chunk.originalText;
+        break;
       case 'pt':
-        return chunk.ptText || chunk.esText || chunk.originalText;
+        raw = chunk.ptText || chunk.esText || chunk.originalText;
+        break;
       case 'original':
       default:
-        return chunk.originalText;
+        raw = chunk.originalText;
+        break;
     }
+    // CEA-708 standard: max ~12 words per card
+    return formatBroadcastSubtitle(raw, 12);
   };
 
   // Get last N chunks for the overlay
-  const recentChunks = chunks.slice(-urlParams.lines);
+  const recentChunks = isFadedOut ? [] : delayedChunks.slice(-urlParams.lines);
 
   return (
     <div className="fixed inset-0 w-screen h-screen bg-transparent pointer-events-none flex flex-col justify-end p-8 sm:p-12 z-50 overflow-hidden font-sans">
       
+      {/* Optional Operator Exit Button (Hover/Pointer Enabled) */}
+      {onExit && (
+        <button
+          onClick={onExit}
+          className="fixed top-4 right-4 pointer-events-auto px-3 py-1.5 rounded-full bg-black/80 hover:bg-black text-white/70 hover:text-white border border-white/20 font-mono text-xs shadow-lg transition-all flex items-center gap-1.5"
+          title="Salir del Overlay y volver a la consola de control"
+        >
+          <span>✕ SALIR DE OVERLAY</span>
+        </button>
+      )}
+
       {/* Broadcast Subtitle Container pinned to bottom center */}
       <div className="w-full max-w-5xl mx-auto flex flex-col items-center">
         
@@ -76,7 +133,7 @@ export const OBSOverlayView: React.FC<OBSOverlayViewProps> = ({
                 return (
                   <p
                     key={chunk.id}
-                    className={`font-semibold tracking-wide transition-all ${
+                    className={`font-semibold tracking-wide transition-all line-clamp-2 ${
                       isLatest
                         ? 'text-white text-2xl sm:text-3xl leading-snug drop-shadow-md'
                         : 'text-gray-400 text-xl sm:text-2xl leading-normal opacity-85'
