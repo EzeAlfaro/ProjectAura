@@ -1,0 +1,155 @@
+import { SubtitleChunk, Stage, StageTakeaway, StageQA, SupportedLanguage, StageData } from '../types.js';
+
+export interface WSCallbacks {
+  onCaption?: (chunk: SubtitleChunk) => void;
+  onTakeaways?: (takeaways: StageTakeaway[]) => void;
+  onQuestions?: (questions: StageQA[]) => void;
+  onAudioLevel?: (level: number) => void;
+  onStagesUpdate?: (stages: Stage[]) => void;
+  onInitialState?: (data: { stage: Stage; chunks: SubtitleChunk[]; takeaways: StageTakeaway[]; suggestedQuestions: StageQA[] }) => void;
+  onStatusChange?: (connected: boolean) => void;
+}
+
+export class WSClient {
+  private ws: WebSocket | null = null;
+  private callbacks: WSCallbacks = {};
+  private currentStageId: string = 'stage-1';
+  private currentLang: SupportedLanguage = 'original';
+  private reconnectTimer: NodeJS.Timeout | null = null;
+  private isExplicitlyClosed: boolean = false;
+
+  constructor(callbacks: WSCallbacks) {
+    this.callbacks = callbacks;
+  }
+
+  public connect(stageId: string = 'stage-1', lang: SupportedLanguage = 'original') {
+    this.currentStageId = stageId;
+    this.currentLang = lang;
+    this.isExplicitlyClosed = false;
+
+    if (this.ws) {
+      try {
+        this.ws.close();
+      } catch (e) {}
+    }
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    const wsUrl = `${protocol}//${host}/ws`;
+
+    try {
+      this.ws = new WebSocket(wsUrl);
+
+      this.ws.onopen = () => {
+        this.callbacks.onStatusChange?.(true);
+        this.send({
+          type: 'subscribe',
+          stageId: this.currentStageId,
+          lang: this.currentLang
+        });
+      };
+
+      this.ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          switch (msg.type) {
+            case 'caption':
+              this.callbacks.onCaption?.(msg.chunk);
+              break;
+            case 'takeaways':
+              this.callbacks.onTakeaways?.(msg.takeaways);
+              break;
+            case 'questions':
+              this.callbacks.onQuestions?.(msg.questions);
+              break;
+            case 'audio_level':
+              this.callbacks.onAudioLevel?.(msg.level);
+              break;
+            case 'stages_update':
+              this.callbacks.onStagesUpdate?.(msg.stages);
+              break;
+            case 'initial_state':
+              this.callbacks.onInitialState?.(msg);
+              break;
+          }
+        } catch (err) {
+          console.error('[WSClient] Error parsing message:', err);
+        }
+      };
+
+      this.ws.onclose = () => {
+        this.callbacks.onStatusChange?.(false);
+        if (!this.isExplicitlyClosed) {
+          this.scheduleReconnect();
+        }
+      };
+
+      this.ws.onerror = (error) => {
+        console.warn('[WSClient] Socket error:', error);
+      };
+
+    } catch (e) {
+      console.error('[WSClient] Connection failed:', e);
+      this.scheduleReconnect();
+    }
+  }
+
+  public setStage(stageId: string, lang?: SupportedLanguage) {
+    this.currentStageId = stageId;
+    if (lang) this.currentLang = lang;
+    this.send({
+      type: 'subscribe',
+      stageId: this.currentStageId,
+      lang: this.currentLang
+    });
+  }
+
+  public setLanguage(lang: SupportedLanguage) {
+    this.currentLang = lang;
+    this.send({
+      type: 'set_lang',
+      lang: this.currentLang
+    });
+  }
+
+  public sendAudioChunk(stageId: string, base64Audio: string, mimeType: string = 'audio/webm') {
+    this.send({
+      type: 'audio_chunk',
+      stageId,
+      base64Audio,
+      mimeType
+    });
+  }
+
+  public sendAudioLevel(stageId: string, level: number) {
+    this.send({
+      type: 'audio_level',
+      stageId,
+      level
+    });
+  }
+
+  private send(data: any) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(data));
+    }
+  }
+
+  private scheduleReconnect() {
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = setTimeout(() => {
+      if (!this.isExplicitlyClosed) {
+        this.connect(this.currentStageId, this.currentLang);
+      }
+    }, 2000);
+  }
+
+  public disconnect() {
+    this.isExplicitlyClosed = true;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+  }
+}
