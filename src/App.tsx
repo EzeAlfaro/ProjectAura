@@ -8,7 +8,7 @@ import { ApiKeyModal } from './components/ApiKeyModal.js';
 import { QRCodeModal } from './components/QRCodeModal.js';
 import { VMixModal } from './components/VMixModal.js';
 import { WSClient } from './services/websocket.js';
-import { fetchStages, fetchStatus } from './services/api.js';
+import { fetchStages, fetchStatus, triggerDeepIntel } from './services/api.js';
 import { Stage, SubtitleChunk, StageTakeaway, StageQA, SupportedLanguage } from './types.js';
 
 export function App() {
@@ -20,6 +20,9 @@ export function App() {
   const [chunks, setChunks] = useState<SubtitleChunk[]>([]);
   const [takeaways, setTakeaways] = useState<StageTakeaway[]>([]);
   const [suggestedQuestions, setSuggestedQuestions] = useState<StageQA[]>([]);
+  const [executiveSummary, setExecutiveSummary] = useState<string>('');
+  const [intelModelUsed, setIntelModelUsed] = useState<string>('gemini-2.5-pro');
+  const [isGeneratingIntel, setIsGeneratingIntel] = useState<boolean>(false);
   
   const [geminiConfigured, setGeminiConfigured] = useState<boolean>(false);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false);
@@ -75,6 +78,8 @@ export function App() {
         if (data.chunks) setChunks(data.chunks);
         if (data.takeaways) setTakeaways(data.takeaways);
         if (data.suggestedQuestions) setSuggestedQuestions(data.suggestedQuestions);
+        if ((data as any).executiveSummary) setExecutiveSummary((data as any).executiveSummary);
+        if ((data as any).intelModelUsed) setIntelModelUsed((data as any).intelModelUsed);
       },
       onCaption: (newChunk) => {
         setChunks((prev) => {
@@ -86,6 +91,12 @@ export function App() {
       },
       onTakeaways: (newTakeaways) => setTakeaways(newTakeaways),
       onQuestions: (newQuestions) => setSuggestedQuestions(newQuestions),
+      onDeepIntel: (data) => {
+        if (data.executiveSummary) setExecutiveSummary(data.executiveSummary);
+        if (data.intelModelUsed) setIntelModelUsed(data.intelModelUsed);
+        if (data.takeaways) setTakeaways(data.takeaways);
+        if (data.suggestedQuestions) setSuggestedQuestions(data.suggestedQuestions);
+      },
       onChunkDeleted: (chunkId) => {
         setChunks((prev) => prev.filter((c) => c.id !== chunkId));
       },
@@ -110,12 +121,28 @@ export function App() {
     };
   }, []);
 
+  const handleTriggerDeepIntel = async () => {
+    setIsGeneratingIntel(true);
+    try {
+      const res = await triggerDeepIntel(selectedStageId);
+      if (res.executiveSummary) setExecutiveSummary(res.executiveSummary);
+      if (res.intelModelUsed) setIntelModelUsed(res.intelModelUsed);
+      if (res.takeaways) setTakeaways(res.takeaways);
+      if (res.suggestedQuestions) setSuggestedQuestions(res.suggestedQuestions);
+    } catch (e) {
+      console.warn('Deep intel trigger error:', e);
+    } finally {
+      setIsGeneratingIntel(false);
+    }
+  };
+
   // Sync stage switch with WebSocket
   const handleSelectStage = (stageId: string) => {
     setSelectedStageId(stageId);
     setChunks([]);
     setTakeaways([]);
     setSuggestedQuestions([]);
+    setExecutiveSummary('');
     wsClientRef.current?.setStage(stageId, selectedLang);
   };
 
@@ -188,6 +215,10 @@ export function App() {
             takeaways={takeaways}
             suggestedQuestions={suggestedQuestions}
             onOpenQrModal={() => setIsQrModalOpen(true)}
+            executiveSummary={executiveSummary}
+            intelModelUsed={intelModelUsed}
+            onTriggerDeepIntel={handleTriggerDeepIntel}
+            isGeneratingIntel={isGeneratingIntel}
           />
         )}
 

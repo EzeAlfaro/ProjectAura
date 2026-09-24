@@ -10,6 +10,7 @@ export interface WSCallbacks {
   onStatusChange?: (connected: boolean) => void;
   onChunkDeleted?: (chunkId: string) => void;
   onRemoteReload?: (stageId: string) => void;
+  onDeepIntel?: (data: { stageId: string; takeaways: StageTakeaway[]; suggestedQuestions: StageQA[]; executiveSummary: string; intelModelUsed: string }) => void;
 }
 
 export class WSClient {
@@ -63,6 +64,11 @@ export class WSClient {
               break;
             case 'questions':
               this.callbacks.onQuestions?.(msg.questions);
+              break;
+            case 'deep_intel':
+              this.callbacks.onDeepIntel?.(msg);
+              if (msg.takeaways) this.callbacks.onTakeaways?.(msg.takeaways);
+              if (msg.suggestedQuestions) this.callbacks.onQuestions?.(msg.suggestedQuestions);
               break;
             case 'audio_level':
               this.callbacks.onAudioLevel?.(msg.level);
