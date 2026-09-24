@@ -3,14 +3,16 @@ import { Header } from './components/Header.js';
 import { AudienceView } from './components/AudienceView.js';
 import { AdminView } from './components/AdminView.js';
 import { OBSOverlayView } from './components/OBSOverlayView.js';
+import { StageKioskView } from './components/StageKioskView.js';
 import { ApiKeyModal } from './components/ApiKeyModal.js';
 import { QRCodeModal } from './components/QRCodeModal.js';
+import { VMixModal } from './components/VMixModal.js';
 import { WSClient } from './services/websocket.js';
 import { fetchStages, fetchStatus } from './services/api.js';
 import { Stage, SubtitleChunk, StageTakeaway, StageQA, SupportedLanguage } from './types.js';
 
 export function App() {
-  const [currentView, setCurrentView] = useState<'audience' | 'admin' | 'overlay'>('audience');
+  const [currentView, setCurrentView] = useState<'audience' | 'admin' | 'overlay' | 'kiosk'>('audience');
   const [stages, setStages] = useState<Stage[]>([]);
   const [selectedStageId, setSelectedStageId] = useState<string>('stage-1');
   const [selectedLang, setSelectedLang] = useState<SupportedLanguage>('es');
@@ -22,20 +24,25 @@ export function App() {
   const [geminiConfigured, setGeminiConfigured] = useState<boolean>(false);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState<boolean>(false);
+  const [isVMixModalOpen, setIsVMixModalOpen] = useState<boolean>(false);
   const [isConnected, setIsConnected] = useState<boolean>(false);
 
   const wsClientRef = useRef<WSClient | null>(null);
 
-  // Check URL pathname or query param for OBS Overlay mode
+  // Check URL pathname or query param for Overlay / Kiosk modes
   useEffect(() => {
-    const path = window.location.pathname;
     const params = new URLSearchParams(window.location.search);
-    if (path.includes('overlay') || params.has('overlay') || window.location.hash.includes('overlay')) {
+    const queryStage = params.get('stage');
+    if (queryStage) setSelectedStageId(queryStage);
+    const queryLang = params.get('lang') as SupportedLanguage;
+    if (queryLang) setSelectedLang(queryLang);
+
+    const path = window.location.pathname;
+    const queryView = params.get('view');
+    if (queryView === 'kiosk' || path.includes('kiosk') || params.has('kiosk')) {
+      setCurrentView('kiosk');
+    } else if (queryView === 'overlay' || path.includes('overlay') || params.has('overlay') || window.location.hash.includes('overlay')) {
       setCurrentView('overlay');
-      const queryStage = params.get('stage');
-      if (queryStage) setSelectedStageId(queryStage);
-      const queryLang = params.get('lang') as SupportedLanguage;
-      if (queryLang) setSelectedLang(queryLang);
     }
   }, []);
 
@@ -79,6 +86,15 @@ export function App() {
       },
       onTakeaways: (newTakeaways) => setTakeaways(newTakeaways),
       onQuestions: (newQuestions) => setSuggestedQuestions(newQuestions),
+      onChunkDeleted: (chunkId) => {
+        setChunks((prev) => prev.filter((c) => c.id !== chunkId));
+      },
+      onRemoteReload: (stageId) => {
+        if (!stageId || stageId === selectedStageId) {
+          console.log('[RemoteReload] Signal received from Mesa Técnica, executing reload...');
+          window.location.reload();
+        }
+      },
       onAudioLevel: (level) => {
         setStages((prev) =>
           prev.map((s) => (s.id === selectedStageId ? { ...s, audioLevel: level } : s))
@@ -120,8 +136,28 @@ export function App() {
           chunks={chunks}
           selectedLang={selectedLang}
           onSelectLang={handleSelectLang}
+          onExit={() => setCurrentView('admin')}
         />
       </div>
+    );
+  }
+
+  // If in autonomous On-Stage Mini PC Kiosk mode
+  if (currentView === 'kiosk') {
+    return (
+      <StageKioskView
+        stage={currentStage}
+        stages={stages}
+        onSelectStage={handleSelectStage}
+        chunks={chunks}
+        selectedLang={selectedLang}
+        onSelectLang={handleSelectLang}
+        wsClient={wsClientRef.current}
+        onPushLiveTranscript={(text: string, sourceLang?: string) => {
+          wsClientRef.current?.sendLiveTranscript(selectedStageId, text, sourceLang || 'es');
+        }}
+        onExit={() => setCurrentView('admin')}
+      />
     );
   }
 
@@ -134,6 +170,7 @@ export function App() {
         geminiConfigured={geminiConfigured}
         onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
         onOpenQrModal={() => setIsQrModalOpen(true)}
+        onOpenVMixModal={() => setIsVMixModalOpen(true)}
         isConnected={isConnected}
         activeStageName={currentStage?.name}
       />
@@ -160,6 +197,12 @@ export function App() {
             onSelectStage={handleSelectStage}
             geminiConfigured={geminiConfigured}
             onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
+            onOpenVMixModal={() => setIsVMixModalOpen(true)}
+            chunks={chunks}
+            wsClient={wsClientRef.current}
+            onPushLiveTranscript={(text: string, sourceLang?: string) => {
+              wsClientRef.current?.sendLiveTranscript(selectedStageId, text, sourceLang || 'es');
+            }}
           />
         )}
       </main>
@@ -203,6 +246,14 @@ export function App() {
           selectedLang={selectedLang}
         />
       )}
+
+      {/* vMix & OBS Studio Integration Modal */}
+      <VMixModal
+        isOpen={isVMixModalOpen}
+        onClose={() => setIsVMixModalOpen(false)}
+        stages={stages}
+        selectedStageId={selectedStageId}
+      />
     </div>
   );
 }

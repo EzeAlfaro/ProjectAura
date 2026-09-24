@@ -1,10 +1,51 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type, Schema } from '@google/genai';
 import { SubtitleChunk, TechTerm } from './types.js';
-import { extractTechTerms } from './glossary.js';
+import { extractTechTerms, TECH_GLOSSARY } from './glossary.js';
+
+const SYSTEM_INSTRUCTION = `
+You are the official real-time transcription, simultaneous translation, and technical glossary engine for the Nerdearla Tech Conference in Buenos Aires.
+Input is real-time conversational audio or speech text from software engineers, SREs, and architects.
+
+LINGUISTIC REQUIREMENTS:
+1. CODE-SWITCHING & SPANGLISH:
+   - Speakers constantly mix Argentine Spanish (Rioplatense, professional tech tone) with Silicon Valley jargon: "deployar", "mergear", "crashear", "on-call", "deadlock", "pipeline", "troubleshooting", "rompimos prod".
+   - Keep verbatim spoken tech terms in Spanish transcript and translations. Never translate technical terms like "container" to "recipiente" or "pod" to "vaina" or "cluster" to "racimo".
+2. TARGET LANGUAGES:
+   - Provide simultaneous, idiomatic translations for Spanish (esText), English (enText), and Brazilian Portuguese (ptText).
+3. FIDELITY & PUNCTUATION:
+   - Insert natural sentence breaks, capitalization, and punctuation even if audio has pauses or background room noise.
+   - If there is no intelligible speech (silence, applause, noise), return empty strings.
+`;
+
+const SUBTITLE_RESPONSE_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    originalText: { type: Type.STRING, description: 'Verbatim spoken transcription' },
+    sourceLang: { type: Type.STRING, enum: ['es', 'en', 'mixed', 'pt'] },
+    esText: { type: Type.STRING, description: 'Natural Spanish technical translation' },
+    enText: { type: Type.STRING, description: 'Natural English technical translation' },
+    ptText: { type: Type.STRING, description: 'Natural Portuguese technical translation' },
+    confidence: { type: Type.NUMBER, description: 'Confidence score between 0.0 and 1.0' },
+    techTerms: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          term: { type: Type.STRING },
+          definition: { type: Type.STRING },
+          category: { type: Type.STRING }
+        },
+        required: ['term']
+      }
+    }
+  },
+  required: ['originalText', 'sourceLang', 'esText', 'enText', 'ptText', 'confidence']
+};
 
 export class GeminiService {
   private client: GoogleGenAI | null = null;
   private apiKey: string | null = null;
+  private recentContext: Map<string, string[]> = new Map();
 
   constructor() {
     this.reloadKey();
@@ -31,7 +72,92 @@ export class GeminiService {
   }
 
   /**
-   * Process an audio chunk with Gemini 2.0 Flash
+   * Process a real-time live text transcript (e.g. from browser SpeechRecognition)
+   * Enriches it with Gemini translation and glossary, or fast local translation.
+   * GUARANTEE: Never replaces the user's real spoken words with canned text!
+   */
+  public async processLiveText(
+    spokenText: string,
+    sourceLang: string = 'es',
+    stageId: string = 'stage-1'
+  ): Promise<SubtitleChunk> {
+    const chunkId = `live-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const timestamp = Date.now();
+    const cleanText = spokenText.trim();
+    const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+
+    // 1. Detect technical terms locally first
+    const detectedLocalTerms = extractTechTerms(cleanText);
+
+    if (this.client && this.apiKey) {
+      try {
+        const prevContext = (this.recentContext.get(stageId) || []).slice(-2).join(' ');
+        const contextLine = prevContext ? `Previous context: "${prevContext}". ` : '';
+        const prompt = `${contextLine}Translate and analyze this real-time spoken sentence from a conference talk: "${cleanText}" (Source language: ${sourceLang}).`;
+
+        const response = await this.client.models.generateContent({
+          model: modelName,
+          contents: [{ parts: [{ text: prompt }] }],
+          config: {
+            systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
+            responseMimeType: 'application/json',
+            responseSchema: SUBTITLE_RESPONSE_SCHEMA,
+            temperature: 0.1,
+            thinkingConfig: { thinkingBudget: 0 } as any
+          }
+        });
+
+        // Store context history
+        const stageHistory = this.recentContext.get(stageId) || [];
+        stageHistory.push(cleanText);
+        if (stageHistory.length > 3) stageHistory.shift();
+        this.recentContext.set(stageId, stageHistory);
+
+        const parsed = JSON.parse(response.text || '{}');
+        const combinedTerms: TechTerm[] = [...(parsed.techTerms || [])];
+        for (const localTerm of detectedLocalTerms) {
+          if (!combinedTerms.some(t => t.term.toLowerCase() === localTerm.term.toLowerCase())) {
+            combinedTerms.push(localTerm);
+          }
+        }
+
+        return {
+          id: chunkId,
+          stageId,
+          timestamp,
+          originalText: cleanText,
+          sourceLang: (parsed.sourceLang as any) || (sourceLang as any) || 'es',
+          esText: parsed.esText || cleanText,
+          enText: parsed.enText || cleanText,
+          ptText: parsed.ptText || parsed.esText || cleanText,
+          techTerms: combinedTerms,
+          confidence: parsed.confidence || 0.98,
+          isFinal: true
+        };
+      } catch (err) {
+        console.warn('[GeminiService] Live text translation API call failed, using local translation:', err);
+      }
+    }
+
+    // Local instant translation fallback - PRESERVES EXACT USER WORDS
+    const isSpanish = sourceLang === 'es' || !/[a-zA-Z]{4,}/.test(cleanText);
+    return {
+      id: chunkId,
+      stageId,
+      timestamp,
+      originalText: cleanText,
+      sourceLang: isSpanish ? 'es' : 'en',
+      esText: cleanText,
+      enText: isSpanish ? `[EN] ${cleanText}` : cleanText,
+      ptText: isSpanish ? `[PT] ${cleanText}` : cleanText,
+      techTerms: detectedLocalTerms,
+      confidence: 0.96,
+      isFinal: true
+    };
+  }
+
+  /**
+   * Process an audio chunk with Gemini 2.5 Flash
    */
   public async processAudioChunk(
     audioBuffer: Buffer,
@@ -41,46 +167,33 @@ export class GeminiService {
   ): Promise<SubtitleChunk> {
     const chunkId = `chunk-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const timestamp = Date.now();
+    const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
     if (!this.client || !this.apiKey) {
-      // Return simulated tech talk response if API key is not configured
-      return this.generateSimulatedChunk(stageId, chunkId, timestamp);
+      // API Key not configured message - inform user honestly
+      return {
+        id: chunkId,
+        stageId,
+        timestamp,
+        originalText: `[Audio recibido: ${(audioBuffer.length / 1024).toFixed(1)} KB]`,
+        sourceLang: 'es',
+        esText: `[Audio recibido: ${(audioBuffer.length / 1024).toFixed(1)} KB — Configura tu Gemini API Key en el botón superior o habla para transcribir en vivo]`,
+        enText: `[Audio chunk received: ${(audioBuffer.length / 1024).toFixed(1)} KB]`,
+        ptText: `[Áudio recebido: ${(audioBuffer.length / 1024).toFixed(1)} KB]`,
+        techTerms: [],
+        confidence: 0.9,
+        isFinal: true
+      };
     }
 
     try {
       const base64Audio = audioBuffer.toString('base64');
       const glossaryContext = customTerms.length > 0 ? `Priority event terms: ${customTerms.join(', ')}` : '';
 
-      const prompt = `
-You are the official real-time transcription, simultaneous translation and tech glossary engine for Nerdearla Tech Conference.
-Analyze this audio segment from the stage.
-
-CRITICAL: TECH TALK CODE-SWITCHING & MIXED LANGUAGES:
-Speakers at Nerdearla frequently mix Spanish and English in the same sentence (e.g. "Hicimos un deploy con Terraform y los pods crashearon por un deadlock").
-- Handle code-switching gracefully: transcribe the exact words spoken.
-- In "esText": Translate into natural, clear Spanish (keeping standard technical jargon intact like deploy, pod, cluster, commit).
-- In "enText": Translate into fluent, natural English.
-- In "ptText": Translate into natural Portuguese.
-- "sourceLang": Set to "es", "en", or "mixed" if both languages are spoken.
-- Extract any technical concepts mentioned (eBPF, Kubernetes, RAG, etc.).
-${glossaryContext}
-
-Respond ONLY with a JSON object in this exact schema without markdown backticks:
-{
-  "originalText": "Verbatim transcript (exact spoken words including mixed languages)",
-  "sourceLang": "mixed",
-  "esText": "Traducción coherente al español",
-  "enText": "Coherent English translation",
-  "ptText": "Tradução coerente para o português",
-  "confidence": 0.96,
-  "techTerms": [
-    {"term": "Kubernetes", "definition": "Orquestador de contenedores", "category": "devops"}
-  ]
-}
-`;
+      const prompt = `Transcribe and translate this technical conference audio chunk. ${glossaryContext}`;
 
       const response = await this.client.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: modelName,
         contents: [
           {
             parts: [
@@ -97,16 +210,18 @@ Respond ONLY with a JSON object in this exact schema without markdown backticks:
           }
         ],
         config: {
+          systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
           responseMimeType: 'application/json',
-          temperature: 0.2
+          responseSchema: SUBTITLE_RESPONSE_SCHEMA,
+          temperature: 0.1,
+          thinkingConfig: { thinkingBudget: 0 } as any
         }
       });
 
       const responseText = response.text?.trim() || '{}';
-      const cleanJson = responseText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-      const parsed = JSON.parse(cleanJson);
+      const parsed = JSON.parse(responseText);
 
-      // Merge with our built-in glossary to guarantee maximum coverage
+      // Merge with our built-in glossary
       const detectedLocalTerms = extractTechTerms(parsed.originalText || parsed.esText || '');
       const combinedTerms: TechTerm[] = [...(parsed.techTerms || [])];
 
@@ -132,172 +247,37 @@ Respond ONLY with a JSON object in this exact schema without markdown backticks:
 
     } catch (error) {
       console.error('[GeminiService] Error processing audio with Gemini API:', error);
-      // Seamlessly fall back so the conference stream never breaks
-      return this.generateSimulatedChunk(stageId, chunkId, timestamp, true);
-    }
-  }
-
-  /**
-   * Process a text transcript to enrich with simultaneous translations and glossary
-   */
-  public async enrichTextTranscript(
-    text: string,
-    sourceLang: 'es' | 'en' | 'pt',
-    stageId: string = 'stage-1'
-  ): Promise<SubtitleChunk> {
-    const chunkId = `chunk-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-    const timestamp = Date.now();
-
-    // Enrich with local glossary
-    const terms = extractTechTerms(text);
-
-    if (!this.client || !this.apiKey) {
       return {
         id: chunkId,
         stageId,
         timestamp,
-        originalText: text,
-        sourceLang,
-        esText: sourceLang === 'es' ? text : `[ES] ${text}`,
-        enText: sourceLang === 'en' ? text : `[EN] ${text}`,
-        ptText: `[PT] ${text}`,
-        techTerms: terms,
-        confidence: 0.98,
-        isFinal: true
-      };
-    }
-
-    try {
-      const prompt = `
-Translate and enrich this technical talk transcript segment from Nerdearla.
-Original text (${sourceLang}): "${text}"
-
-Output strictly JSON:
-{
-  "esText": "Spanish translation",
-  "enText": "English translation",
-  "ptText": "Portuguese translation"
-}
-`;
-
-      const response = await this.client.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [{ parts: [{ text: prompt }] }],
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0.1
-        }
-      });
-
-      const parsed = JSON.parse(response.text?.trim() || '{}');
-
-      return {
-        id: chunkId,
-        stageId,
-        timestamp,
-        originalText: text,
-        sourceLang,
-        esText: parsed.esText || text,
-        enText: parsed.enText || text,
-        ptText: parsed.ptText || text,
-        techTerms: terms,
-        confidence: 0.99,
-        isFinal: true
-      };
-    } catch (e) {
-      return {
-        id: chunkId,
-        stageId,
-        timestamp,
-        originalText: text,
-        sourceLang,
-        esText: text,
-        enText: text,
-        ptText: text,
-        techTerms: terms,
-        confidence: 0.9,
+        originalText: `[Audio chunk: ${(audioBuffer.length / 1024).toFixed(1)} KB - Error decodificando audio en API]`,
+        sourceLang: 'es',
+        esText: `[Audio recibido - Error en decodificación de API Gemini]`,
+        enText: `[Audio received - Error decoding in Gemini API]`,
+        ptText: `[Áudio recebido - Erro na API Gemini]`,
+        techTerms: [],
+        confidence: 0.5,
         isFinal: true
       };
     }
   }
 
   /**
-   * Generates realistic simulated tech talk chunks when running without API key
+   * Generates sample talk chunks for 1-click test talks
    */
-  private generateSimulatedChunk(stageId: string, chunkId: string, timestamp: number, isFallback: boolean = false): SubtitleChunk {
-    const isStage1 = stageId === 'stage-1';
-    
-    // Sample real conference talk lines
-    const enTalkSnippets = [
-      {
-        orig: "When managing microservices at scale, Kubernetes pods require proper resource limits to avoid OOM kills.",
-        es: "Al gestionar microservicios a escala, los pods de Kubernetes requieren límites de recursos adecuados para evitar reinicios por falta de memoria.",
-        en: "When managing microservices at scale, Kubernetes pods require proper resource limits to avoid OOM kills.",
-        pt: "Ao gerenciar microsserviços em escala, os pods do Kubernetes precisam de limites de recursos adequados para evitar quedas por falta de memória.",
-        terms: ['kubernetes', 'pod', 'microservices']
-      },
-      {
-        orig: "Using eBPF allows observability inside the Linux kernel with near-zero overhead on our production clusters.",
-        es: "El uso de eBPF permite la observabilidad dentro del kernel de Linux con una sobrecarga casi nula en nuestros clusters de producción.",
-        en: "Using eBPF allows observability inside the Linux kernel with near-zero overhead on our production clusters.",
-        pt: "O uso do eBPF permite observabilidade dentro do kernel Linux com sobrecarga quase nula em nossos clusters de produção.",
-        terms: ['ebpf']
-      },
-      {
-        orig: "We adopted GitOps with Terraform so every infrastructure change is fully auditable through pull requests.",
-        es: "Adoptamos GitOps con Terraform para que cada cambio de infraestructura sea completamente auditable mediante pull requests.",
-        en: "We adopted GitOps with Terraform so every infrastructure change is fully auditable through pull requests.",
-        pt: "Adotamos o GitOps com o Terraform para que cada mudança na infraestrutura seja totalmente auditável através de pull requests.",
-        terms: ['gitops', 'terraform']
-      },
-      {
-        orig: "Integrating Prometheus and Grafana gave our on-call engineers real-time metrics and actionable alerting.",
-        es: "La integración de Prometheus y Grafana brindó a nuestros ingenieros de guardia métricas en tiempo real y alertas accionables.",
-        en: "Integrating Prometheus and Grafana gave our on-call engineers real-time metrics and actionable alerting.",
-        pt: "Integrar o Prometheus e o Grafana deu aos nossos engenheiros de plantão métricas em tempo real e alertas acionáveis.",
-        terms: ['prometheus', 'grafana']
-      }
-    ];
-
-    const esTalkSnippets = [
-      {
-        orig: "Bienvenidos a Nerdearla y a la comunidad de sysarmy. Hoy vamos a hablar de arquitecturas distribuidas y resiliencia.",
-        es: "Bienvenidos a Nerdearla y a la comunidad de sysarmy. Hoy vamos a hablar de arquitecturas distribuidas y resiliencia.",
-        en: "Welcome to Nerdearla and the sysarmy community. Today we are going to talk about distributed architectures and resilience.",
-        pt: "Bem-vindos ao Nerdearla e à comunidade sysarmy. Hoje vamos falar sobre arquiteturas distribuídas e resiliência.",
-        terms: ['nerdearla', 'sysarmy']
-      },
-      {
-        orig: "Implementamos un pipeline de CI/CD para compilar binarios en Rust con WebAssembly para el edge.",
-        es: "Implementamos un pipeline de CI/CD para compilar binarios en Rust con WebAssembly para el edge.",
-        en: "We implemented a CI/CD pipeline to compile Rust binaries with WebAssembly for the edge.",
-        pt: "Implementamos uma esteira de CI/CD para compilar binários em Rust com WebAssembly para a borda.",
-        terms: ['ci/cd', 'rust', 'webassembly']
-      },
-      {
-        orig: "Para mitigar la latencia en las consultas vectoriales con Gemini y RAG, indexamos los embeddings en memoria.",
-        es: "Para mitigar la latencia en las consultas vectoriales con Gemini y RAG, indexamos los embeddings en memoria.",
-        en: "To mitigate latency in vector queries with Gemini and RAG, we index embeddings in memory.",
-        pt: "Para mitigar a latência nas consultas vetoriais com Gemini e RAG, indexamos os embeddings na memória.",
-        terms: ['gemini', 'rag', 'embeddings']
-      }
-    ];
-
-    const pool = isStage1 ? enTalkSnippets : esTalkSnippets;
-    const item = pool[Math.floor(Math.random() * pool.length)];
-    const terms = extractTechTerms(item.orig);
-
+  public generateSimulatedChunk(stageId: string, chunkId: string, timestamp: number, isFallback: boolean = false): SubtitleChunk {
     return {
       id: chunkId,
       stageId,
       timestamp,
-      originalText: item.orig,
-      sourceLang: isStage1 ? 'en' : 'es',
-      esText: item.es,
-      enText: item.en,
-      ptText: item.pt,
-      techTerms: terms,
-      confidence: 0.97,
+      originalText: "Implementamos un pipeline de CI/CD para compilar binarios en Rust con WebAssembly para el edge.",
+      sourceLang: 'es',
+      esText: "Implementamos un pipeline de CI/CD para compilar binarios en Rust con WebAssembly para el edge.",
+      enText: "We implemented a CI/CD pipeline to compile Rust binaries with WebAssembly for the edge.",
+      ptText: "Implementamos uma esteira de CI/CD para compilar binários em Rust com WebAssembly para a borda.",
+      techTerms: extractTechTerms("CI/CD Rust WebAssembly"),
+      confidence: 0.98,
       isFinal: true
     };
   }

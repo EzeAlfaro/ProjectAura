@@ -1,0 +1,965 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Stage, 
+  SubtitleChunk, 
+  SupportedLanguage, 
+  TechTerm 
+} from '../types.js';
+import { 
+  Mic, 
+  Square, 
+  Tv, 
+  QrCode, 
+  RefreshCw, 
+  Maximize2, 
+  Minimize2, 
+  Activity, 
+  Cpu, 
+  Radio, 
+  Volume2, 
+  ShieldCheck, 
+  AlertCircle,
+  Settings,
+  X,
+  Layers,
+  ChevronDown,
+  Sliders
+} from 'lucide-react';
+import { HardwareVuMeter, HardwareOscilloscope } from './HardwareControls.js';
+import { WSClient } from '../services/websocket.js';
+import QRCode from 'qrcode';
+import { findBroadcastSplitIndex, formatBroadcastSubtitle } from '../utils/broadcastSegmenter.js';
+
+interface StageKioskViewProps {
+  stage?: Stage;
+  stages: Stage[];
+  onSelectStage: (id: string) => void;
+  chunks: SubtitleChunk[];
+  selectedLang: SupportedLanguage;
+  onSelectLang: (lang: SupportedLanguage) => void;
+  wsClient?: WSClient | null;
+  onPushLiveTranscript?: (text: string, sourceLang?: string) => void;
+  onExit?: () => void;
+}
+
+export const StageKioskView: React.FC<StageKioskViewProps> = ({
+  stage,
+  stages,
+  onSelectStage,
+  chunks,
+  selectedLang,
+  onSelectLang,
+  wsClient,
+  onPushLiveTranscript,
+  onExit,
+}) => {
+  const [isRecording, setIsRecording] = useState(false);
+  const [spokenLang, setSpokenLang] = useState<'es' | 'en'>(() => {
+    return stage?.detectedLang === 'en' ? 'en' : 'es';
+  });
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>(() => {
+    return localStorage.getItem('nerdsub_kiosk_device_id') || '';
+  });
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const [currentDbfs, setCurrentDbfs] = useState(-60);
+  const [isClipping, setIsClipping] = useState(false);
+  const [liveInterimText, setLiveInterimText] = useState('');
+  const [showQrCorner, setShowQrCorner] = useState(true);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
+  const [fontSize, setFontSize] = useState<'normal' | 'large' | 'cinema'>('large');
+  
+  // Display Mode: Classic Broadcast Subtitles (1-2 lines) vs Scrolling Teleprompter
+  const [displayMode, setDisplayMode] = useState<'classic' | 'prompter'>(() => {
+    return (localStorage.getItem('nerdsub_kiosk_display_mode') as any) || 'classic';
+  });
+
+  const [showConfigDrawer, setShowConfigDrawer] = useState(false);
+  const [watchdogStatus, setWatchdogStatus] = useState<'healthy' | 'recovering'>('healthy');
+  const [deviceChangeNotice, setDeviceChangeNotice] = useState<string | null>(null);
+
+  // Audio & Speech Recognition Refs
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const recognitionRef = useRef<any>(null);
+  const isRecordingRef = useRef(false);
+  const prompterContainerRef = useRef<HTMLDivElement | null>(null);
+  const restartTimerRef = useRef<any>(null);
+  const committedCharsRef = useRef(0);
+  const silenceFlushTimerRef = useRef<any>(null);
+
+  // Generate Corner QR Code
+  useEffect(() => {
+    if (stage) {
+      const shareUrl = `${window.location.origin}/?stage=${stage.id}&lang=${selectedLang}`;
+      QRCode.toDataURL(shareUrl, {
+        width: 140,
+        margin: 1,
+        color: { dark: '#000000', light: '#ffffff' }
+      }).then(setQrCodeDataUrl).catch(console.warn);
+    }
+  }, [stage?.id, selectedLang]);
+
+  // Audio Device Enumeration and Hardware Hot-Plug listener
+  useEffect(() => {
+    refreshAudioDevices();
+
+    const handleDeviceChange = async () => {
+      console.log('[Audio Hot-Plug] Se detectó conexión/desconexión de dispositivo de audio');
+      setDeviceChangeNotice('¡Hardware de audio actualizado (USB / Jack detectado)!');
+      setTimeout(() => setDeviceChangeNotice(null), 3000);
+      await refreshAudioDevices();
+    };
+
+    if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+    }
+
+    return () => {
+      stopIngest();
+      if (navigator.mediaDevices && navigator.mediaDevices.removeEventListener) {
+        navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+      }
+    };
+  }, []);
+
+  // Save display mode
+  useEffect(() => {
+    localStorage.setItem('nerdsub_kiosk_display_mode', displayMode);
+  }, [displayMode]);
+
+  // Save selected device
+  useEffect(() => {
+    if (selectedDeviceId) {
+      localStorage.setItem('nerdsub_kiosk_device_id', selectedDeviceId);
+    }
+  }, [selectedDeviceId]);
+
+  // Auto-scroll in prompter mode
+  useEffect(() => {
+    if (displayMode === 'prompter' && prompterContainerRef.current) {
+      prompterContainerRef.current.scrollTop = prompterContainerRef.current.scrollHeight;
+    }
+  }, [chunks, liveInterimText, displayMode]);
+
+  const refreshAudioDevices = async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+      let devices = await navigator.mediaDevices.enumerateDevices();
+      let audioInputs = devices.filter((d) => d.kind === 'audioinput');
+
+      if (audioInputs.length === 0 || audioInputs.every((d) => !d.label)) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          devices = await navigator.mediaDevices.enumerateDevices();
+          audioInputs = devices.filter((d) => d.kind === 'audioinput');
+          stream.getTracks().forEach((t) => t.stop());
+        } catch (e) {}
+      }
+
+      setAudioDevices(audioInputs);
+      if (audioInputs.length > 0 && !selectedDeviceId) {
+        // Auto-prioritize Line-In / Jack 3.5mm / USB Audio Interface
+        const preferred = audioInputs.find((d) => 
+          /line|jack|realtek|usb|scarlett|rode|shure|behringer|external|mezcla/i.test(d.label)
+        );
+        setSelectedDeviceId(preferred ? preferred.deviceId : audioInputs[0].deviceId);
+      }
+    } catch (e) {
+      console.warn('Device scan warning:', e);
+    }
+  };
+
+  const commitPhrase = (phrase: string, lang: 'es' | 'en') => {
+    const clean = phrase.trim();
+    if (!clean) return;
+
+    if (onPushLiveTranscript) {
+      onPushLiveTranscript(clean, lang);
+    } else if (stage) {
+      fetch(`/api/stages/${stage.id}/live-text`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: clean, sourceLang: lang })
+      }).catch(console.error);
+    }
+  };
+
+  /**
+   * Broadcast-Grade SpeechRecognition factory.
+   * Chunks long continuous speech into bite-sized 6-8 word broadcast subtitles.
+   * Flushes on 550ms acoustic pauses so fast speakers never generate monster paragraphs.
+   */
+  const createAndStartRecognition = (overrideLang?: 'es' | 'en') => {
+    if (!isRecordingRef.current) return;
+
+    // Clean up previous instance
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.onerror = null;
+        recognitionRef.current.onend = null;
+        recognitionRef.current.abort();
+      } catch (e) {}
+      recognitionRef.current = null;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    const targetLang = overrideLang || spokenLang;
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = targetLang === 'en' ? 'en-US' : 'es-AR';
+
+      recognition.onresult = (event: any) => {
+        // Clear any pending silence timer
+        if (silenceFlushTimerRef.current) {
+          clearTimeout(silenceFlushTimerRef.current);
+          silenceFlushTimerRef.current = null;
+        }
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          const res = event.results[i];
+          const transcript = res[0]?.transcript || '';
+
+          if (res.isFinal) {
+            // Commit any remaining uncommitted words from this utterance
+            const finalRemaining = transcript.substring(committedCharsRef.current).trim();
+            if (finalRemaining) {
+              commitPhrase(finalRemaining, targetLang);
+            }
+            committedCharsRef.current = 0;
+            setLiveInterimText('');
+            return;
+          }
+
+          if (transcript) {
+            // Guard against speech engine rewrites where transcript is shorter than committed
+            if (committedCharsRef.current > transcript.length) {
+              committedCharsRef.current = 0;
+            }
+
+            // Rapid broadcast phrase chunking: cut at 7-8 words or natural conjunctions
+            while (true) {
+              const uncommitted = transcript.substring(committedCharsRef.current).trimStart();
+              if (!uncommitted) break;
+
+              const splitPos = findBroadcastSplitIndex(uncommitted, {
+                maxWords: 8,
+                maxChars: 50,
+                minWordsBeforeCut: 5,
+              });
+
+              if (splitPos === null) break;
+
+              const chunkText = uncommitted.substring(0, splitPos).trim();
+              if (!chunkText) break;
+
+              // Commit this broadcast-ready phrase immediately!
+              commitPhrase(chunkText, targetLang);
+
+              // Advance committed offset
+              const matchIdx = transcript.indexOf(chunkText, committedCharsRef.current);
+              if (matchIdx !== -1) {
+                committedCharsRef.current = matchIdx + chunkText.length;
+              } else {
+                committedCharsRef.current += splitPos;
+              }
+            }
+
+            const remaining = transcript.substring(committedCharsRef.current).trim();
+            setLiveInterimText(remaining);
+
+            // Fast acoustic pause detection: 550ms of silence flushes any remaining speech immediately!
+            if (remaining.length > 0) {
+              silenceFlushTimerRef.current = setTimeout(() => {
+                const toFlush = transcript.substring(committedCharsRef.current).trim();
+                if (toFlush) {
+                  commitPhrase(toFlush, targetLang);
+                  committedCharsRef.current = transcript.length;
+                  setLiveInterimText('');
+                }
+              }, 550);
+            }
+          }
+        }
+      };
+
+      recognition.onerror = (e: any) => {
+        console.warn('[Kiosk Recognition Error]', e.error);
+        if (e.error === 'not-allowed') {
+          setAudioError('Permiso de micrófono no otorgado en el navegador');
+        }
+      };
+
+      recognition.onend = () => {
+        if (silenceFlushTimerRef.current) {
+          clearTimeout(silenceFlushTimerRef.current);
+          silenceFlushTimerRef.current = null;
+        }
+        committedCharsRef.current = 0;
+        setLiveInterimText('');
+
+        // Natural end or silence pause: re-arm a fresh instance smoothly
+        if (isRecordingRef.current) {
+          if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+          restartTimerRef.current = setTimeout(() => {
+            if (isRecordingRef.current) {
+              createAndStartRecognition(targetLang);
+            }
+          }, 150);
+        }
+      };
+
+      recognition.start();
+      recognitionRef.current = recognition;
+      setWatchdogStatus('healthy');
+    } catch (err: any) {
+      console.warn('SpeechRecognition initialization error:', err);
+      if (isRecordingRef.current) {
+        if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = setTimeout(() => {
+          if (isRecordingRef.current) createAndStartRecognition(targetLang);
+        }, 1000);
+      }
+    }
+  };
+
+  const handleSpokenLangChange = (newLang: 'es' | 'en') => {
+    setSpokenLang(newLang);
+    if (isRecordingRef.current) {
+      if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = setTimeout(() => {
+        if (isRecordingRef.current) createAndStartRecognition(newLang);
+      }, 100);
+    }
+  };
+
+  const startIngest = async (deviceIdToUse?: string) => {
+    try {
+      setAudioError(null);
+      setLiveInterimText('');
+      isRecordingRef.current = true;
+
+      const deviceId = deviceIdToUse || selectedDeviceId;
+      const constraints: MediaStreamConstraints = {
+        audio: deviceId ? { deviceId: { ideal: deviceId } } : true,
+      };
+
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (err) {
+        console.warn('Could not grab specific device, falling back to default input:', err);
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+
+      mediaStreamRef.current = stream;
+
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+
+      audioContextRef.current = audioCtx;
+      analyserRef.current = analyser;
+
+      const meterInterval = setInterval(() => {
+        if (!analyserRef.current) {
+          clearInterval(meterInterval);
+          return;
+        }
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteTimeDomainData(data);
+        let max = 0;
+        for (let i = 0; i < data.length; i++) {
+          const v = Math.abs(data[i] - 128);
+          if (v > max) max = v;
+        }
+        const norm = max / 128;
+        const db = norm > 0 ? Math.round(20 * Math.log10(norm)) : -60;
+        setCurrentDbfs(db);
+        setIsClipping(db >= -1);
+      }, 80);
+
+      // Launch resilient speech recognition
+      createAndStartRecognition();
+
+      setIsRecording(true);
+    } catch (err: any) {
+      setAudioError(`Error al inicializar entrada de audio: ${err.message}`);
+      setIsRecording(false);
+      isRecordingRef.current = false;
+    }
+  };
+
+  const stopIngest = () => {
+    isRecordingRef.current = false;
+    setLiveInterimText('');
+
+    if (silenceFlushTimerRef.current) {
+      clearTimeout(silenceFlushTimerRef.current);
+      silenceFlushTimerRef.current = null;
+    }
+    committedCharsRef.current = 0;
+
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
+
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.onerror = null;
+        recognitionRef.current.onend = null;
+        recognitionRef.current.abort();
+      } catch (e) {}
+      recognitionRef.current = null;
+    }
+
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+      mediaStreamRef.current = null;
+    }
+
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+
+    analyserRef.current = null;
+    setIsRecording(false);
+    setCurrentDbfs(-60);
+    setIsClipping(false);
+  };
+
+  const handleDeviceSwitch = async (newDeviceId: string) => {
+    setSelectedDeviceId(newDeviceId);
+    if (isRecording) {
+      stopIngest();
+      setTimeout(() => {
+        startIngest(newDeviceId);
+      }, 200);
+    }
+  };
+
+  const getDisplayText = (chunk: SubtitleChunk): string => {
+    switch (selectedLang) {
+      case 'es':
+        return chunk.esText || chunk.originalText;
+      case 'en':
+        return chunk.enText || chunk.originalText;
+      case 'pt':
+        return chunk.ptText || chunk.esText || chunk.originalText;
+      case 'original':
+      default:
+        return chunk.originalText;
+    }
+  };
+
+  const getAdaptiveFontClass = (text: string) => {
+    const len = text.length;
+    if (len <= 45) {
+      return 'text-2xl sm:text-4xl lg:text-5xl font-black leading-tight tracking-tight';
+    }
+    if (len <= 80) {
+      return 'text-xl sm:text-3xl lg:text-4xl font-bold leading-snug tracking-normal';
+    }
+    return 'text-lg sm:text-2xl lg:text-3xl font-semibold leading-normal';
+  };
+
+  const getFontSizeClass = () => {
+    switch (fontSize) {
+      case 'cinema':
+        return 'text-3xl sm:text-4xl lg:text-6xl leading-tight font-black tracking-tight';
+      case 'large':
+        return 'text-2xl sm:text-3xl lg:text-4xl leading-snug font-bold';
+      case 'normal':
+      default:
+        return 'text-lg sm:text-xl lg:text-2xl leading-relaxed font-semibold';
+    }
+  };
+
+  const getDeviceBadge = (label: string) => {
+    if (/usb|rode|focusrite|scarlett|behringer|shure|samson|blue/i.test(label)) return '🔌 USB';
+    if (/line|jack|realtek|rear|line-in/i.test(label)) return '🎧 JACK 3.5';
+    return '🎤 MIC';
+  };
+
+  const activeDeviceLabel = audioDevices.find((d) => d.deviceId === selectedDeviceId)?.label || 'Entrada Predeterminada';
+
+  // In Classic mode, take only the last 2 chunks
+  const classicChunks = chunks.slice(-2);
+
+  return (
+    <div className="fixed inset-0 w-screen h-screen bg-[#06080d] text-white flex flex-col overflow-hidden select-none font-sans">
+      
+      {/* Top Professional Telemetry & Control Bar */}
+      <div className="bg-[#0b0e14] border-b-2 border-[#1c2333] px-3 sm:px-4 py-2 flex items-center justify-between z-30 shadow-md">
+        
+        {/* Left: Stage Ident & Quick Hardware Input Selector */}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="flex items-center gap-2 shrink-0">
+            <span className={`w-2.5 h-2.5 rounded-full ${isRecording ? 'bg-[#00ff66] shadow-[0_0_10px_#00ff66] animate-pulse' : 'bg-[#ff1744]'}`} />
+            <span className="font-mono text-xs sm:text-sm font-black text-white uppercase tracking-wider hidden sm:inline">
+              NODO SALA //
+            </span>
+            <span className="font-mono text-xs sm:text-sm font-bold text-[#00f5ff] uppercase truncate max-w-[140px] sm:max-w-none">
+              {stage?.name || 'ESCENARIO'}
+            </span>
+          </div>
+
+          {/* Quick Hardware Audio Source Selector (USB / Jack / Speaker Mic) */}
+          <div className="flex items-center gap-1.5 pl-2 border-l border-[#1c2333]">
+            <select
+              value={selectedDeviceId}
+              onChange={(e) => handleDeviceSwitch(e.target.value)}
+              className="px-2 py-1 bg-[#10141e] border border-[#222a3d] rounded text-[11px] font-mono text-gray-200 focus:outline-none focus:border-[#00f5ff] max-w-[160px] sm:max-w-xs truncate"
+              title="Cambiar dispositivo de entrada de audio (Jack 3.5mm, Placa USB, Micrófono de orador)"
+            >
+              {audioDevices.length === 0 ? (
+                <option value="">Entrada de Audio Predeterminada</option>
+              ) : (
+                audioDevices.map((d, index) => (
+                  <option key={d.deviceId || index} value={d.deviceId}>
+                    {getDeviceBadge(d.label)} • {d.label || `Entrada ${index + 1}`}
+                  </option>
+                ))
+              )}
+            </select>
+
+            <button
+              onClick={refreshAudioDevices}
+              className="p-1 rounded bg-[#10141e] hover:bg-[#1a2030] border border-[#222a3d] text-gray-400 hover:text-[#00f5ff] transition-all"
+              title="Escanear nuevos dispositivos USB o cables conectados"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Center: Live Meter & Display Mode Switcher */}
+        <div className="hidden md:flex items-center gap-3">
+          
+          {/* Audio VU meter */}
+          <div className="flex items-center gap-2 bg-[#06080d] px-2.5 py-1 rounded border border-[#1b2230] font-mono text-xs">
+            <span className="text-[10px] text-gray-400">VU:</span>
+            <div className="w-20 bg-[#121622] h-2 rounded overflow-hidden">
+              <div 
+                className={`h-full transition-all duration-75 ${isClipping ? 'bg-[#ff1744]' : 'bg-[#00ff66]'}`}
+                style={{ width: `${Math.min(100, Math.max(0, ((currentDbfs + 60) / 60) * 100))}%` }}
+              />
+            </div>
+            <span className={`text-[9px] ${isClipping ? 'text-[#ff1744] font-bold' : 'text-gray-400'}`}>
+              {currentDbfs} dB
+            </span>
+          </div>
+
+          {/* Display Mode Switcher: Clásico vs Teleprómpter */}
+          <div className="flex items-center bg-[#07090e] p-0.5 rounded border border-[#1b2230] text-[10px] font-mono font-bold">
+            <button
+              onClick={() => setDisplayMode('classic')}
+              className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
+                displayMode === 'classic'
+                  ? 'bg-[#141b29] text-[#00f5ff] border border-[#00f5ff]/40 shadow-sm'
+                  : 'text-[#64748b] hover:text-white'
+              }`}
+              title="Modo Subtítulo Clásico: Muestra solo 1 o 2 líneas grandes y limpias tipo cine/escenario"
+            >
+              <Tv className="w-3 h-3" />
+              <span>SUBTÍTULO CLÁSICO</span>
+            </button>
+
+            <button
+              onClick={() => setDisplayMode('prompter')}
+              className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
+                displayMode === 'prompter'
+                  ? 'bg-[#141b29] text-[#00ff66] border border-[#00ff66]/40 shadow-sm'
+                  : 'text-[#64748b] hover:text-white'
+              }`}
+              title="Modo Teleprómpter: Muestra el historial corrido de los últimos subtítulos emitidos"
+            >
+              <Layers className="w-3 h-3" />
+              <span>TELEPRÓMPTER</span>
+            </button>
+          </div>
+
+          {/* Spoken Language Selector (Orador ES / EN) */}
+          <div className="flex items-center bg-[#07090e] p-0.5 rounded border border-[#1b2230] text-[10px] font-mono font-bold">
+            <span className="text-[9px] text-[#64748b] px-1.5 hidden lg:inline">ORADOR:</span>
+            <button
+              onClick={() => handleSpokenLangChange('es')}
+              className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
+                spokenLang === 'es'
+                  ? 'bg-[#141b29] text-[#00f5ff] border border-[#00f5ff]/40 shadow-sm'
+                  : 'text-[#64748b] hover:text-white'
+              }`}
+              title="Orador habla en Español (transcripción es-AR)"
+            >
+              <span>🇪🇸 ES</span>
+            </button>
+            <button
+              onClick={() => handleSpokenLangChange('en')}
+              className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
+                spokenLang === 'en'
+                  ? 'bg-[#141b29] text-[#00ff66] border border-[#00ff66]/40 shadow-sm'
+                  : 'text-[#64748b] hover:text-white'
+              }`}
+              title="Speaker speaks in English (transcription en-US)"
+            >
+              <span>🇬🇧 EN</span>
+            </button>
+          </div>
+
+        </div>
+
+        {/* Right: Stream Actions & Settings Toggle */}
+        <div className="flex items-center gap-2 shrink-0">
+          
+          {/* Main Ingest Start/Stop Button */}
+          {isRecording ? (
+            <button
+              onClick={stopIngest}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#ff1744] hover:bg-[#ff1744]/90 text-white font-mono text-xs font-bold rounded shadow-[0_0_10px_#ff1744] animate-pulse"
+            >
+              <Square className="w-3.5 h-3.5" />
+              <span>DETENER_ENTRADA</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => startIngest()}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#00f5ff] hover:bg-[#00f5ff]/90 text-black font-mono text-xs font-black rounded shadow-[0_0_12px_rgba(0,245,255,0.4)] transition-all"
+            >
+              <Mic className="w-3.5 h-3.5" />
+              <span>ARMAR_ENTRADA</span>
+            </button>
+          )}
+
+          {/* Toggle QR Corner */}
+          <button
+            onClick={() => setShowQrCorner(!showQrCorner)}
+            className={`p-1.5 rounded border text-xs font-mono transition-all ${showQrCorner ? 'bg-[#141b29] border-[#00f5ff] text-[#00f5ff]' : 'bg-[#090c14] border-[#1e2535] text-gray-400'}`}
+            title="Mostrar / Ocultar QR para celulares en pantalla"
+          >
+            <QrCode className="w-4 h-4" />
+          </button>
+
+          {/* Config Drawer Toggle */}
+          <button
+            onClick={() => setShowConfigDrawer(!showConfigDrawer)}
+            className="p-1.5 rounded bg-[#090c14] border border-[#1e2535] text-gray-400 hover:text-white"
+            title="Configuración de sala y hardware"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
+
+          {/* Return to Control Room / Admin View */}
+          {onExit && (
+            <button
+              onClick={onExit}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded bg-[#10141e] hover:bg-[#1a2030] border border-[#222a3d] text-gray-300 hover:text-white font-mono text-[11px] transition-all"
+              title="Volver a la Mesa Técnica (Control Room)"
+            >
+              <Sliders className="w-3.5 h-3.5 text-[#ffb800]" />
+              <span className="hidden sm:inline">CONTROL ROOM</span>
+            </button>
+          )}
+        </div>
+
+      </div>
+
+      {/* Hot-Plug Notification Toast */}
+      {deviceChangeNotice && (
+        <div className="bg-[#00ff66]/15 border-b border-[#00ff66]/40 px-4 py-1.5 text-center text-xs font-mono text-[#00ff66] flex items-center justify-center gap-2 animate-fade-in z-20">
+          <Activity className="w-3.5 h-3.5" />
+          <span>{deviceChangeNotice}</span>
+        </div>
+      )}
+
+      {/* Error Banner */}
+      {audioError && (
+        <div className="bg-[#ff1744]/20 border-b border-[#ff1744]/40 px-4 py-2 text-center text-xs font-mono text-[#ff1744] flex items-center justify-center gap-2 z-20">
+          <AlertCircle className="w-4 h-4" />
+          <span>{audioError}</span>
+        </div>
+      )}
+
+      {/* ========================================================
+          MAIN SCREEN CONTENT (DUAL-MODE: CLÁSICO vs PROMPTER)
+         ======================================================== */}
+      
+      {/* MODE 1: SUBTÍTULO CLÁSICO (CINEMA BANNER) */}
+      {displayMode === 'classic' && (
+        <div className="flex-1 flex flex-col justify-end items-center p-6 sm:p-12 pb-16 relative max-w-6xl mx-auto w-full">
+          
+          {classicChunks.length === 0 && !liveInterimText ? (
+            <div className="m-auto text-center space-y-4 max-w-lg">
+              <div className="w-16 h-16 rounded-full bg-[#111520] border-2 border-[#00f5ff]/30 flex items-center justify-center mx-auto text-[#00f5ff]">
+                <Tv className="w-8 h-8 animate-pulse" />
+              </div>
+              <div className="font-mono text-2xl font-black text-gray-200 uppercase">
+                {stage?.name || 'ESCENARIO PRINCIPAL'}
+              </div>
+              <p className="font-mono text-xs text-gray-400 leading-relaxed">
+                MODO SUBTÍTULO CLÁSICO ACTIVO • Presioná <strong className="text-[#00f5ff]">"ARMAR_ENTRADA"</strong> arriba para transmitir desde el Jack 3.5mm o dispositivo USB conectado. Los subtítulos aparecerán en grande y centrados aquí.
+              </p>
+            </div>
+          ) : (
+            <div className="w-full space-y-3 text-center">
+              
+              {/* Previous line (subtle and truncated to 1 clean line) */}
+              {classicChunks.length > 1 && !liveInterimText && (
+                <div className="text-gray-400 opacity-60 text-lg sm:text-xl lg:text-2xl font-medium tracking-wide max-w-4xl mx-auto truncate">
+                  {formatBroadcastSubtitle(getDisplayText(classicChunks[0]), 12)}
+                </div>
+              )}
+
+              {/* Active subtitle box with high contrast broadcast styling (Strict 1-2 lines) */}
+              <div 
+                className="bg-black/90 backdrop-blur-md border-2 border-white/20 rounded-2xl sm:rounded-3xl px-6 py-5 sm:px-10 sm:py-7 shadow-2xl transition-all max-w-5xl mx-auto w-full min-h-[90px] flex items-center justify-center text-center"
+                style={{
+                  boxShadow: '0 10px 40px rgba(0,0,0,0.85), 0 0 25px rgba(0,245,255,0.1)'
+                }}
+              >
+                {liveInterimText ? (
+                  <p 
+                    className={`${getAdaptiveFontClass(liveInterimText)} text-[#00f5ff] drop-shadow-md line-clamp-2 max-w-4xl`}
+                    style={{ textShadow: '0 2px 8px rgba(0,0,0,0.95), 0 0 16px rgba(0,245,255,0.45)' }}
+                  >
+                    <span>{liveInterimText}</span>
+                    <span className="inline-block w-2.5 h-5 bg-[#00f5ff] ml-2 animate-pulse align-middle rounded-sm" />
+                  </p>
+                ) : (
+                  <p 
+                    className={`${getAdaptiveFontClass(classicChunks.length > 0 ? getDisplayText(classicChunks[classicChunks.length - 1]) : '')} text-white drop-shadow-md line-clamp-2 max-w-4xl`}
+                    style={{ textShadow: '0 2px 8px rgba(0,0,0,0.95)' }}
+                  >
+                    {classicChunks.length > 0 ? formatBroadcastSubtitle(getDisplayText(classicChunks[classicChunks.length - 1]), 16) : ''}
+                  </p>
+                )}
+              </div>
+
+              {/* Discreet Speaker Tag */}
+              <div className="text-[11px] font-mono text-[#64748b] tracking-wider uppercase">
+                {stage?.speaker || 'TALK'} • {selectedLang.toUpperCase()}
+              </div>
+
+            </div>
+          )}
+
+        </div>
+      )}
+
+      {/* MODE 2: TELEPRÓMPTER / HISTORIAL SCROLL */}
+      {displayMode === 'prompter' && (
+        <div 
+          ref={prompterContainerRef}
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions"
+          className="flex-1 p-6 sm:p-12 overflow-y-auto space-y-6 relative flex flex-col justify-end max-w-6xl mx-auto w-full"
+        >
+          {chunks.length === 0 && !liveInterimText ? (
+            <div className="m-auto text-center space-y-4 max-w-md">
+              <div className="w-16 h-16 rounded-full bg-[#111520] border-2 border-[#00f5ff]/30 flex items-center justify-center mx-auto text-[#00f5ff]">
+                <Layers className="w-8 h-8 animate-pulse" />
+              </div>
+              <div className="font-mono text-xl font-bold text-gray-200 uppercase">
+                {stage?.name || 'ESCENARIO PRINCIPAL'}
+              </div>
+              <p className="font-mono text-xs text-gray-400 leading-relaxed">
+                MODO TELEPRÓMPTER • Los subtítulos correrán en orden cronológico a medida que hable el speaker.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4 w-full">
+              {chunks.slice(-6).map((chunk, index, arr) => {
+                const isLatest = index === arr.length - 1;
+                return (
+                  <div
+                    key={chunk.id}
+                    className={`p-4 rounded-xl transition-all duration-300 ${
+                      isLatest
+                        ? 'bg-black/50 border-l-4 border-[#00f5ff] text-white shadow-xl'
+                        : 'opacity-70 text-gray-300'
+                    }`}
+                  >
+                    <p 
+                      className={`${getFontSizeClass()} tracking-wide`}
+                      style={{ textShadow: '0 2px 6px rgba(0,0,0,0.9)' }}
+                    >
+                      {getDisplayText(chunk)}
+                    </p>
+                  </div>
+                );
+              })}
+
+              {/* In-Flight Live Interim Speech Words */}
+              {liveInterimText && (
+                <div className="p-4 rounded-xl border-l-4 border-[#00f5ff] bg-[#00f5ff]/10 animate-pulse">
+                  <p className={`${getFontSizeClass()} text-[#00f5ff] font-bold`}>
+                    "{liveInterimText}"
+                    <span className="inline-block w-3 h-6 bg-[#00f5ff] ml-2 animate-ping align-middle" />
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Floating Corner QR Code (Attendees can scan directly from stage screen) */}
+      {showQrCorner && qrCodeDataUrl && (
+        <div className="fixed bottom-6 right-6 z-40 bg-black/90 backdrop-blur-md border border-[#232b3d] p-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-fade-in pointer-events-auto">
+          <img 
+            src={qrCodeDataUrl} 
+            alt="QR Subtítulos en celular" 
+            className="w-18 h-18 rounded-lg bg-white p-1"
+          />
+          <div className="font-mono text-left">
+            <span className="text-[10px] text-[#00f5ff] font-bold block uppercase tracking-wider">
+              📱 SEGUÍ EN TU CELULAR
+            </span>
+            <span className="text-xs font-bold text-white block">
+              ES / EN / PT
+            </span>
+            <span className="text-[9px] text-gray-400 block mt-0.5">
+              Escaneá el código QR
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Config Drawer for Room Technician */}
+      {showConfigDrawer && (
+        <div className="fixed inset-y-0 right-0 w-80 sm:w-96 bg-[#0d1017] border-l-2 border-[#1c2333] z-50 p-5 shadow-2xl space-y-4 font-mono text-xs overflow-y-auto">
+          <div className="flex items-center justify-between border-b border-[#181d2a] pb-3">
+            <span className="font-bold text-[#00f5ff] flex items-center gap-1.5 uppercase">
+              <Settings className="w-4 h-4" />
+              CONFIGURACIÓN NODO SALA
+            </span>
+            <button onClick={() => setShowConfigDrawer(false)} className="text-gray-400 hover:text-white">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Presentation Style */}
+          <div className="space-y-1">
+            <label className="text-[10px] text-gray-400 uppercase">MODO DE PRESENTACIÓN:</label>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                onClick={() => setDisplayMode('classic')}
+                className={`py-1.5 rounded border text-center uppercase font-bold ${
+                  displayMode === 'classic' ? 'bg-[#141b29] border-[#00f5ff] text-[#00f5ff]' : 'bg-[#07090e] border-[#1e2535] text-gray-400'
+                }`}
+              >
+                Subtítulo Clásico
+              </button>
+              <button
+                onClick={() => setDisplayMode('prompter')}
+                className={`py-1.5 rounded border text-center uppercase font-bold ${
+                  displayMode === 'prompter' ? 'bg-[#141b29] border-[#00ff66] text-[#00ff66]' : 'bg-[#07090e] border-[#1e2535] text-gray-400'
+                }`}
+              >
+                Teleprómpter
+              </button>
+            </div>
+          </div>
+
+          {/* Room Switcher */}
+          <div className="space-y-1">
+            <label className="text-[10px] text-gray-400 uppercase">SALA ASIGNADA A ESTA MINI PC:</label>
+            <select
+              value={stage?.id}
+              onChange={(e) => onSelectStage(e.target.value)}
+              className="w-full px-2.5 py-1.5 bg-[#07090e] border border-[#202738] rounded text-white"
+            >
+              {stages.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Audio Input Device Switcher */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] text-gray-400 uppercase">DISPOSITIVO DE AUDIO (JACK / USB / MIC):</label>
+              <button onClick={refreshAudioDevices} className="text-[9px] text-[#00f5ff] hover:underline">
+                ESCANEAR
+              </button>
+            </div>
+            <select
+              value={selectedDeviceId}
+              onChange={(e) => handleDeviceSwitch(e.target.value)}
+              className="w-full px-2.5 py-1.5 bg-[#07090e] border border-[#202738] rounded text-white text-[11px]"
+            >
+              {audioDevices.map((d, i) => (
+                <option key={d.deviceId || i} value={d.deviceId}>
+                  {getDeviceBadge(d.label)} • {d.label || `Entrada ${i + 1}`}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Language for On-Stage Display */}
+          <div className="space-y-1">
+            <label className="text-[10px] text-gray-400 uppercase">IDIOMA EN PANTALLA DE SALA:</label>
+            <div className="grid grid-cols-3 gap-1">
+              {(['es', 'en', 'original'] as SupportedLanguage[]).map((l) => (
+                <button
+                  key={l}
+                  onClick={() => onSelectLang(l)}
+                  className={`py-1 rounded border text-center uppercase font-bold ${
+                    selectedLang === l ? 'bg-[#141b29] border-[#00f5ff] text-[#00f5ff]' : 'bg-[#07090e] border-[#1e2535] text-gray-400'
+                  }`}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Font Size */}
+          <div className="space-y-1">
+            <label className="text-[10px] text-gray-400 uppercase">TAMAÑO DE TIPOGRAFÍA (PROYECTOR):</label>
+            <div className="grid grid-cols-3 gap-1">
+              {(['normal', 'large', 'cinema'] as const).map((sz) => (
+                <button
+                  key={sz}
+                  onClick={() => setFontSize(sz)}
+                  className={`py-1 rounded border text-center uppercase font-bold ${
+                    fontSize === sz ? 'bg-[#141b29] border-[#00f5ff] text-[#00f5ff]' : 'bg-[#07090e] border-[#1e2535] text-gray-400'
+                  }`}
+                >
+                  {sz === 'cinema' ? 'Cine (XL)' : sz}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Self-Healing Watchdog Status */}
+          <div className="p-3 bg-[#07090e] border border-[#171b26] rounded space-y-1.5 text-[10px]">
+            <span className="text-[#00ff66] font-bold block flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              WATCHDOG ZERO-RUSTDESK: ACTIVO
+            </span>
+            <div className="text-gray-400">Estado de Motor: <span className="text-white uppercase">{watchdogStatus}</span></div>
+            <div className="text-gray-400">Hot-plug USB: <span className="text-white">Detectando en vivo</span></div>
+            <div className="text-gray-500 pt-1 border-t border-[#181d2a]">
+              Las pausas del orador son respetadas normalmente sin congelar la sesión. Si la Mesa Técnica envía un F5 remoto, la pantalla se recarga sola.
+            </div>
+          </div>
+
+        </div>
+      )}
+
+    </div>
+  );
+};

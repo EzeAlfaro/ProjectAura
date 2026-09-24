@@ -2,11 +2,12 @@ import React from 'react';
 import { Radio, Tv, Sliders, KeyRound, Sparkles, Volume2, QrCode, Terminal, Activity, ShieldCheck } from 'lucide-react';
 
 interface HeaderProps {
-  currentView: 'audience' | 'admin' | 'overlay';
-  onSelectView: (view: 'audience' | 'admin' | 'overlay') => void;
+  currentView: 'audience' | 'admin' | 'overlay' | 'kiosk';
+  onSelectView: (view: 'audience' | 'admin' | 'overlay' | 'kiosk') => void;
   geminiConfigured: boolean;
   onOpenApiKeyModal: () => void;
   onOpenQrModal: () => void;
+  onOpenVMixModal?: () => void;
   isConnected: boolean;
   activeStageName?: string;
 }
@@ -17,6 +18,7 @@ export const Header: React.FC<HeaderProps> = ({
   geminiConfigured,
   onOpenApiKeyModal,
   onOpenQrModal,
+  onOpenVMixModal,
   isConnected,
   activeStageName,
 }) => {
@@ -113,13 +115,36 @@ export const Header: React.FC<HeaderProps> = ({
             title="OBS / vMix Studio Transparent Overlay"
           >
             <Tv className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">03 // OBS OVERLAY</span>
+            <span className="hidden md:inline">03 // OVERLAY</span>
+          </button>
+
+          <button
+            onClick={() => onSelectView('kiosk')}
+            className={`hardware-btn flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded text-xs font-mono font-bold transition-all ${
+              currentView === 'kiosk' ? 'hardware-btn-active text-[#00ff66]' : 'text-[#718096]'
+            }`}
+            title="Nodo Autónomo de Mini PC para Sala (Audio 3.5mm + Proyector de Sala)"
+          >
+            <Radio className="w-3.5 h-3.5" />
+            <span className="hidden lg:inline">04 // NODO SALA</span>
           </button>
         </nav>
 
-        {/* Right Console Actions: QR & Gemini Engine Status */}
+        {/* Right Console Actions: vMix, QR & Gemini Engine Status */}
         <div className="flex items-center gap-2 sm:gap-3">
           
+          {/* vMix & OBS Studio Integration Hub */}
+          {onOpenVMixModal && (
+            <button
+              onClick={onOpenVMixModal}
+              className="hardware-btn flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded text-xs font-mono font-bold text-[#ff1744] hover:border-[#ff1744] hover:bg-[#ff1744]/10 transition-all"
+              title="Abrir panel de integración de URLs y configuración para vMix y OBS Studio"
+            >
+              <Tv className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">vMIX / OBS</span>
+            </button>
+          )}
+
           {/* QR Code Quick-Launch for Attendee Mobile Access */}
           <button
             onClick={onOpenQrModal}

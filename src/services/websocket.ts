@@ -8,6 +8,8 @@ export interface WSCallbacks {
   onStagesUpdate?: (stages: Stage[]) => void;
   onInitialState?: (data: { stage: Stage; chunks: SubtitleChunk[]; takeaways: StageTakeaway[]; suggestedQuestions: StageQA[] }) => void;
   onStatusChange?: (connected: boolean) => void;
+  onChunkDeleted?: (chunkId: string) => void;
+  onRemoteReload?: (stageId: string) => void;
 }
 
 export class WSClient {
@@ -71,6 +73,12 @@ export class WSClient {
             case 'initial_state':
               this.callbacks.onInitialState?.(msg);
               break;
+            case 'chunk_deleted':
+              this.callbacks.onChunkDeleted?.(msg.chunkId);
+              break;
+            case 'remote_reload':
+              this.callbacks.onRemoteReload?.(msg.stageId);
+              break;
           }
         } catch (err) {
           console.error('[WSClient] Error parsing message:', err);
@@ -121,11 +129,41 @@ export class WSClient {
     });
   }
 
+  public sendLiveTranscript(stageId: string, text: string, sourceLang: string = 'es') {
+    this.send({
+      type: 'live_transcript',
+      stageId,
+      text,
+      sourceLang
+    });
+  }
+
   public sendAudioLevel(stageId: string, level: number) {
     this.send({
       type: 'audio_level',
       stageId,
       level
+    });
+  }
+
+  public deleteLastChunk(stageId: string) {
+    this.send({
+      type: 'delete_last_chunk',
+      stageId
+    });
+  }
+
+  public sendEmergencyClear(stageId: string) {
+    this.send({
+      type: 'emergency_clear',
+      stageId
+    });
+  }
+
+  public sendRemoteReload(stageId: string) {
+    this.send({
+      type: 'remote_reload',
+      stageId
     });
   }
 
@@ -135,13 +173,20 @@ export class WSClient {
     }
   }
 
+  private reconnectAttempts = 0;
   private scheduleReconnect() {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectAttempts++;
+    // Exponential backoff + Full Jitter (Sysarmy Event Resilience)
+    const baseDelay = Math.min(8000, 1000 * Math.pow(1.5, Math.min(this.reconnectAttempts, 5)));
+    const jitter = Math.random() * 800;
+    const delay = Math.round(baseDelay + jitter);
+
     this.reconnectTimer = setTimeout(() => {
       if (!this.isExplicitlyClosed) {
         this.connect(this.currentStageId, this.currentLang);
       }
-    }, 2000);
+    }, delay);
   }
 
   public disconnect() {

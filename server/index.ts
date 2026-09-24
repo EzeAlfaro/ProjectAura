@@ -4,12 +4,19 @@ import { WebSocketServer, WebSocket } from 'ws';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { stageManager } from './stageManager.js';
 import { geminiService } from './geminiService.js';
 import { TECH_GLOSSARY, registerCustomTerm } from './glossary.js';
 import { SupportedLanguage } from './types.js';
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const distPath = path.resolve(__dirname, '../dist');
 
 const app = express();
 const server = http.createServer(app);
@@ -106,6 +113,41 @@ app.post('/api/stages/:id/audio', upload.single('audio'), async (req: Request, r
   }
 });
 
+// Direct Live Text Transcript (from Browser Speech Recognition or real-time mic)
+app.post('/api/stages/:id/live-text', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { text, sourceLang } = req.body;
+  if (!text || typeof text !== 'string') {
+    return res.status(400).json({ error: 'Text is required' });
+  }
+
+  try {
+    await stageManager.pushLiveTranscript(id, text, sourceLang || 'es');
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Live text processing error:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// Delete Last Chunk (Panic / Redaction Button)
+app.delete('/api/stages/:id/chunks/last', (req: Request, res: Response) => {
+  const success = stageManager.deleteLastChunk(req.params.id);
+  res.json({ success });
+});
+
+// Emergency Blackout / Clear All Subtitles (EDM - Erase Displayed Memory)
+app.post('/api/stages/:id/emergency-clear', (req: Request, res: Response) => {
+  stageManager.emergencyClear(req.params.id);
+  res.json({ success: true, message: `Emergency clear executed for ${req.params.id}` });
+});
+
+// Remote Stage Reload (Zero-RustDesk F5 trigger from Mesa Técnica)
+app.post('/api/stages/:id/remote-reload', (req: Request, res: Response) => {
+  stageManager.remoteReloadStage(req.params.id);
+  res.json({ success: true, message: `Remote reload triggered for ${req.params.id}` });
+});
+
 // Export Transcripts
 app.get('/api/stages/:id/export/:format', (req: Request, res: Response) => {
   const { id, format } = req.params;
@@ -141,21 +183,6 @@ app.post('/api/glossary', (req: Request, res: Response) => {
   registerCustomTerm(term, definition, category || 'general');
   res.status(201).json({ success: true, term, definition });
 });
-
-// Serve frontend build if dist folder exists
-import path from 'path';
-import fs from 'fs';
-
-const distPath = path.resolve(process.cwd(), 'dist');
-if (fs.existsSync(distPath)) {
-  app.use(express.static(distPath));
-  app.get('*', (req: Request, res: Response, next) => {
-    if (req.path.startsWith('/api') || req.path.startsWith('/ws')) {
-      return next();
-    }
-    res.sendFile(path.join(distPath, 'index.html'));
-  });
-}
 
 /* ========================================================
    WebSocket Real-Time Broadcast Server
@@ -200,6 +227,35 @@ wss.on('connection', (ws: WebSocket) => {
           }
           break;
         }
+
+        case 'live_transcript': {
+          // Direct real-time speech recognition transcript from operator microphone
+          if (message.stageId && message.text) {
+            await stageManager.pushLiveTranscript(message.stageId, message.text, message.sourceLang || 'es');
+          }
+          break;
+        }
+
+        case 'delete_last_chunk': {
+          if (message.stageId) {
+            stageManager.deleteLastChunk(message.stageId);
+          }
+          break;
+        }
+
+        case 'emergency_clear': {
+          if (message.stageId) {
+            stageManager.emergencyClear(message.stageId);
+          }
+          break;
+        }
+
+        case 'remote_reload': {
+          if (message.stageId) {
+            stageManager.remoteReloadStage(message.stageId);
+          }
+          break;
+        }
       }
     } catch (err) {
       console.error('[WebSocket] Error handling client message:', err);
@@ -210,6 +266,19 @@ wss.on('connection', (ws: WebSocket) => {
     stageManager.unsubscribe(ws);
   });
 });
+
+/* ========================================================
+   Production Static Serving & SPA Fallback
+======================================================== */
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  app.get('*', (req: Request, res: Response, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/ws')) {
+      return next();
+    }
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+}
 
 const PORT = process.env.PORT || 3001;
 
