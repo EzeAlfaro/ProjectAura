@@ -714,14 +714,14 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
           ) : (
             <div className="w-full space-y-3 text-center">
               
-              {/* Previous line (subtle and truncated to 1 clean line) */}
+              {/* Previous line (subtle and visible for context) */}
               {classicChunks.length > 1 && !liveInterimText && (
-                <div className="text-gray-400 opacity-60 text-lg sm:text-xl lg:text-2xl font-medium tracking-wide max-w-4xl mx-auto truncate">
-                  {formatBroadcastSubtitle(getDisplayText(classicChunks[0]), 12)}
+                <div className="text-gray-400 opacity-60 text-lg sm:text-xl lg:text-2xl font-medium tracking-wide max-w-4xl mx-auto break-words">
+                  {getDisplayText(classicChunks[classicChunks.length - 2])}
                 </div>
               )}
 
-              {/* Active subtitle box with high contrast broadcast styling (Strict 1-2 lines) */}
+              {/* Active subtitle box with high contrast broadcast styling (Full text, adaptive wrap) */}
               <div 
                 className="bg-black/90 backdrop-blur-md border-2 border-white/20 rounded-2xl sm:rounded-3xl px-6 py-5 sm:px-10 sm:py-7 shadow-2xl transition-all max-w-5xl mx-auto w-full min-h-[90px] flex items-center justify-center text-center"
                 style={{
@@ -730,7 +730,7 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
               >
                 {liveInterimText ? (
                   <p 
-                    className={`${getAdaptiveFontClass(liveInterimText)} text-[#00f5ff] drop-shadow-md line-clamp-2 max-w-4xl`}
+                    className={`${getAdaptiveFontClass(liveInterimText)} text-[#00f5ff] drop-shadow-md max-w-4xl break-words`}
                     style={{ textShadow: '0 2px 8px rgba(0,0,0,0.95), 0 0 16px rgba(0,245,255,0.45)' }}
                   >
                     <span>{liveInterimText}</span>
@@ -738,10 +738,10 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
                   </p>
                 ) : (
                   <p 
-                    className={`${getAdaptiveFontClass(classicChunks.length > 0 ? getDisplayText(classicChunks[classicChunks.length - 1]) : '')} text-white drop-shadow-md line-clamp-2 max-w-4xl`}
+                    className={`${getAdaptiveFontClass(classicChunks.length > 0 ? getDisplayText(classicChunks[classicChunks.length - 1]) : '')} text-white drop-shadow-md max-w-4xl break-words`}
                     style={{ textShadow: '0 2px 8px rgba(0,0,0,0.95)' }}
                   >
-                    {classicChunks.length > 0 ? formatBroadcastSubtitle(getDisplayText(classicChunks[classicChunks.length - 1]), 16) : ''}
+                    {classicChunks.length > 0 ? getDisplayText(classicChunks[classicChunks.length - 1]) : ''}
                   </p>
                 )}
               </div>

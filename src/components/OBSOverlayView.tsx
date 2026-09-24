@@ -133,7 +133,7 @@ export const OBSOverlayView: React.FC<OBSOverlayViewProps> = ({
                 return (
                   <p
                     key={chunk.id}
-                    className={`font-semibold tracking-wide transition-all line-clamp-2 ${
+                    className={`font-semibold tracking-wide transition-all break-words ${
                       isLatest
                         ? 'text-white text-2xl sm:text-3xl leading-snug drop-shadow-md'
                         : 'text-gray-400 text-xl sm:text-2xl leading-normal opacity-85'
