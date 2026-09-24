@@ -1,7 +1,7 @@
 {
-  "name": "nerdsub",
+  "name": "project-aura",
   "version": "1.0.0",
-  "description": "NerdSub - Open-Source Real-Time Technical Transcription, Simultaneous Translation & Accessibility Engine for Conferences",
+  "description": "Project Aura - Open-Source Real-Time Technical Transcription, Simultaneous Translation & Accessibility Engine for Global Conferences",
   "type": "module",
   "scripts": {
     "dev:server": "tsx watch server/index.ts",

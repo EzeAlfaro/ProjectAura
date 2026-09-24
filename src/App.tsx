@@ -252,7 +252,7 @@ export function App() {
       <footer className="border-t border-[#2a344f] bg-[#0c0f17] py-6 text-center text-xs text-[#94a3b8]">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="font-mono text-white font-bold">⚡ NerdSub</span>
+            <span className="font-mono text-white font-bold">⚡ Project Aura</span>
             <span>—</span>
             <span>Construido para la Vibeathon de Nerdearla 2026</span>
           </div>

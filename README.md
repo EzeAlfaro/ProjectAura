@@ -1,51 +1,64 @@
-# ⚡ NerdSub
+# ⚡ Project Aura
 
 > **Motor Open-Source de Transcripción Simultánea, Traducción Técnica y Accesibilidad a Escala para Conferencias Globales**  
-> *Proyecto desarrollado para la Vibeathon de **Nerdearla 2026** (Buenos Aires, Argentina).*
+> *Desarrollado por Ezequiel Alfaro para la Vibeathon de **Nerdearla 2026** (Buenos Aires, Argentina) y auditorios de todo el mundo.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Nerdearla](https://img.shields.io/badge/Conferencia-Nerdearla%202026-00f0ff)](https://nerdear.live)
-[![Powered by Gemini](https://img.shields.io/badge/AI%20Engine-Gemini%202.5%20Flash-8b5cf6)](https://aistudio.google.com)
-[![Orchestration: OpenCode](https://img.shields.io/badge/Orchestrator-OpenCode%20Engine-ff5500)](https://github.com/opencode-ai)
-[![Node.js](https://img.shields.io/badge/Node.js-v22-green)](https://nodejs.org)
+[![Nerdearla](https://img.shields.io/badge/Conferencia-Nerdearla%202026-00f0ff)](https://nerdear.la)
+[![AI Engine Live](https://img.shields.io/badge/AI%20Live-Gemini%203.5%20Transcribe%20Live-4285F4)](https://blog.google)
+[![AI Engine Pro](https://img.shields.io/badge/AI%20Synthesis-Gemini%202.5%20Pro-8b5cf6)](https://aistudio.google.com)
+[![AI Fallback](https://img.shields.io/badge/AI%20Fallback-Gemini%202.5%20Flash-00ff66)](https://aistudio.google.com)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue)](https://www.typescriptlang.org)
+[![Audio Pipeline](https://img.shields.io/badge/Audio-AudioWorklet%2016kHz%20PCM-ffaa00)](#-arquitectura-del-sistema)
 
 ---
 
 ## 📌 1. El Problema que Resolvemos
 
-En eventos masivos como **Nerdearla**, la accesibilidad es prioritaria: más de 30 charlas técnicas con speakers internacionales en inglés y español en simultáneo a lo largo de múltiples auditorios.
+En conferencias técnicas masivas como **Nerdearla**, la accesibilidad es un factor innegociable: más de 30 charlas simultáneas con oradores internacionales en inglés y español distribuidas en múltiples escenarios.
 
-Las herramientas comerciales actuales tienen severas limitaciones:
-1. **Costos prohibitivos** por minuto y por usuario conectado.
-2. **Dependencia de operación manual** propensa a fallas de coordinación.
-3. **Pobre calidad con la jerga técnica**: confunden habitualmente términos cruciales como *"deploy"*, *"pod"*, *"eBPF"*, *"commit"*, *"Goroutine"*, *"CI/CD"*, generando transcripciones ininteligibles para la comunidad IT.
-4. **Falta de escalabilidad** para correr 5, 10 o más tracks concurrentes de forma autónoma.
+Las soluciones comerciales cerradas fallan estrepitosamente en 4 aspectos críticos:
+1. **Costos prohibitivos**: Cobran por minuto y por usuario conectado, haciendo inviable cubrir 5 a 10 salas en simultáneo durante 3 días.
+2. **Destrucción de la jerga técnica**: Confunden habitualmente términos cruciales como *"deploy"*, *"eBPF"*, *"Kubernetes"*, *"commit"*, *"Goroutine"*, *"deadlock"*, *"CI/CD"*, generando transcripciones absurdas para una audiencia IT.
+3. **Latencia destructiva**: La mayoría de las soluciones acumulan buffers de 6 a 10 segundos antes de procesar, dejando los subtítulos totalmente desfasados del orador.
+4. **Falta de integración con transmisiones profesionales**: No ofrecen salidas limpias transparentes para OBS Studio o vMix en transmisiones de Twitch/YouTube.
 
-**NerdSub** es la solución abierta, modular y de costo ultra-eficiente diseñada para que cualquier conferencia tecnológica en el mundo pueda desplegar subtitulado, traducción simultánea y accesibilidad cognitiva con un solo comando.
+**Project Aura** es la plataforma abierta, modular y de costo ultra-eficiente diseñada para que cualquier conferencia tecnológica del planeta pueda desplegar subtitulado en tiempo real, traducción simultánea, accesibilidad WCAG AAA y síntesis ejecutiva con un solo comando.
 
 ---
 
 ## ✨ 2. Características Principales
 
-### 🎯 Requisitos Mínimos (MVP) 100% Cumplidos
-- **Ingesta de audio versátil**: Micrófono en vivo de sala (Web Audio API / 16kHz PCM), subida de archivos (.mp3, .wav, .webm) y **módulo de prueba en 1 click** con audios de charlas reales de Nerdearla.
-- **Transcripción técnica en tiempo real**: Extracción precisa del idioma original (Español o Inglés).
-- **Traducción simultánea en vivo**: Inglés ⇄ Español (y Español ⇄ Inglés).
-- **Subtítulos interactivos**: Visualizador web reactivo con auto-scroll inteligente y tamaño de fuente regulable.
-- **Multi-sesión simultánea nativa**: Procesa múltiples escenarios en paralelo (`Escenario Principal`, `Escenario Cloud & DevOps`, `Escenario Data & AI`) sin interferencias.
+### 🎙️ Ingesta de Audio de Grado Broadcast (AudioWorklet 16kHz PCM)
+- **Remuestreo continuo en hilo de audio dedicado (`public/worklets/pcm-processor.js`)**: Captura audio de micrófono o placa de sonido (44.1kHz / 48kHz) y remuestrea mediante interpolación lineal con memoria residual a **16-bit 16.000 Hz Mono Little-Endian PCM** en bloques de 100ms (3.200 bytes), sin bloquear la interfaz gráfica ni generar chasquidos acústicos.
+- **Audio Check Pre-vuelo**: Diagnóstico de entrada con sondeo de decibelios peak/avg y alerta de clipping en tiempo real.
+- **Demos integradas en 1 click**: 3 charlas reales pre-cargadas de conferencias para validar el sistema sin necesidad de orador en vivo.
 
-### 🍬 Todos los Opcionales Incluidos (Puntos Extra)
-- 📺 **OBS / vMix Overlay Mode** (`/overlay`): URL optimizada para *Browser Source* en software de streaming, con fondo 100% transparente y tipografía estilo broadcast con drop shadow y contorno de alto contraste.
-- 🌐 **Soporte Multi-idioma Extendido**: Español 🇦🇷, Inglés 🇺🇸 y Portugués 🇧🇷.
-- 📖 **NerdGlosario Técnico Inyectado**: Diccionario de +150 términos de DevOps, Cloud, Kubernetes, IA, Rust y Linux inyectados en el system prompt de Gemini para evitar alucinaciones, más un panel para que los organizadores agreguen términos en vivo.
-- 💾 **Exportación Post-Charla Multi-formato**: Descarga en 1 click de `.srt` (SubRip), `.vtt` (WebVTT para HTML5), `.md` (Markdown con resumen) y `.txt`.
-- 🎛️ **Production Control Room (`/admin`)**: Panel para sonidistas con vúmetro en tiempo real, latencia en milisegundos, medidor de audiencia y control individual de cada sala.
+### 🧠 Arquitectura de Doble Motor de Inteligencia Artificial (Google Gemini)
+- **Motor en Tiempo Real (Gemini 3.5 Transcribe Live)**: Streaming bidireccional sobre WebSockets con emisión de **sub-150ms speculative interim preview** (texto provisional en vivo con pulsación ámbar) y finalización instantánea con puntuación natural.
+- **Motor de Síntesis Ejecutiva (Gemini 2.5 Pro)**: Genera resúmenes ejecutivos en Markdown, lecciones de arquitectura técnica y preguntas agudas sugeridas para el bloque de Q&A post-charla.
+- **Fallback Resiliente (Gemini 2.5 Flash + Diccionario Local)**: Si la conexión a la nube sufre micro-cortes, el sistema conmuta sin fisuras a procesamiento local ultrarrápido sin perder una sola palabra.
 
-### 🚀 Innovaciones Exclusivas (El Factor Ganador)
-- 💡 **NerdGlosario Interactivo para la Audiencia**: Las palabras técnicas difíciles que dice el speaker se iluminan con insignias neón en los subtítulos. Cualquier asistente puede hacer click para ver una tarjeta explicativa instantánea de qué es y para qué sirve (ideal para juniors).
-- 🧠 **Live Key Takeaways**: Resumen dinámico en viñetas de las ideas centrales expuestas durante la charla, actualizado en tiempo real.
-- ❓ **Smart Q&A Prompts**: Generación automática de preguntas técnicas de alto nivel para el bloque de preguntas y respuestas al finalizar la disertación.
+### 🎛️ Consola de Hardware de Operador (Teenage Engineering & Blackmagic Industrial Design)
+- **Rack de 19 pulgadas**: Chasis oscuro anodizado, tornillos hexagonales y tipografía técnica de alto contraste.
+- **Vúmetro LED de 12 segmentos**: Indicadores discretos de nivel acústico, decibelios dBFS y advertencia de saturación.
+- **Cerrojo de Seguridad de Mesa Técnica**: Bloquea controles sensibles para evitar errores accidentales durante transmisiones en vivo.
+- **Auto-Heal Watchdog de 8 Minutos**: Limpia buffers de memoria y renueva la sesión de streaming proactivamente antes de los límites de sesión de Google Live API.
+- **Botón de Pánico & Apagón de Emergencia (EDM)**: Borrado instantáneo de la última frase o black-out total de subtítulos ante bloopers o confidencialidad en vivo.
+- **Recarga Remota F5**: Recarga nodos de escenario remotos desde la mesa técnica sin requerir software de escritorio remoto (Zero-RustDesk).
+
+### 🌐 Topología Multiescenario Global (Konex & Auditorios del Mundo)
+- **Aprovisionamiento Dinámico de Salas**: Modal interactivo para agregar nuevos escenarios en caliente (`+ Agregar Escenario`) especificando track, orador y título.
+- **Modo Kiosk para Mini PCs de Escenario**: Interfaz de pantalla completa para Mini PCs ubicadas al pie del escenario con captura de línea y reconexión automática resiliente.
+- **Transmisión 1-a-N ultra-escalable**: Un único stream de procesamiento alimenta a miles de espectadores conectados por WebSocket sin costo adicional por asistente.
+
+### 📺 Integración para Transmisiones (OBS Studio / vMix Overlay)
+- **Ruta `/overlay` con fondo 100% transparente**: Lista para Browser Source en OBS Studio o vMix con drop-shadow broadcast, división de líneas según estándar CEA-708 y preview en tiempo real del habla del orador.
+
+### ♿ Accesibilidad Radical (WCAG AAA)
+- **NerdGlosario Neón Interactivo**: Más de 150 términos técnicos IT inyectados en el system prompt. Los asistentes pueden hacer click en insignias luminosas para leer explicaciones didácticas de términos complejos (ideal para juniors y estudiantes).
+- **Tipografía adaptable & Modo Foco**: Regulación de tamaño de fuente (A-, A, A+ Cinema), auto-scroll inteligente con pausa táctil y selector rápido de idioma (Español 🇦🇷, Inglés 🇺🇸, Portugués 🇧🇷).
+- **Acceso móvil por Código QR**: Los asistentes escanean el código proyectado y leen la transcripción en sus teléfonos en tiempo real sin instalar apps.
 
 ---
 
@@ -53,112 +66,86 @@ Las herramientas comerciales actuales tienen severas limitaciones:
 
 ```mermaid
 flowchart TD
-    subgraph AudioSources["🎙️ Ingesta de Audio"]
-        Mic["🎤 Micrófono Sala (PCM 16kHz)"]
-        Demos["📻 Charlas Nerdearla (1-Click Test)"]
-        Upload["📁 Subida de Archivos WAV/MP3"]
+    subgraph AudioIngest["🎙️ Pipeline de Audio"]
+        Mic["🎤 Micrófono / Interfaz (48kHz Float32)"]
+        Worklet["⚡ AudioWorklet Resampler (16kHz Int16 PCM)"]
+        Demos["📻 Demos de Prueba (1-Click Test)"]
+        Mic --> Worklet
     end
 
-    subgraph CoreEngine["⚡ NerdSub Engine (Node.js + WebSockets)"]
+    subgraph CentralServer["⚡ Servidor Central Aura (Node.js + WebSockets)"]
         StageManager["Multi-Stage Orchestrator (Salas 1..N)"]
-        GeminiService["Google Gemini 2.5 Flash / Multimodal"]
-        Glossary["NerdGlosario Engine (+150 Términos IT)"]
+        GeminiLive["Gemini 3.5 Transcribe Live (Streaming ASR)"]
+        GeminiPro["Gemini 2.5 Pro (Takeaways, Q&A & Briefing)"]
+        GeminiFlash["Gemini 2.5 Flash (Traducción Simultánea)"]
         PubSub["Broadcast Pub/Sub (1 Stream -> N Clientes)"]
     end
 
-    subgraph Delivery["📱 Interfaces y Distribución"]
-        AudienceApp["📱 Vista Audiencia (Selector Sala + Idioma + Glosario)"]
-        OBS["📺 OBS Studio / vMix Overlay (Fondo Transparente)"]
-        ControlRoom["🎛️ Panel de Monitoreo (/admin)"]
-        Exporter["💾 Exportador SRT / VTT / Markdown"]
+    subgraph OutputChannels["📱 Distribución en Vivo"]
+        AudienceApp["📱 Audiencia Móvil (QR + Selector Idioma + Glosario)"]
+        OBS["📺 OBS Studio / vMix Overlay (Alpha Transparente)"]
+        Console["🎛️ Consola de Producción Broadcast (/admin)"]
+        Kiosk["🖥️ Kiosk Mode para Mini PCs de Escenario"]
+        Exporter["💾 Exportador (.SRT, .VTT, .TXT, .MD)"]
     end
 
-    AudioSources --> StageManager
-    StageManager --> GeminiService
-    Glossary -. Inyección de Contexto .-> GeminiService
-    GeminiService --> PubSub
+    Worklet --> StageManager
+    Demos --> StageManager
+    StageManager --> GeminiLive
+    StageManager --> GeminiFlash
+    StageManager --> GeminiPro
+    GeminiLive --> PubSub
+    GeminiFlash --> PubSub
+    GeminiPro --> PubSub
     PubSub --> AudienceApp
     PubSub --> OBS
-    PubSub --> ControlRoom
+    PubSub --> Console
+    PubSub --> Kiosk
     PubSub --> Exporter
 ```
 
-### 💡 Secreto de Escalabilidad y Eficiencia de Costos (1-a-N Pub/Sub)
-A diferencia de los servicios comerciales que cobran por cada usuario que mira los subtítulos, **NerdSub realiza únicamente 1 llamada a la API de Gemini por escenario**. Una vez generada la transcripción/traducción, el servidor local de WebSockets la distribuye a cientos o miles de asistentes conectados de forma instantánea:
-- **10 escenarios en simultáneo con 5,000 personas en la audiencia** = **10 llamadas de streaming de audio**.
-- Costo de infraestructura cercano a cero y consumo de red mínimo.
-
 ---
 
-## ⚡ 4. Guía de Inicio Rápido (1 Minuto)
+## ⚡ 4. Guía de Inicio Rápido
 
 ### Prerrequisitos
-- Node.js v18 o superior (`node -v`)
+- Node.js v20 o superior (`node -v`)
 - npm (`npm -v`)
 
 ### Paso 1: Clonar e Instalar
 ```bash
-git clone https://github.com/tu-usuario/nerdsub.git
-cd nerdsub
+git clone https://github.com/EzeAlfaro/ProjectAura.git
+cd ProjectAura
 npm install
 ```
 
-### Paso 2: Configurar API Key (Opcional para Pruebas)
+### Paso 2: Configurar Credenciales
 Copiá el archivo de entorno:
 ```bash
 cp .env.example .env
 ```
-Editá `.env` y colocá tu `GEMINI_API_KEY` (obtenida gratis en [Google AI Studio](https://aistudio.google.com)).  
-> *Nota: Si no colocás la clave, NerdSub arranca automáticamente en **Modo Simulación Inteligente**, permitiendo probar todas las funcionalidades y salas concurrentes de inmediato sin bloquearse.*
+Editá `.env` e ingresá tu clave de API de Google AI Studio:
+```env
+GEMINI_API_KEY=tu_gemini_api_key_aqui
+GEMINI_MODEL=gemini-3.5-transcribe-live
+PORT=3001
+```
+*(Nota: Si no se provee clave, el sistema arranca automáticamente en **Modo Simulación Inteligente**, permitiendo probar la interfaz, los vúmetros y el switching de salas sin conexión exterior).*
 
 ### Paso 3: Iniciar
 ```bash
-npm start
+npm run dev
 ```
+
 Abrí tu navegador en:
-- 📱 **Vista de Audiencia**: [http://localhost:3001](http://localhost:3001)
-- 🎛️ **Panel de Producción / Control Room**: [http://localhost:3001](http://localhost:3001) (Click en "Control Room")
-- 📺 **OBS Overlay Transparente**: [http://localhost:3001/overlay?stage=stage-1&lang=es](http://localhost:3001/overlay?stage=stage-1&lang=es)
-
----
-
-## 🎥 5. Guión del Video Demo (1-2 Minutos para el Jurado)
-
-> 📄 **Guión Segundo a Segundo Completo:** Ver [docs/GUION_VIDEO_DEMO.md](./docs/GUION_VIDEO_DEMO.md) para el libreto exacto palabra por palabra y las acciones de pantalla recomendadas.  
-> 🏆 **Documento de Postulación Devpost:** Ver [docs/DEVPOST_SUBMISSION.md](./docs/DEVPOST_SUBMISSION.md) para el pitch oficial de entrega.
-
-Para grabar el video demo requerido para la entrega en Devpost/YouTube:
-
-1. **0:00 - 0:25 | Introducción**: Presentar el problema en Nerdearla (más de 30 charlas, herramientas comerciales caras y sin precisión en términos técnicos). Mostrar la interfaz de NerdSub con identidad Nerdearla.
-2. **0:25 - 0:50 | Calidad y Traducción Técnica en Vivo**:
-   - Abrir el **Escenario Principal** (Charla en Inglés sobre Kubernetes y eBPF).
-   - Mostrar cómo se traduce al Español preservando perfectamente los términos técnicos (*pods, clusters, eBPF, CI/CD, GitOps*).
-   - Hacer click en una píldora de **NerdGlosario** para mostrar la definición instantánea.
-3. **0:50 - 1:15 | Escalabilidad Multi-Escenario**:
-   - Cambiar en 1 click al **Escenario Cloud & DevOps** (Charla en Español sobre Resiliencia y Caos).
-   - Mostrar cómo ambas salas corren en paralelo con métricas de latencia sub-segundo y vúmetros activos.
-4. **1:15 - 1:35 | Integración con OBS / Streaming**:
-   - Mostrar la pantalla de OBS Overlay (`/overlay`) con fondo transparente y tipografía estilo televisión lista para la transmisión de YouTube/Twitch de Nerdearla.
-5. **1:35 - 1:50 | Exportación y Cierre**:
-   - Descargar el archivo `.srt` y `.md` con el resumen generado por IA.
-   - Destacar la licencia MIT y el impacto para todas las conferencias de la comunidad.
-
----
-
-## 📈 6. Cómo Escalar a 10+ Escenarios en Producción
-
-NerdSub está diseñado con una arquitectura completamente desacoplada:
-
-1. **Despliegue con Docker / Cloud Run**:
-   El proyecto se empaqueta en una imagen liviana de Node.js que consume menos de 150MB de memoria RAM.
-2. **Worker Pool para Ingesta de Audio**:
-   Para conferencias con más de 20 escenarios en simultáneo, se puede configurar un broker Redis Pub/Sub para desacoplar los procesos de ingesta de audio de los servidores WebSocket de cara al público.
-3. **Optimización de Costos**:
-   Gracias al modelo **Gemini 2.5 Flash**, el costo por hora de audio procesado es una fracción mínima comparado con los servicios cerrados de transcripción en la nube.
+- 📱 **Vista de Audiencia**: [http://localhost:3000](http://localhost:3000)
+- 🎛️ **Consola de Operador Broadcast**: [http://localhost:3000](http://localhost:3000) (Click en "Control Room")
+- 📺 **Overlay para OBS / vMix**: [http://localhost:3000?view=overlay&stage=stage-1&lang=es](http://localhost:3000?view=overlay&stage=stage-1&lang=es)
+- 🖥️ **Modo Kiosk para Mini PC**: [http://localhost:3000?view=kiosk&stage=stage-1](http://localhost:3000?view=kiosk&stage=stage-1)
 
 ---
 
 ## 📄 Licencia
 
-Este proyecto está liberado bajo la **Licencia MIT**, aprobada por la [Open Source Initiative (OSI)](https://opensource.org/licenses/MIT).  
-Nerdearla y la comunidad de Sysarmy pueden usar, adaptar, forkear y desplegar esta solución libremente en todas sus ediciones futuras.
+Este proyecto está publicado bajo la **Licencia MIT**, aprobada por la [Open Source Initiative (OSI)](https://opensource.org/licenses/MIT).  
+Nerdearla, Sysarmy y cualquier comunidad tecnológica del mundo tienen plena libertad para utilizar, adaptar, desplegar y enriquecer este motor en sus eventos presentes y futuros.

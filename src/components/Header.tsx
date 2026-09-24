@@ -32,7 +32,7 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="rack-screw">✕</span>
             <span className="text-[#00f5ff] font-black tracking-wider">SYSARMY</span>
             <span className="text-[#334155]">/</span>
-            <span className="text-white font-bold">NERDSUB RACK-1000 PRO</span>
+            <span className="text-white font-bold">AURA RACK-1000 PRO</span>
             <span className="text-[#334155]">/</span>
             <span className="text-[#64748b] hidden sm:inline">SER: #2026-TX</span>
           </div>

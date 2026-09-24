@@ -160,9 +160,9 @@ export const OBSOverlayView: React.FC<OBSOverlayViewProps> = ({
           )}
         </div>
 
-        {/* Nerdearla Logo Watermark for Broadcast */}
+        {/* Watermark for Broadcast */}
         <div className="mt-3 flex items-center gap-1.5 opacity-60 text-[10px] font-mono text-white tracking-widest uppercase">
-          <span>⚡ NERDSUB AI</span>
+          <span>⚡ PROJECT AURA</span>
           <span>•</span>
           <span>NERDEARLA 2026 LIVE</span>
         </div>
