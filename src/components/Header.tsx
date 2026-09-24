@@ -1,5 +1,5 @@
 import React from 'react';
-import { Radio, Tv, Sliders, KeyRound, Sparkles, Volume2 } from 'lucide-react';
+import { Radio, Tv, Sliders, KeyRound, Sparkles, Volume2, QrCode, Terminal, Activity, ShieldCheck } from 'lucide-react';
 
 interface HeaderProps {
   currentView: 'audience' | 'admin' | 'overlay';
@@ -21,117 +21,134 @@ export const Header: React.FC<HeaderProps> = ({
   activeStageName,
 }) => {
   return (
-    <header className="border-b border-[#2a344f] bg-[#0c0f17]/95 backdrop-blur sticky top-0 z-40">
+    <header className="border-b border-[#1c2130] bg-[#090b10]/95 backdrop-blur-md sticky top-0 z-40 select-none">
+      
+      {/* Top micro-chassis telemetry bar */}
+      <div className="border-b border-[#141722] px-4 sm:px-6 py-1 flex items-center justify-between text-[10px] font-mono text-[#64748b]">
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1.5 text-gray-400">
+            <span className="text-[#00f5ff] font-bold">NERDSUB</span>
+            <span>//</span>
+            <span>SYSARMY_BROADCAST_SYSTEM_2026</span>
+          </span>
+          <span className="hidden md:inline text-[#334155]">|</span>
+          <span className="hidden md:flex items-center gap-1.5">
+            <Activity className="w-3 h-3 text-[#00ff88]" />
+            <span className="text-gray-300">AUDIO BUS: 48kHz → 16kHz PCM</span>
+          </span>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <span className="hidden sm:inline text-gray-400">
+            LOC: <strong className="text-gray-200">KONEX BUENOS AIRES</strong>
+          </span>
+          <span className="text-[#334155]">•</span>
+          <span className="flex items-center gap-1">
+            <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-[#00ff88]' : 'bg-[#ff1744]'}`} />
+            <span className={isConnected ? 'text-[#00ff88]' : 'text-[#ff1744]'}>
+              {isConnected ? 'STREAM_SYNC_OK' : 'OFFLINE'}
+            </span>
+          </span>
+        </div>
+      </div>
+
+      {/* Main Console Navigation Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         
-        {/* Brand Logo & Name */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-[#00f0ff] to-[#8b5cf6] p-[2px]">
-            <div className="w-full h-full bg-[#0c0f17] rounded-[10px] flex items-center justify-center">
-              <span className="text-xl font-bold bg-gradient-to-r from-[#00f0ff] to-[#8b5cf6] bg-clip-text text-transparent font-mono">
-                ⚡
-              </span>
-            </div>
+        {/* Brand Unit Ident */}
+        <div className="flex items-center gap-3.5">
+          <div className="relative flex items-center justify-center w-9 h-9 rounded-lg bg-[#141824] border border-[#252c40] shadow-inner">
+            <span className="text-lg font-black text-[#00f5ff] font-mono tracking-tighter">
+              ⚡
+            </span>
+            <span className="absolute -bottom-1 -right-1 w-2 h-2 rounded-full bg-[#ff5500] ring-2 ring-[#090b10]" />
           </div>
+
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="font-extrabold text-lg tracking-tight text-white flex items-center gap-1.5">
-                Nerd<span className="text-[#00f0ff]">Sub</span>
-              </h1>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#8b5cf6]/20 text-[#a855f7] border border-[#8b5cf6]/30 font-semibold">
-                nerdearla 2026
+              <span className="font-mono text-base font-black tracking-tight text-white uppercase">
+                NERD<span className="text-[#00f5ff]">SUB</span>
+              </span>
+              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#1c2233] text-[#00f5ff] border border-[#2d3752] font-bold tracking-widest uppercase">
+                TX-26
               </span>
             </div>
-            <p className="text-xs text-[#94a3b8] hidden sm:block">
-              Live Technical Subtitles & AI Translation at Scale
+            <p className="text-[10px] font-mono text-[#64748b] hidden sm:block">
+              REAL-TIME TECHNICAL CAPTIONING ENGINE
             </p>
           </div>
         </div>
 
-        {/* View Switcher Tabs */}
-        <nav className="flex items-center bg-[#141a29] p-1 rounded-xl border border-[#2a344f]">
+        {/* Tactile Hardware Selector Switches */}
+        <nav className="flex items-center bg-[#0d0f17] p-1 rounded-xl border border-[#1c2130] shadow-inner gap-1">
           <button
             onClick={() => onSelectView('audience')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all ${
               currentView === 'audience'
-                ? 'bg-[#00f0ff] text-[#0c0f17] font-semibold shadow-sm'
-                : 'text-[#94a3b8] hover:text-white'
+                ? 'bg-[#181d2a] text-[#00f5ff] border border-[#00f5ff]/40 shadow-sm shadow-[#00f5ff]/10'
+                : 'text-[#64748b] hover:text-white hover:bg-[#141722]'
             }`}
           >
             <Radio className="w-3.5 h-3.5" />
-            <span>Audiencia</span>
+            <span>01 // AUDIENCIA</span>
           </button>
 
           <button
             onClick={() => onSelectView('admin')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all ${
               currentView === 'admin'
-                ? 'bg-[#8b5cf6] text-white font-semibold shadow-sm'
-                : 'text-[#94a3b8] hover:text-white'
+                ? 'bg-[#181d2a] text-[#ffb700] border border-[#ffb700]/40 shadow-sm shadow-[#ffb700]/10'
+                : 'text-[#64748b] hover:text-white hover:bg-[#141722]'
             }`}
           >
             <Sliders className="w-3.5 h-3.5" />
-            <span>Control Room</span>
+            <span>02 // CONTROL ROOM</span>
           </button>
 
           <button
             onClick={() => onSelectView('overlay')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all ${
               currentView === 'overlay'
-                ? 'bg-[#ff007a] text-white font-semibold shadow-sm'
-                : 'text-[#94a3b8] hover:text-white'
+                ? 'bg-[#181d2a] text-[#ff1744] border border-[#ff1744]/40 shadow-sm shadow-[#ff1744]/10'
+                : 'text-[#64748b] hover:text-white hover:bg-[#141722]'
             }`}
-            title="Modo transparente para OBS Studio o vMix"
+            title="OBS / vMix Studio Transparent Overlay"
           >
             <Tv className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">OBS Overlay</span>
+            <span className="hidden md:inline">03 // OBS OVERLAY</span>
           </button>
         </nav>
 
-        {/* Status Indicators & Settings */}
-        <div className="flex items-center gap-3">
-          {/* Socket Status */}
-          <div
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono border ${
-              isConnected
-                ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/50'
-                : 'bg-red-950/40 text-red-400 border-red-800/50'
-            }`}
-          >
-            <span
-              className={`w-2 h-2 rounded-full ${
-                isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'
-              }`}
-            />
-            <span className="hidden sm:inline">{isConnected ? 'LIVE' : 'DESCONECTADO'}</span>
-          </div>
-
-          {/* QR Code Attendee & Projector Button */}
+        {/* Right Console Actions: QR & Gemini Engine Status */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          
+          {/* QR Code Quick-Launch */}
           <button
             onClick={onOpenQrModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#8b5cf6]/10 text-[#a855f7] border border-[#8b5cf6]/30 hover:bg-[#8b5cf6]/20 transition-all"
-            title="Generar QR para Asistentes y Pantalla de Sala"
+            className="hardware-btn flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono font-semibold text-gray-200 hover:text-white hover:border-[#00f5ff]/50"
+            title="Generar QR para proyección en auditorio o celulares de los asistentes"
           >
-            <span className="text-sm">📱</span>
-            <span className="hidden sm:inline">QR Sala</span>
+            <QrCode className="w-3.5 h-3.5 text-[#00f5ff]" />
+            <span className="hidden sm:inline">QR_SALA</span>
           </button>
 
-          {/* Gemini API Status Badge & Modal Trigger */}
+          {/* Gemini AI Status Switch */}
           <button
             onClick={onOpenApiKeyModal}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-mono font-semibold border transition-all ${
               geminiConfigured
-                ? 'bg-[#00f0ff]/10 text-[#00f0ff] border-[#00f0ff]/30 hover:bg-[#00f0ff]/20'
-                : 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20'
+                ? 'bg-[#00f5ff]/10 text-[#00f5ff] border-[#00f5ff]/30 hover:bg-[#00f5ff]/20'
+                : 'bg-[#ff5500]/10 text-[#ff5500] border-[#ff5500]/30 hover:bg-[#ff5500]/20'
             }`}
-            title="Configurar Gemini API Key"
+            title="Configuración de Motor Gemini"
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span className="hidden md:inline font-mono">
-              {geminiConfigured ? 'Gemini 2.5 Flash' : 'Modo Simulación'}
+            <span className={`w-2 h-2 rounded-full ${geminiConfigured ? 'bg-[#00f5ff] shadow-[0_0_8px_#00f5ff]' : 'bg-[#ff5500]'}`} />
+            <span className="hidden lg:inline">
+              {geminiConfigured ? 'GEMINI_2.5_ONLINE' : 'SIMULATION_MODE'}
             </span>
             <KeyRound className="w-3 h-3 opacity-70" />
           </button>
+
         </div>
 
       </div>

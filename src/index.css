@@ -4,42 +4,105 @@
 
 @layer base {
   body {
-    @apply bg-[#0c0f17] text-[#f1f5f9] min-h-screen overflow-x-hidden selection:bg-[#00f0ff] selection:text-[#0c0f17];
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    background-color: #07080c;
+    color: #e2e8f0;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "tnum";
+    background-image: 
+      radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, #07080c, #0a0c14);
+    background-size: 24px 24px, 100% 100%;
+    min-height: 100vh;
   }
 }
 
-/* Custom Scrollbars */
+/* Custom Scrollbars - Industrial Slim */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: #141a29;
+  background: #090a0f;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2a344f;
-  border-radius: 9999px;
+  background: #1f2433;
+  border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #00f0ff;
+  background: #00f5ff;
 }
 
-/* Glowing tech borders */
-.nerd-glow-cyan {
-  box-shadow: 0 0 15px rgba(0, 240, 255, 0.25);
+/* Dual-fade container (from modern-web-guidance soft-edge-content-fade) */
+.dual-fade-mask {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 90%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 90%, transparent 100%);
 }
-.nerd-glow-purple {
-  box-shadow: 0 0 15px rgba(139, 92, 246, 0.25);
+
+/* Bottom fade only */
+.bottom-fade-mask {
+  -webkit-mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+}
+
+/* Industrial Tactile Hardware Switcher Button */
+.hardware-btn {
+  position: relative;
+  background: #11131a;
+  border: 1px solid #222636;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 4px rgba(0, 0, 0, 0.6);
+  transition: all 0.1s ease;
+}
+.hardware-btn:hover {
+  border-color: #3b4259;
+  background: #161922;
+}
+.hardware-btn:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+.hardware-btn-active {
+  background: #181d29;
+  border-color: #00f5ff;
+  box-shadow: 0 0 12px rgba(0, 245, 255, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 /* Broadcast Overlay Text Shadow */
 .broadcast-text-shadow {
   text-shadow: 
-    0 2px 4px rgba(0, 0, 0, 0.9),
-    0 0 8px rgba(0, 0, 0, 0.8),
+    0 2px 4px rgba(0, 0, 0, 0.95),
+    0 0 12px rgba(0, 0, 0, 0.9),
     -1px -1px 0 #000,
     1px -1px 0 #000,
     -1px 1px 0 #000,
     1px 1px 0 #000;
+}
+
+/* Segmented LED Meter Blocks */
+.led-segment {
+  width: 100%;
+  height: 4px;
+  border-radius: 1px;
+  margin-bottom: 2px;
+  background-color: #161822;
+  transition: background-color 0.05s ease;
+}
+.led-segment.on-green {
+  background-color: #00ff88;
+  box-shadow: 0 0 6px #00ff88;
+}
+.led-segment.on-yellow {
+  background-color: #ffb700;
+  box-shadow: 0 0 6px #ffb700;
+}
+.led-segment.on-red {
+  background-color: #ff1744;
+  box-shadow: 0 0 8px #ff1744;
+}
+
+/* CRT / Phosphor scanline subtle line */
+.scanline-overlay {
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%, 
+    rgba(0, 0, 0, 0.25) 50%
+  );
+  background-size: 100% 4px;
 }

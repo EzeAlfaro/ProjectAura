@@ -23,9 +23,10 @@ import {
   HardDrive,
   Check,
   RefreshCw,
-  Headphones,
+  Gauge,
+  Terminal,
   VolumeX,
-  Gauge
+  Volume1
 } from 'lucide-react';
 import { 
   triggerDemo, 
@@ -91,7 +92,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
   // Sound check stream ref
   const soundCheckStreamRef = useRef<MediaStream | null>(null);
-  const recordedBlobsRef = useRef<Blob[]>([]);
 
   useEffect(() => {
     fetchGlossary().then(setGlossaryTerms);
@@ -127,7 +127,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const refreshAudioDevices = async () => {
     try {
       if (!navigator.mediaDevices?.enumerateDevices) return;
-      // Request initial permission to get device labels
       await navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
         stream.getTracks().forEach((t) => t.stop());
       }).catch(() => {});
@@ -181,7 +180,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
         }
       };
 
-      mediaRecorder.start(3000); // 3-second chunks
+      mediaRecorder.start(3000); // 3-second slices
       setIsRecording(true);
       drawVisualizer();
 
@@ -210,12 +209,11 @@ export const AdminView: React.FC<AdminViewProps> = ({
     setIsClipping(false);
   };
 
-  // Pre-flight 5-Second Sound Check for the AV Tech
+  // Pre-flight 4-Second Sound Check
   const startSoundCheck = async () => {
     setSoundCheckResult(null);
     setSoundCheckProgress(0);
     setIsSoundChecking(true);
-    recordedBlobsRef.current = [];
 
     try {
       const constraints: MediaStreamConstraints = {
@@ -241,7 +239,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
       let samplesCount = 0;
 
       const startTime = Date.now();
-      const duration = 4000; // 4 seconds test
+      const duration = 4000;
 
       const interval = setInterval(() => {
         const elapsed = Date.now() - startTime;
@@ -293,7 +291,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     setIsSoundChecking(false);
   };
 
-  // Draw Audio Visualizer Bars & Calculate dBFS Meter
+  // Oscilloscope & dBFS Meter Visualizer
   const drawVisualizer = () => {
     if (!canvasRef.current || !analyserRef.current) return;
     const canvas = canvasRef.current;
@@ -308,8 +306,18 @@ export const AdminView: React.FC<AdminViewProps> = ({
       animationFrameRef.current = requestAnimationFrame(render);
       analyser.getByteFrequencyData(dataArray);
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const barWidth = (canvas.width / bufferLength) * 2.5;
+      // Clean background with industrial grid line
+      ctx.fillStyle = '#0a0c13';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = '#161a26';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, canvas.height / 2);
+      ctx.lineTo(canvas.width, canvas.height / 2);
+      ctx.stroke();
+
+      const barWidth = (canvas.width / bufferLength) * 2.2;
       let x = 0;
       let maxVal = 0;
 
@@ -317,18 +325,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
         const val = dataArray[i];
         if (val > maxVal) maxVal = val;
         const barHeight = (val / 255) * canvas.height;
-        
-        // Gradient color based on intensity
-        const r = Math.min(255, val * 1.5);
-        const g = Math.max(0, 255 - val);
-        const b = 255;
 
-        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+        ctx.fillStyle = val > 220 ? '#ff1744' : val > 170 ? '#ffb700' : '#00f5ff';
         ctx.fillRect(x, canvas.height - barHeight, barWidth - 1, barHeight);
         x += barWidth;
       }
 
-      // Calculate dBFS (-60 to 0)
       const normalized = maxVal / 255;
       const db = normalized > 0.001 ? Math.round(20 * Math.log10(normalized)) : -60;
       setCurrentDbfs(db);
@@ -338,14 +340,14 @@ export const AdminView: React.FC<AdminViewProps> = ({
     render();
   };
 
-  const handleTriggerDemo = async (talkId: string) => {
+  const handleTriggerDemo = async (stageId: string, talkId: string) => {
     if (isRecording) stopMicStreaming();
-    await triggerDemo(selectedStageId, talkId);
+    await triggerDemo(stageId, talkId);
   };
 
-  const handleStopStage = async () => {
+  const handleStopStage = async (stageId: string) => {
     if (isRecording) stopMicStreaming();
-    await stopStage(selectedStageId);
+    await stopStage(stageId);
   };
 
   const handleAddTerm = async (e: React.FormEvent) => {
@@ -361,138 +363,122 @@ export const AdminView: React.FC<AdminViewProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-5">
       
-      {/* Top Banner: Control Room Title & Sound Tech Hardware Diagnostic */}
-      <div className="bg-[#141a29] border border-[#2a344f] p-5 rounded-3xl shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* MASTER BROADCAST CONSOLE HEADER */}
+      <div className="bg-[#0d0f17] border border-[#1c2130] p-4 sm:p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
-          <div className="p-3 rounded-2xl bg-gradient-to-br from-[#00f0ff]/20 to-[#8b5cf6]/20 border border-[#00f0ff]/30 text-[#00f0ff]">
-            <Sliders className="w-6 h-6" />
+          <div className="p-3 rounded-xl bg-[#141722] border border-[#222636] text-[#00f5ff] flex items-center justify-center">
+            <Sliders className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-extrabold text-white">
-                Consola de Sonido & Control Room
+              <h2 className="text-base font-mono font-bold text-white uppercase tracking-tight">
+                SOUND_CONSOLE // PRODUCTION_DESK
               </h2>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/40 text-emerald-400 border border-emerald-800 font-bold">
-                BROADCAST READY
+              <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-[#00ff88]/15 text-[#00ff88] border border-[#00ff88]/30 font-bold">
+                MULTI-TRACK ACTIVE
               </span>
             </div>
-            <p className="text-xs text-[#94a3b8]">
-              Orquestador de audio profesional para técnicos del evento y transmisiones simultáneas
+            <p className="text-xs font-mono text-[#64748b]">
+              Blackmagic / Field Mixer Layout para operadores y sonidistas del evento
             </p>
           </div>
         </div>
 
-        {/* Hardware Status Badges */}
+        {/* Master Telemetry Badges */}
         <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
-          <div className="px-3 py-1.5 rounded-xl bg-[#0c0f17] border border-[#2a344f] flex items-center gap-2 text-gray-300">
-            <Cpu className="w-3.5 h-3.5 text-[#00f0ff]" />
-            <span>Web Audio: {hardwareStats.audioContextSupported ? 'Activo' : 'N/A'}</span>
+          <div className="px-3 py-1.5 rounded-xl bg-[#11131a] border border-[#222636] flex items-center gap-2 text-gray-300">
+            <Cpu className="w-3.5 h-3.5 text-[#00f5ff]" />
+            <span>HARDWARE: {hardwareStats.sampleRate / 1000} kHz</span>
           </div>
 
-          <div className="px-3 py-1.5 rounded-xl bg-[#0c0f17] border border-[#2a344f] flex items-center gap-2 text-gray-300">
-            <HardDrive className="w-3.5 h-3.5 text-[#8b5cf6]" />
-            <span>Muestreo: {hardwareStats.sampleRate / 1000} kHz</span>
+          <div className="px-3 py-1.5 rounded-xl bg-[#11131a] border border-[#222636] flex items-center gap-2 text-gray-300">
+            <Activity className="w-3.5 h-3.5 text-[#ffb700]" />
+            <span>INPUTS: {audioDevices.length} MICS</span>
           </div>
-
-          {!geminiConfigured && (
-            <button
-              onClick={onOpenApiKeyModal}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 font-semibold hover:bg-amber-500/20 transition-colors"
-            >
-              <AlertCircle className="w-3.5 h-3.5" />
-              <span>Conectar Gemini API Key</span>
-            </button>
-          )}
         </div>
       </div>
 
-      {/* AUDIO HARDWARE DIAGNOSTICS & SOUND CHECK (AV Technician friendly) */}
-      <div className="bg-[#141a29] border border-[#2a344f] rounded-3xl p-5 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#2a344f] pb-3 gap-2">
+      {/* HARDWARE DIAGNOSTICS & PRE-FLIGHT LEVEL TEST RACK */}
+      <div className="bg-[#0a0c13] border border-[#1c2130] rounded-2xl p-4 sm:p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#1c2130] pb-3 gap-2">
           <div>
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Settings2 className="w-4 h-4 text-[#00f0ff]" />
-              Diagnóstico de Hardware & Dispositivos de Audio Conectados
-            </h3>
-            <p className="text-xs text-[#94a3b8]">
-              Verificación física de interfaces de sonido, micrófonos y prueba de nivel antes de salir al aire
+            <span className="text-xs font-mono font-bold text-[#00f5ff] flex items-center gap-2">
+              <Settings2 className="w-4 h-4" />
+              AUDIO_INTERFACE // HARDWARE_INSPECTION
+            </span>
+            <p className="text-[11px] font-mono text-[#64748b]">
+              Selección de interfaz física y prueba de calibración de ganancia
             </p>
           </div>
 
           <button
             onClick={refreshAudioDevices}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1b2236] hover:bg-[#232c45] border border-[#2a344f] text-gray-300 text-xs rounded-xl transition-colors self-start sm:self-auto"
+            className="hardware-btn flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono text-gray-300 hover:text-white"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            <span>Detectar Dispositivos</span>
+            <span>ESCANEAR_DISPOSITIVOS</span>
           </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
           
-          {/* Device Selector (6 cols) */}
+          {/* Audio Input Device Dropdown (6 cols) */}
           <div className="md:col-span-6 space-y-1.5">
-            <label className="block text-xs font-semibold text-gray-300 flex items-center justify-between">
-              <span>Entrada de Audio de la Sala (Micrófono / Consola USB):</span>
-              <span className="text-[10px] text-emerald-400 font-mono">
-                {audioDevices.length} detectados
-              </span>
+            <label className="block text-[11px] font-mono text-[#64748b]">
+              DISPOSITIVO_DE_ENTRADA (MIC / USB INTERFACE):
             </label>
             <select
               value={selectedDeviceId}
               onChange={(e) => setSelectedDeviceId(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-[#0c0f17] border border-[#2a344f] rounded-xl text-xs text-white focus:outline-none focus:border-[#00f0ff] font-mono"
+              className="w-full px-3 py-2 bg-[#11131a] border border-[#222636] rounded-xl text-xs text-white focus:outline-none focus:border-[#00f5ff] font-mono"
             >
               {audioDevices.length === 0 ? (
-                <option value="">(No se detectaron micrófonos o permiso no otorgado)</option>
+                <option value="">(No se detectaron dispositivos de audio)</option>
               ) : (
                 audioDevices.map((d, index) => (
                   <option key={d.deviceId || index} value={d.deviceId}>
-                    {d.label || `Micrófono / Entrada de línea ${index + 1}`}
+                    {d.label || `Entrada de Audio ${index + 1}`}
                   </option>
                 ))
               )}
             </select>
           </div>
 
-          {/* Pre-Flight Sound Check Button & Result (6 cols) */}
+          {/* Sound Check Trigger & Result (6 cols) */}
           <div className="md:col-span-6 flex flex-col justify-end space-y-2">
             <div className="flex items-center gap-3">
               <button
                 onClick={startSoundCheck}
                 disabled={isSoundChecking || isRecording}
-                className="flex items-center gap-2 px-4 py-2.5 bg-[#1b2236] hover:bg-[#232c45] disabled:opacity-50 border border-[#00f0ff]/40 text-[#00f0ff] text-xs font-bold rounded-xl transition-all shadow-sm"
+                className="hardware-btn flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-bold text-[#00f5ff] hover:border-[#00f5ff]"
               >
                 <Gauge className="w-4 h-4" />
-                <span>{isSoundChecking ? `Muestreando audio (${soundCheckProgress}%)...` : 'Hacer Prueba de Nivel (4s)'}</span>
+                <span>{isSoundChecking ? `CALIBRANDO (${soundCheckProgress}%)...` : 'PRUEBA_DE_NIVEL (4s)'}</span>
               </button>
 
               {soundCheckResult && (
                 <div
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-mono font-bold border ${
                     soundCheckResult.status === 'optimal'
-                      ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800'
+                      ? 'bg-[#00ff88]/15 text-[#00ff88] border-[#00ff88]/40'
                       : soundCheckResult.status === 'clipping'
-                      ? 'bg-red-950/40 text-red-400 border-red-800'
-                      : 'bg-yellow-950/40 text-yellow-400 border-yellow-800'
+                      ? 'bg-[#ff1744]/15 text-[#ff1744] border-[#ff1744]/40'
+                      : 'bg-[#ffb700]/15 text-[#ffb700] border-[#ffb700]/40'
                   }`}
                 >
-                  {soundCheckResult.status === 'optimal' && <Check className="w-3.5 h-3.5" />}
-                  {soundCheckResult.status === 'clipping' && <AlertCircle className="w-3.5 h-3.5" />}
                   <span>
-                    Pico: {soundCheckResult.peakDb} dBFS • {soundCheckResult.status.toUpperCase()}
+                    PEAK: {soundCheckResult.peakDb} dBFS • {soundCheckResult.status.toUpperCase()}
                   </span>
                 </div>
               )}
             </div>
 
-            {/* Sound Check Progress Bar */}
             {isSoundChecking && (
-              <div className="w-full bg-[#0c0f17] h-2 rounded-full overflow-hidden">
+              <div className="w-full bg-[#11131a] h-1.5 rounded-full overflow-hidden">
                 <div
-                  className="bg-[#00f0ff] h-full transition-all duration-100"
+                  className="bg-[#00f5ff] h-full transition-all duration-100"
                   style={{ width: `${soundCheckProgress}%` }}
                 />
               </div>
@@ -502,64 +488,105 @@ export const AdminView: React.FC<AdminViewProps> = ({
         </div>
       </div>
 
-      {/* MULTI-STAGE MATRIX (Criteria: Concurrent multi-session support) */}
+      {/* VERTICAL CHANNEL STRIPS (Teenage Engineering TX-6 / Blackmagic ATEM Mixer Style) */}
       <div>
-        <h3 className="text-xs font-mono uppercase text-[#94a3b8] tracking-wider mb-3 flex items-center gap-2">
-          <Layers className="w-4 h-4 text-[#00f0ff]" />
-          <span>Matriz de Escenarios en Vivo ({stages.length} Salas Concurrente)</span>
-        </h3>
+        <div className="flex items-center justify-between mb-3 text-xs font-mono text-[#64748b]">
+          <span className="flex items-center gap-2">
+            <Layers className="w-3.5 h-3.5 text-[#00f5ff]" />
+            CONSOLA DE CANALES MULTI-SALA (1-TO-N BROADCAST MATRIX)
+          </span>
+          <span>CHANNELS: {stages.length} ACTIVE</span>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {stages.map((stage) => {
+          {stages.map((stage, idx) => {
             const isSelected = stage.id === selectedStageId;
             return (
               <div
                 key={stage.id}
                 onClick={() => setSelectedStageId(stage.id)}
-                className={`p-4 rounded-2xl border cursor-pointer transition-all ${
+                className={`bg-[#0a0c13] rounded-2xl border p-4 transition-all cursor-pointer flex flex-col justify-between ${
                   isSelected
-                    ? 'bg-[#141a29] border-[#00f0ff] shadow-lg shadow-[#00f0ff]/10'
-                    : 'bg-[#0f1422] border-[#2a344f] hover:border-[#3a4768]'
+                    ? 'border-[#00f5ff] shadow-xl shadow-[#00f5ff]/10'
+                    : 'border-[#1c2130] hover:border-[#2b334a]'
                 }`}
               >
-                <div className="flex items-center justify-between mb-2">
+                {/* Channel Header */}
+                <div className="flex items-center justify-between border-b border-[#1c2130] pb-2.5 mb-3">
                   <div className="flex items-center gap-2">
-                    <span
-                      className={`w-2.5 h-2.5 rounded-full ${
-                        stage.isLive ? 'bg-red-500 animate-pulse' : 'bg-gray-600'
-                      }`}
-                    />
-                    <span className="font-bold text-white text-sm">{stage.name}</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#141722] text-[#00f5ff] font-bold">
+                      CH_0{idx + 1}
+                    </span>
+                    <span className="font-mono font-bold text-sm text-white">{stage.name}</span>
                   </div>
-                  <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-black/40 text-[#00f0ff] border border-[#00f0ff]/20">
-                    {stage.currentAudioSource}
-                  </span>
+
+                  <span className={`w-2.5 h-2.5 rounded-full ${stage.isLive ? 'bg-[#ff5500] animate-pulse shadow-[0_0_8px_#ff5500]' : 'bg-[#334155]'}`} />
                 </div>
 
-                <div className="text-xs font-semibold text-gray-200 line-clamp-1 mb-1">
-                  {stage.talkTitle}
-                </div>
-                <div className="text-[11px] text-[#94a3b8] truncate mb-3">
-                  {stage.speaker}
+                {/* Talk Meta */}
+                <div className="space-y-1 mb-4">
+                  <div className="text-xs font-bold text-gray-200 line-clamp-1">
+                    {stage.talkTitle}
+                  </div>
+                  <div className="text-[10px] font-mono text-[#64748b] truncate">
+                    {stage.speaker}
+                  </div>
                 </div>
 
-                {/* Live VU Meter & Metrics */}
-                <div className="space-y-2 border-t border-[#2a344f] pt-3">
-                  <div className="flex items-center justify-between text-[10px] font-mono text-gray-400">
-                    <span>Nivel de Audio</span>
+                {/* Segmented LED VU Meter Bar (Discrete Multi-Segment LEDs) */}
+                <div className="bg-[#07080c] border border-[#141722] rounded-xl p-3 mb-4 space-y-2">
+                  <div className="flex items-center justify-between text-[9px] font-mono text-[#64748b]">
+                    <span>AUDIO_LEVEL</span>
                     <span className="text-white font-bold">{stage.audioLevel}%</span>
                   </div>
-                  <div className="w-full bg-[#0c0f17] h-2 rounded-full overflow-hidden">
-                    <div
-                      className="bg-gradient-to-r from-emerald-500 via-yellow-500 to-red-500 h-full transition-all duration-300"
-                      style={{ width: `${stage.audioLevel}%` }}
-                    />
+
+                  {/* Discrete LED ladder */}
+                  <div className="grid grid-cols-12 gap-1 h-3 items-center">
+                    {Array.from({ length: 12 }).map((_, i) => {
+                      const threshold = ((i + 1) / 12) * 100;
+                      const isActive = stage.audioLevel >= threshold;
+                      const isRed = i >= 10;
+                      const isYellow = i >= 7 && i < 10;
+                      
+                      let colorClass = 'bg-[#141722]';
+                      if (isActive) {
+                        if (isRed) colorClass = 'bg-[#ff1744] shadow-[0_0_4px_#ff1744]';
+                        else if (isYellow) colorClass = 'bg-[#ffb700] shadow-[0_0_4px_#ffb700]';
+                        else colorClass = 'bg-[#00ff88] shadow-[0_0_4px_#00ff88]';
+                      }
+
+                      return <div key={i} className={`h-full rounded-xs transition-colors duration-75 ${colorClass}`} />;
+                    })}
                   </div>
 
-                  <div className="flex items-center justify-between text-[10px] font-mono text-gray-400 pt-1">
-                    <span>Audiencia: <strong className="text-white">{stage.audienceCount}</strong></span>
-                    <span>Latencia: <strong className="text-emerald-400">{stage.latencyMs} ms</strong></span>
+                  <div className="flex items-center justify-between text-[9px] font-mono text-[#475569] pt-1">
+                    <span>AUD: {stage.audienceCount}</span>
+                    <span>LAT: {stage.latencyMs}ms</span>
+                    <span>SRC: {stage.currentAudioSource.toUpperCase()}</span>
                   </div>
+                </div>
+
+                {/* Tactical Channel Strip Buttons */}
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#1c2130]">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleTriggerDemo(stage.id, stage.id === 'stage-1' ? 'talk-en-k8s' : 'talk-es-devops');
+                    }}
+                    className="hardware-btn py-1.5 px-2 rounded-lg text-[10px] font-mono text-center font-bold text-gray-300 hover:text-[#00f5ff]"
+                  >
+                    TEST_DEMO
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleStopStage(stage.id);
+                    }}
+                    className="hardware-btn py-1.5 px-2 rounded-lg text-[10px] font-mono text-center font-bold text-[#ff1744] hover:bg-[#ff1744]/10"
+                  >
+                    STOP_CH
+                  </button>
                 </div>
               </div>
             );
@@ -567,86 +594,84 @@ export const AdminView: React.FC<AdminViewProps> = ({
         </div>
       </div>
 
-      {/* AUDIO INGESTION & STAGE OPERATOR CONSOLE */}
+      {/* SELECTED CHANNEL DETAIL & MIC INGESTION PANEL */}
       {currentStage && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
           
-          {/* Audio Source Controller (7 cols) */}
-          <div className="lg:col-span-7 bg-[#141a29] border border-[#2a344f] rounded-3xl p-5 space-y-5">
-            <div className="flex items-center justify-between border-b border-[#2a344f] pb-3">
+          {/* Audio Ingestion Console (7 cols) */}
+          <div className="lg:col-span-7 bg-[#0a0c13] border border-[#1c2130] rounded-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-[#1c2130] pb-3">
               <div>
-                <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Radio className="w-4 h-4 text-[#00f0ff]" />
-                  Control de Ingesta: <span className="text-[#00f0ff]">{currentStage.name}</span>
-                </h4>
-                <p className="text-xs text-[#94a3b8]">
-                  Elegí la fuente para alimentar la transcripción y traducción en tiempo real
+                <span className="text-xs font-mono font-bold text-[#00f5ff] flex items-center gap-2">
+                  <Radio className="w-4 h-4" />
+                  AUDIO_ROUTING // TARGET: {currentStage.name.toUpperCase()}
+                </span>
+                <p className="text-[11px] font-mono text-[#64748b]">
+                  Control de transmisión directa por micrófono o archivo de sonido
                 </p>
               </div>
 
               {currentStage.isLive && (
                 <button
-                  onClick={handleStopStage}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-950/40 hover:bg-red-900/40 border border-red-800 text-red-400 text-xs font-bold rounded-xl transition-colors"
+                  onClick={() => handleStopStage(currentStage.id)}
+                  className="px-3 py-1 bg-[#ff1744]/15 hover:bg-[#ff1744]/25 border border-[#ff1744]/40 text-[#ff1744] text-xs font-mono font-bold rounded-xl transition-colors"
                 >
-                  <Square className="w-3 h-3" />
-                  <span>Detener Sala</span>
+                  DISARM_STAGE
                 </button>
               )}
             </div>
 
-            {/* Source A: Live Microphone with dBFS Meter and Oscilloscope */}
-            <div className="p-4 bg-[#0f1422] border border-[#2a344f] rounded-2xl space-y-3">
+            {/* Live Mic Transmitter with Oscilloscope */}
+            <div className="p-4 bg-[#0d0f17] border border-[#1c2130] rounded-xl space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-xs font-bold text-white flex items-center gap-2">
-                    <Mic className="w-4 h-4 text-[#00f0ff]" />
-                    <span>Micrófono de Cabina / Sonido del Escenario</span>
+                  <div className="text-xs font-mono font-bold text-white flex items-center gap-2">
+                    <Mic className="w-4 h-4 text-[#00f5ff]" />
+                    <span>TRANSMISIÓN_EN_VIVO (MIC_INPUT)</span>
                   </div>
-                  <p className="text-[11px] text-gray-400">
-                    Captura en PCM 16kHz enviada a Gemini Live / Multimodal
+                  <p className="text-[11px] font-mono text-[#64748b]">
+                    Transmite audio en tiempo real directamente al motor multimodal de Gemini
                   </p>
                 </div>
 
                 {isRecording ? (
                   <button
                     onClick={stopMicStreaming}
-                    className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-colors animate-pulse"
+                    className="flex items-center gap-2 px-4 py-2 bg-[#ff1744] hover:bg-[#ff1744]/90 text-white text-xs font-mono font-bold rounded-xl transition-all animate-pulse"
                   >
                     <Square className="w-3.5 h-3.5" />
-                    <span>Detener Transmisión</span>
+                    <span>DETENER_AIRE</span>
                   </button>
                 ) : (
                   <button
                     onClick={startMicStreaming}
-                    className="flex items-center gap-2 px-4 py-2 bg-[#00f0ff] hover:bg-[#00f0ff]/90 text-black text-xs font-bold rounded-xl transition-all shadow-md shadow-[#00f0ff]/20"
+                    className="hardware-btn-active flex items-center gap-2 px-4 py-2 bg-[#181d2a] text-[#00f5ff] text-xs font-mono font-bold rounded-xl transition-all"
                   >
                     <Mic className="w-3.5 h-3.5" />
-                    <span>Transmitir en Vivo</span>
+                    <span>TRANSMITIR_MIC</span>
                   </button>
                 )}
               </div>
 
-              {/* Real-time Oscilloscope & dBFS Meter */}
+              {/* Oscilloscope Canvas & Calibrated dBFS Bar */}
               {isRecording && (
-                <div className="space-y-2 mt-2">
-                  <div className="bg-[#0c0f17] p-2.5 rounded-xl border border-[#2a344f]">
+                <div className="space-y-2 pt-2">
+                  <div className="rounded-xl overflow-hidden border border-[#1c2130]">
                     <canvas ref={canvasRef} width={500} height={45} className="w-full h-11" />
                   </div>
 
-                  {/* Broadcast dBFS VU Bar */}
                   <div className="flex items-center gap-2 text-[10px] font-mono">
                     <span className="text-gray-400 w-12 text-right">{currentDbfs} dBFS</span>
-                    <div className="flex-1 bg-[#0c0f17] h-2.5 rounded-full overflow-hidden p-0.5 border border-[#2a344f]">
+                    <div className="flex-1 bg-[#07080c] h-2.5 rounded-full overflow-hidden p-0.5 border border-[#1c2130]">
                       <div
                         className={`h-full rounded-full transition-all duration-75 ${
-                          isClipping ? 'bg-red-500 animate-pulse' : 'bg-gradient-to-r from-emerald-500 via-yellow-400 to-red-500'
+                          isClipping ? 'bg-[#ff1744] animate-pulse' : 'bg-gradient-to-r from-[#00ff88] via-[#ffb700] to-[#ff1744]'
                         }`}
                         style={{ width: `${Math.min(100, Math.max(0, ((currentDbfs + 60) / 60) * 100))}%` }}
                       />
                     </div>
                     {isClipping && (
-                      <span className="px-1.5 py-0.2 bg-red-600 text-white rounded font-bold text-[9px] animate-pulse">
+                      <span className="px-1.5 py-0.2 bg-[#ff1744] text-white rounded font-bold text-[9px] animate-pulse">
                         CLIP!
                       </span>
                     )}
@@ -655,75 +680,64 @@ export const AdminView: React.FC<AdminViewProps> = ({
               )}
 
               {audioError && (
-                <div className="p-2.5 bg-red-950/50 border border-red-800 rounded-xl text-red-400 text-xs flex items-center gap-2">
+                <div className="p-2.5 bg-[#ff1744]/15 border border-[#ff1744]/40 rounded-xl text-[#ff1744] text-xs font-mono flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>{audioError}</span>
                 </div>
               )}
             </div>
 
-            {/* Source B: 1-Click Nerdearla Sample Talk Demos */}
-            <div className="p-4 bg-[#0f1422] border border-[#2a344f] rounded-2xl space-y-3">
-              <div>
-                <div className="text-xs font-bold text-white flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-[#8b5cf6]" />
-                  <span>Charlas Reales de Nerdearla (1-Click Test para el Jurado)</span>
-                </div>
-                <p className="text-[11px] text-gray-400">
-                  Simulación de audio de conferencias técnicas reales para evaluar Spanglish y precisión
-                </p>
-              </div>
+            {/* 1-Click Nerdearla Talk Demos */}
+            <div className="p-4 bg-[#0d0f17] border border-[#1c2130] rounded-xl space-y-2">
+              <span className="text-xs font-mono font-bold text-[#ffb700] flex items-center gap-2">
+                <Sparkles className="w-3.5 h-3.5" />
+                DEMOS_OFICIALES_NERDEARLA (1-CLICK TEST)
+              </span>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
                 <button
-                  onClick={() => handleTriggerDemo('talk-en-k8s')}
-                  className="p-3 rounded-xl bg-[#141a29] border border-[#2a344f] hover:border-[#00f0ff] text-left transition-all group"
+                  onClick={() => handleTriggerDemo(currentStage.id, 'talk-en-k8s')}
+                  className="hardware-btn p-2.5 rounded-xl text-left transition-all"
                 >
-                  <div className="text-[10px] font-mono text-[#00f0ff] font-bold">INGLÉS 🇺🇸 → ESPAÑOL</div>
-                  <div className="text-xs font-semibold text-white mt-1 group-hover:text-[#00f0ff]">
-                    Keynote Kubernetes & eBPF
-                  </div>
-                  <div className="text-[10px] text-gray-500 mt-0.5">Alex Rivera</div>
+                  <div className="text-[9px] font-mono text-[#00f5ff] font-bold">EN 🇺🇸 → ES 🇦🇷</div>
+                  <div className="text-xs font-bold text-white mt-0.5">Keynote K8s & eBPF</div>
+                  <div className="text-[10px] font-mono text-[#64748b]">Alex Rivera</div>
                 </button>
 
                 <button
-                  onClick={() => handleTriggerDemo('talk-es-devops')}
-                  className="p-3 rounded-xl bg-[#141a29] border border-[#2a344f] hover:border-[#8b5cf6] text-left transition-all group"
+                  onClick={() => handleTriggerDemo(currentStage.id, 'talk-es-devops')}
+                  className="hardware-btn p-2.5 rounded-xl text-left transition-all"
                 >
-                  <div className="text-[10px] font-mono text-[#8b5cf6] font-bold">ESPAÑOL 🇦🇷 → INGLÉS</div>
-                  <div className="text-xs font-semibold text-white mt-1 group-hover:text-[#8b5cf6]">
-                    Sysarmy DevOps & Caos
-                  </div>
-                  <div className="text-[10px] text-gray-500 mt-0.5">Valeria Gómez</div>
+                  <div className="text-[9px] font-mono text-[#8b5cf6] font-bold">ES 🇦🇷 → EN 🇺🇸</div>
+                  <div className="text-xs font-bold text-white mt-0.5">Sysarmy DevOps</div>
+                  <div className="text-[10px] font-mono text-[#64748b]">Valeria Gómez</div>
                 </button>
 
                 <button
-                  onClick={() => handleTriggerDemo('talk-es-ai')}
-                  className="p-3 rounded-xl bg-[#141a29] border border-[#2a344f] hover:border-[#ff007a] text-left transition-all group"
+                  onClick={() => handleTriggerDemo(currentStage.id, 'talk-es-ai')}
+                  className="hardware-btn p-2.5 rounded-xl text-left transition-all"
                 >
-                  <div className="text-[10px] font-mono text-[#ff007a] font-bold">DATA & AI TRACK</div>
-                  <div className="text-xs font-semibold text-white mt-1 group-hover:text-[#ff007a]">
-                    Gemini Live & Gemma
-                  </div>
-                  <div className="text-[10px] text-gray-500 mt-0.5">Federico Balbi</div>
+                  <div className="text-[9px] font-mono text-[#ff5500] font-bold">DATA & AI TRACK</div>
+                  <div className="text-xs font-bold text-white mt-0.5">Gemini & Gemma</div>
+                  <div className="text-[10px] font-mono text-[#64748b]">Federico Balbi</div>
                 </button>
               </div>
             </div>
 
-            {/* Source C: File Upload */}
-            <div className="p-4 bg-[#0f1422] border border-[#2a344f] rounded-2xl flex items-center justify-between">
+            {/* File Upload */}
+            <div className="p-3.5 bg-[#0d0f17] border border-[#1c2130] rounded-xl flex items-center justify-between">
               <div>
-                <div className="text-xs font-bold text-white flex items-center gap-2">
-                  <Upload className="w-4 h-4 text-emerald-400" />
-                  <span>Cargar Archivo de Audio Local</span>
+                <div className="text-xs font-mono font-bold text-white flex items-center gap-2">
+                  <Upload className="w-3.5 h-3.5 text-[#00ff88]" />
+                  <span>SUBIR ARCHIVO DE AUDIO LOCAL</span>
                 </div>
-                <p className="text-[11px] text-gray-400">
-                  Subí cualquier fragmento .mp3, .wav o .webm para procesarlo de inmediato
+                <p className="text-[10px] font-mono text-[#64748b]">
+                  Soporta .mp3, .wav, .webm
                 </p>
               </div>
 
-              <label className="cursor-pointer px-4 py-2 bg-[#1b2236] hover:bg-[#232c45] border border-[#2a344f] text-white text-xs font-medium rounded-xl transition-colors">
-                <span>Elegir Archivo</span>
+              <label className="hardware-btn cursor-pointer px-3.5 py-1.5 rounded-xl text-xs font-mono font-bold text-gray-200 hover:text-white">
+                <span>ELEGIR_ARCHIVO</span>
                 <input
                   type="file"
                   accept="audio/*"
@@ -731,7 +745,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (file) {
-                      await uploadAudioChunk(selectedStageId, file);
+                      await uploadAudioChunk(currentStage.id, file);
                     }
                   }}
                 />
@@ -740,92 +754,89 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
           </div>
 
-          {/* Dynamic Technical Glossary Injector (5 cols) */}
-          <div className="lg:col-span-5 bg-[#141a29] border border-[#2a344f] rounded-3xl p-5 space-y-4">
-            <div className="border-b border-[#2a344f] pb-3">
-              <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-[#00f0ff]" />
-                Inyector de Glosario en Vivo
-              </h4>
-              <p className="text-xs text-[#94a3b8]">
-                Agregá nombres de speakers, proyectos o siglas para priorizarlos en el prompt de Gemini
+          {/* Terminal Style Glossary Injector (5 cols) */}
+          <div className="lg:col-span-5 bg-[#0a0c13] border border-[#1c2130] rounded-2xl p-5 space-y-4">
+            <div className="border-b border-[#1c2130] pb-3">
+              <span className="text-xs font-mono font-bold text-[#00f5ff] flex items-center gap-2">
+                <Terminal className="w-4 h-4" />
+                GLOSSARY_CLI // INYECTOR_EN_VIVO
+              </span>
+              <p className="text-[11px] font-mono text-[#64748b]">
+                Inyectá términos prioritarios directamente al contexto de Gemini
               </p>
             </div>
 
-            <form onSubmit={handleAddTerm} className="space-y-3">
+            <form onSubmit={handleAddTerm} className="space-y-3 font-mono text-xs">
               <div>
-                <label className="block text-[11px] font-semibold text-gray-300 mb-1">
-                  Término o Sigla
+                <label className="block text-[10px] text-[#64748b] mb-1">
+                  PARAM: --term
                 </label>
                 <input
                   type="text"
                   value={newTerm}
                   onChange={(e) => setNewTerm(e.target.value)}
                   placeholder="ej. Cilium, Kafka, ArgoCD"
-                  className="w-full px-3 py-2 bg-[#0c0f17] border border-[#2a344f] rounded-xl text-xs text-white focus:outline-none focus:border-[#00f0ff]"
+                  className="w-full px-3 py-2 bg-[#11131a] border border-[#222636] rounded-xl text-white focus:outline-none focus:border-[#00f5ff]"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-gray-300 mb-1">
-                  Categoría
+                <label className="block text-[10px] text-[#64748b] mb-1">
+                  PARAM: --category
                 </label>
                 <select
                   value={newCategory}
                   onChange={(e) => setNewCategory(e.target.value as any)}
-                  className="w-full px-3 py-2 bg-[#0c0f17] border border-[#2a344f] rounded-xl text-xs text-white focus:outline-none focus:border-[#00f0ff]"
+                  className="w-full px-3 py-2 bg-[#11131a] border border-[#222636] rounded-xl text-white focus:outline-none focus:border-[#00f5ff]"
                 >
-                  <option value="cloud">Cloud / Infraestructura</option>
-                  <option value="devops">DevOps & CI/CD</option>
-                  <option value="ai">Inteligencia Artificial / ML</option>
-                  <option value="architecture">Arquitectura de Software</option>
-                  <option value="security">Seguridad & Redes</option>
-                  <option value="language">Lenguaje / Runtime</option>
+                  <option value="cloud">cloud</option>
+                  <option value="devops">devops</option>
+                  <option value="ai">ai</option>
+                  <option value="architecture">architecture</option>
+                  <option value="security">security</option>
+                  <option value="language">language</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-gray-300 mb-1">
-                  Definición Rápida (para la audiencia)
+                <label className="block text-[10px] text-[#64748b] mb-1">
+                  PARAM: --definition
                 </label>
                 <textarea
                   value={newDefinition}
                   onChange={(e) => setNewDefinition(e.target.value)}
-                  placeholder="Breve explicación de 1 frase..."
+                  placeholder="Definición concisa de 1 frase..."
                   rows={2}
-                  className="w-full px-3 py-2 bg-[#0c0f17] border border-[#2a344f] rounded-xl text-xs text-white focus:outline-none focus:border-[#00f0ff] resize-none"
+                  className="w-full px-3 py-2 bg-[#11131a] border border-[#222636] rounded-xl text-white focus:outline-none focus:border-[#00f5ff] resize-none"
                   required
                 />
               </div>
 
               {formSuccess && (
-                <div className="flex items-center gap-2 p-2 bg-emerald-950/40 border border-emerald-800 rounded-xl text-emerald-400 text-xs">
-                  <CheckCircle className="w-4 h-4 shrink-0" />
-                  <span>¡Término agregado al motor de Gemini con éxito!</span>
+                <div className="flex items-center gap-2 p-2 bg-[#00ff88]/15 border border-[#00ff88]/40 rounded-xl text-[#00ff88] text-[11px]">
+                  <Check className="w-3.5 h-3.5 shrink-0" />
+                  <span>[STATUS 201] Término inyectado al motor</span>
                 </div>
               )}
 
               <button
                 type="submit"
-                className="w-full flex items-center justify-center gap-1.5 py-2.5 bg-[#8b5cf6] hover:bg-[#8b5cf6]/90 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-[#8b5cf6]/20"
+                className="w-full py-2.5 bg-[#181d2a] hover:bg-[#202738] border border-[#00f5ff]/40 text-[#00f5ff] font-bold rounded-xl transition-all shadow-sm"
               >
-                <Plus className="w-4 h-4" />
-                <span>Inyectar al Glosario del Evento</span>
+                + INYECTAR_AL_MOTOR
               </button>
             </form>
 
-            <div className="pt-2 border-t border-[#2a344f]">
-              <div className="text-[10px] font-mono text-gray-400 mb-2">
-                Términos precargados activos: {glossaryTerms.length}
+            <div className="pt-2 border-t border-[#1c2130]">
+              <div className="text-[10px] font-mono text-[#64748b] mb-2">
+                TÉRMINOS ACTIVOS EN MEMORIA: {glossaryTerms.length}
               </div>
-              <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
-                {glossaryTerms.slice(0, 10).map((t) => (
-                  <div key={t.term} className="text-[11px] bg-[#0c0f17] p-2 rounded-lg border border-[#2a344f] flex items-center justify-between">
-                    <span className="font-semibold text-white">{t.term}</span>
-                    <span className="text-[9px] font-mono px-1 rounded bg-[#1b2236] text-[#a855f7]">
-                      {t.category}
-                    </span>
+              <div className="max-h-32 overflow-y-auto space-y-1 pr-1 font-mono text-[10px]">
+                {glossaryTerms.slice(0, 8).map((t) => (
+                  <div key={t.term} className="bg-[#11131a] p-2 rounded-lg border border-[#1c2130] flex items-center justify-between">
+                    <span className="font-bold text-white">{t.term}</span>
+                    <span className="text-[#8b5cf6]">[{t.category}]</span>
                   </div>
                 ))}
               </div>

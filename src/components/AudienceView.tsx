@@ -14,13 +14,17 @@ import {
   Sparkles, 
   Download, 
   HelpCircle, 
-  Layers, 
   ArrowDownCircle, 
   Clock, 
   Languages, 
-  Type, 
-  ExternalLink,
-  Tag
+  Maximize2,
+  Minimize2,
+  Terminal,
+  Activity,
+  Layers,
+  Tag,
+  Check,
+  QrCode
 } from 'lucide-react';
 import { getExportUrl } from '../services/api.js';
 
@@ -48,9 +52,10 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
   onOpenQrModal,
 }) => {
   const [autoScroll, setAutoScroll] = useState(true);
-  const [fontSize, setFontSize] = useState<'normal' | 'large' | 'xlarge'>('normal');
+  const [fontSize, setFontSize] = useState<'normal' | 'large' | 'cinema'>('large');
   const [activeSidebarTab, setActiveSidebarTab] = useState<'glossary' | 'takeaways' | 'qa' | 'export'>('glossary');
   const [selectedTerm, setSelectedTerm] = useState<TechTerm | null>(null);
+  const [isFocusMode, setIsFocusMode] = useState(false);
 
   const currentStage = stages.find((s) => s.id === selectedStageId) || stages[0];
   const subtitlesContainerRef = useRef<HTMLDivElement>(null);
@@ -91,23 +96,21 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
 
   const getFontSizeClass = () => {
     switch (fontSize) {
+      case 'cinema':
+        return 'text-2xl sm:text-3xl lg:text-4xl leading-snug font-medium tracking-normal';
       case 'large':
-        return 'text-lg md:text-xl leading-relaxed';
-      case 'xlarge':
-        return 'text-xl md:text-2xl leading-loose font-medium';
+        return 'text-lg sm:text-xl lg:text-2xl leading-relaxed font-normal';
       case 'normal':
       default:
-        return 'text-base md:text-lg leading-relaxed';
+        return 'text-base sm:text-lg leading-relaxed';
     }
   };
 
   const renderTextWithGlossaryHighlights = (text: string, terms: TechTerm[]) => {
     if (!terms || terms.length === 0) return text;
 
-    // Build regex to match terms
     const sortedTerms = [...terms].sort((a, b) => b.term.length - a.term.length);
     const pattern = new RegExp(`\\b(${sortedTerms.map(t => escapeRegExp(t.term)).join('|')})\\b`, 'gi');
-
     const parts = text.split(pattern);
 
     return parts.map((part, i) => {
@@ -120,11 +123,10 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
               setSelectedTerm(matched);
               setActiveSidebarTab('glossary');
             }}
-            className="cursor-pointer inline-flex items-center mx-0.5 px-1.5 py-0.5 rounded-md bg-[#00f0ff]/15 text-[#00f0ff] border border-[#00f0ff]/40 hover:bg-[#00f0ff]/25 transition-colors font-medium text-[0.95em]"
-            title={`Click para ver definición de ${matched.term}`}
+            className="cursor-pointer inline-flex items-baseline mx-1 px-1.5 py-0.5 rounded bg-[#00f5ff]/10 text-[#00f5ff] border-b border-[#00f5ff]/60 hover:bg-[#00f5ff]/20 hover:border-[#00f5ff] transition-all font-mono font-medium text-[0.9em]"
+            title={`Definición de ${matched.term}`}
           >
             {part}
-            <Tag className="w-2.5 h-2.5 ml-1 opacity-70" />
           </span>
         );
       }
@@ -133,112 +135,126 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-5 transition-all ${isFocusMode ? 'fixed inset-0 z-50 bg-[#07080c] max-w-none p-6 sm:p-10' : ''}`}>
       
-      {/* Stage Selection Tabs */}
-      <div className="flex flex-wrap gap-2.5 items-center justify-between">
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none w-full sm:w-auto">
-          {stages.map((stage) => {
-            const isSelected = stage.id === selectedStageId;
-            return (
-              <button
-                key={stage.id}
-                onClick={() => onSelectStage(stage.id)}
-                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border text-xs font-medium transition-all shrink-0 ${
-                  isSelected
-                    ? 'bg-[#141a29] border-[#00f0ff] text-white shadow-lg shadow-[#00f0ff]/10'
-                    : 'bg-[#0f1422] border-[#2a344f] text-[#94a3b8] hover:text-white hover:border-[#3a4768]'
-                }`}
-              >
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    stage.isLive ? 'bg-red-500 animate-pulse' : 'bg-gray-600'
+      {/* CHANNEL SELECTOR RACK (Matrix Switcher) */}
+      {!isFocusMode && (
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#0d0f17] border border-[#1c2130] p-3 rounded-2xl">
+          
+          {/* Stage Channel Buttons */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none w-full lg:w-auto">
+            <span className="text-[10px] font-mono text-[#64748b] uppercase tracking-wider pl-1 hidden sm:inline">
+              CHANNELS:
+            </span>
+            {stages.map((stage, idx) => {
+              const isSelected = stage.id === selectedStageId;
+              return (
+                <button
+                  key={stage.id}
+                  onClick={() => onSelectStage(stage.id)}
+                  className={`flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-xs font-mono transition-all shrink-0 ${
+                    isSelected
+                      ? 'bg-[#181d2a] border border-[#00f5ff] text-white shadow-md shadow-[#00f5ff]/15'
+                      : 'bg-[#11131a] border border-[#222636] text-[#64748b] hover:text-gray-200 hover:border-[#333a4f]'
                   }`}
-                />
-                <div className="text-left">
-                  <div className="font-semibold text-white">{stage.name}</div>
-                  <div className="text-[10px] text-[#94a3b8] truncate max-w-[140px]">
-                    {stage.speaker}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      stage.isLive ? 'bg-[#ff5500] animate-pulse shadow-[0_0_6px_#ff5500]' : 'bg-[#334155]'
+                    }`}
+                  />
+                  <div className="text-left">
+                    <div className="font-bold flex items-center gap-1.5 text-white">
+                      <span className="text-[10px] text-[#00f5ff]">0{idx + 1}</span>
+                      <span>{stage.name}</span>
+                    </div>
                   </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Language Switcher Buttons */}
-        <div className="flex items-center gap-1.5 bg-[#141a29] p-1.5 rounded-xl border border-[#2a344f]">
-          <Languages className="w-3.5 h-3.5 text-[#94a3b8] ml-2 mr-1" />
-          {[
-            { id: 'original', label: 'Original', flag: '🎙️' },
-            { id: 'es', label: 'Español', flag: '🇦🇷' },
-            { id: 'en', label: 'English', flag: '🇺🇸' },
-            { id: 'pt', label: 'Português', flag: '🇧🇷' },
-          ].map((lang) => {
-            const isSelected = selectedLang === lang.id;
-            return (
-              <button
-                key={lang.id}
-                onClick={() => onSelectLang(lang.id as SupportedLanguage)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  isSelected
-                    ? 'bg-[#00f0ff] text-[#0c0f17] font-bold shadow-sm'
-                    : 'text-[#94a3b8] hover:text-white hover:bg-[#1b2236]'
-                }`}
-              >
-                <span>{lang.flag}</span>
-                <span>{lang.label}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* QR Code Attendee & Auditorium Projector Button */}
-        <button
-          onClick={onOpenQrModal}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#8b5cf6]/20 to-[#00f0ff]/20 border border-[#8b5cf6]/40 hover:border-[#00f0ff] text-white text-xs font-bold transition-all shadow-sm"
-          title="Abrir en celular o proyectar en pantalla de sala"
-        >
-          <span className="text-sm">📱</span>
-          <span>QR Sala & Celular</span>
-        </button>
-      </div>
-
-      {/* Current Talk Info Banner */}
-      {currentStage && (
-        <div className="bg-[#141a29] border border-[#2a344f] rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="px-2 py-0.5 rounded-md bg-[#00f0ff]/10 text-[#00f0ff] text-[10px] font-mono font-bold tracking-wider uppercase border border-[#00f0ff]/30">
-                {currentStage.track}
-              </span>
-              {currentStage.isLive && (
-                <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-red-400 bg-red-950/40 border border-red-800/50 px-2 py-0.5 rounded-md animate-pulse">
-                  EN VIVO
-                </span>
-              )}
-            </div>
-            <h2 className="text-lg sm:text-xl font-extrabold text-white">
-              {currentStage.talkTitle}
-            </h2>
-            <p className="text-xs text-[#94a3b8] mt-0.5">
-              Por <strong className="text-gray-300">{currentStage.speaker}</strong> • {currentStage.description}
-            </p>
+                </button>
+              );
+            })}
           </div>
 
-          <div className="flex items-center gap-4 text-xs font-mono text-[#94a3b8] shrink-0 border-t md:border-t-0 md:border-l border-[#2a344f] pt-3 md:pt-0 md:pl-5">
+          {/* Matrix Language Switcher */}
+          <div className="flex items-center gap-1.5 bg-[#11131a] p-1.5 rounded-xl border border-[#222636]">
+            {[
+              { id: 'original', code: 'ORIGINAL', flag: '🎙️' },
+              { id: 'es', code: 'ES', flag: '🇦🇷' },
+              { id: 'en', code: 'EN', flag: '🇺🇸' },
+              { id: 'pt', code: 'PT', flag: '🇧🇷' },
+            ].map((lang) => {
+              const isSelected = selectedLang === lang.id;
+              return (
+                <button
+                  key={lang.id}
+                  onClick={() => onSelectLang(lang.id as SupportedLanguage)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition-all ${
+                    isSelected
+                      ? 'bg-[#00f5ff] text-[#07080c] shadow-sm font-bold'
+                      : 'text-[#64748b] hover:text-white hover:bg-[#181d2a]'
+                  }`}
+                >
+                  <span>{lang.flag}</span>
+                  <span>{lang.code}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Action buttons: Focus mode & QR Code */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onOpenQrModal}
+              className="hardware-btn flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono font-semibold text-gray-200 hover:text-white"
+              title="Abrir en celular o proyectar en pantalla de sala"
+            >
+              <QrCode className="w-3.5 h-3.5 text-[#00f5ff]" />
+              <span className="hidden sm:inline">QR_LINK</span>
+            </button>
+
+            <button
+              onClick={() => setIsFocusMode(!isFocusMode)}
+              className="hardware-btn flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono font-semibold text-gray-200 hover:text-[#00f5ff]"
+              title="Modo cine sin distracciones"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">FULL_SCREEN</span>
+            </button>
+          </div>
+
+        </div>
+      )}
+
+      {/* Stage Live Status Telemetry Bar */}
+      {currentStage && !isFocusMode && (
+        <div className="bg-[#0d0f17] border border-[#1c2130] rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded bg-[#ff5500]/15 text-[#ff5500] text-[10px] font-mono font-bold tracking-wider uppercase border border-[#ff5500]/30 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#ff5500] animate-ping" />
+                ON_AIR // {currentStage.track}
+              </span>
+              <span className="text-xs font-mono text-[#64748b]">
+                SPEAKER: <strong className="text-gray-200">{currentStage.speaker}</strong>
+              </span>
+            </div>
+            <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
+              {currentStage.talkTitle}
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-4 text-xs font-mono text-[#64748b] shrink-0 border-t md:border-t-0 md:border-l border-[#1c2130] pt-3 md:pt-0 md:pl-5">
             <div>
-              <div className="text-[10px] text-gray-500 uppercase">Audiencia</div>
-              <div className="text-white font-bold">{currentStage.audienceCount} conectados</div>
+              <div className="text-[9px] uppercase tracking-wider text-[#475569]">AUDIENCIA</div>
+              <div className="text-white font-bold">{currentStage.audienceCount} CONECTADOS</div>
             </div>
             <div>
-              <div className="text-[10px] text-gray-500 uppercase">Latencia</div>
-              <div className="text-emerald-400 font-bold">{currentStage.latencyMs || 320} ms</div>
+              <div className="text-[9px] uppercase tracking-wider text-[#475569]">LATENCIA</div>
+              <div className="text-[#00ff88] font-bold">{currentStage.latencyMs || 340} ms</div>
             </div>
             <div>
-              <div className="text-[10px] text-gray-500 uppercase">Audio</div>
-              <div className="flex items-center gap-1 text-white font-bold">
-                <Volume2 className="w-3.5 h-3.5 text-[#00f0ff]" />
+              <div className="text-[9px] uppercase tracking-wider text-[#475569]">AUDIO VU</div>
+              <div className="text-[#00f5ff] font-bold flex items-center gap-1">
+                <Volume2 className="w-3 h-3" />
                 {currentStage.audioLevel}%
               </div>
             </div>
@@ -246,72 +262,82 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
         </div>
       )}
 
-      {/* Main Grid: Subtitles Stream (Left 7 cols) & Tech Intelligence Panel (Right 5 cols) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      {/* MAIN CONSOLE GRID */}
+      <div className={`grid grid-cols-1 ${isFocusMode ? '' : 'lg:grid-cols-12'} gap-5 items-start`}>
         
-        {/* Left: Real-time Subtitles Feed */}
-        <div className="lg:col-span-7 bg-[#141a29] border border-[#2a344f] rounded-2xl flex flex-col h-[600px] shadow-xl overflow-hidden">
+        {/* TELEPROMPTER / SUBTITLES CONTAINER */}
+        <div className={`${isFocusMode ? 'w-full h-[90vh]' : 'lg:col-span-8 h-[640px]'} bg-[#0a0c13] border border-[#1c2130] rounded-2xl flex flex-col shadow-2xl relative overflow-hidden`}>
           
-          {/* Subtitles Header Controls */}
-          <div className="p-3.5 border-b border-[#2a344f] bg-[#0f1422] flex items-center justify-between text-xs">
+          {/* Teleprompter Top Controller */}
+          <div className="p-3 border-b border-[#1c2130] bg-[#0d0f17] flex items-center justify-between text-xs font-mono text-[#64748b]">
             <div className="flex items-center gap-2">
-              <Radio className="w-4 h-4 text-[#00f0ff] animate-pulse" />
-              <span className="font-semibold text-white">Transcripción y Subtítulos en Vivo</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#1b2236] text-[#94a3b8]">
-                {chunks.length} segmentos
+              <span className="w-2 h-2 rounded-full bg-[#00ff88] animate-pulse shadow-[0_0_8px_#00ff88]" />
+              <span className="text-white font-bold tracking-tight">TELEPROMPTER_STREAM</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#141722] text-[#64748b]">
+                {chunks.length} BLOCKS
               </span>
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Font Size Adjuster */}
-              <div className="flex items-center bg-[#1b2236] rounded-lg p-0.5 border border-[#2a344f]">
+              {/* Typeface Size Toggle */}
+              <div className="flex items-center bg-[#141722] rounded-lg p-0.5 border border-[#222636]">
                 <button
                   onClick={() => setFontSize('normal')}
-                  className={`px-2 py-0.5 text-[10px] rounded ${fontSize === 'normal' ? 'bg-[#00f0ff] text-black font-bold' : 'text-gray-400'}`}
+                  className={`px-2 py-0.5 text-[10px] font-mono rounded ${fontSize === 'normal' ? 'bg-[#00f5ff] text-black font-bold' : 'text-[#64748b]'}`}
                 >
-                  A
+                  A1
                 </button>
                 <button
                   onClick={() => setFontSize('large')}
-                  className={`px-2 py-0.5 text-xs rounded ${fontSize === 'large' ? 'bg-[#00f0ff] text-black font-bold' : 'text-gray-400'}`}
+                  className={`px-2 py-0.5 text-[10px] font-mono rounded ${fontSize === 'large' ? 'bg-[#00f5ff] text-black font-bold' : 'text-[#64748b]'}`}
                 >
-                  A+
+                  A2
                 </button>
                 <button
-                  onClick={() => setFontSize('xlarge')}
-                  className={`px-2 py-0.5 text-sm rounded ${fontSize === 'xlarge' ? 'bg-[#00f0ff] text-black font-bold' : 'text-gray-400'}`}
+                  onClick={() => setFontSize('cinema')}
+                  className={`px-2 py-0.5 text-[10px] font-mono rounded ${fontSize === 'cinema' ? 'bg-[#00f5ff] text-black font-bold' : 'text-[#64748b]'}`}
                 >
-                  A++
+                  MAX
                 </button>
               </div>
 
               {/* Auto Scroll Toggle */}
               <button
                 onClick={() => setAutoScroll(!autoScroll)}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-medium transition-colors ${
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-mono font-semibold transition-colors ${
                   autoScroll
-                    ? 'bg-[#00f0ff]/10 text-[#00f0ff] border border-[#00f0ff]/30'
-                    : 'bg-[#1b2236] text-gray-400 border border-[#2a344f]'
+                    ? 'bg-[#00f5ff]/10 text-[#00f5ff] border border-[#00f5ff]/30'
+                    : 'bg-[#141722] text-[#64748b] border border-[#222636]'
                 }`}
-                title={autoScroll ? 'Pausar auto-scroll' : 'Reanudar auto-scroll'}
               >
                 <ArrowDownCircle className="w-3 h-3" />
-                <span>{autoScroll ? 'Auto-scroll ON' : 'Pausado'}</span>
+                <span>{autoScroll ? 'AUTO_SCROLL' : 'PAUSED'}</span>
               </button>
+
+              {/* Focus mode exit button if in focus mode */}
+              {isFocusMode && (
+                <button
+                  onClick={() => setIsFocusMode(false)}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-mono bg-[#ff1744]/15 text-[#ff1744] border border-[#ff1744]/40"
+                >
+                  <Minimize2 className="w-3 h-3" />
+                  <span>SALIR_FOCUS</span>
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Subtitles Scrollable Area */}
+          {/* Subtitles Scrollable Area with Soft Edge Fade */}
           <div
             ref={subtitlesContainerRef}
-            className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4"
+            className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6 dual-fade-mask"
           >
             {chunks.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center text-[#94a3b8] p-6 space-y-3">
-                <Volume2 className="w-12 h-12 text-[#2a344f] animate-pulse" />
-                <p className="text-sm">Esperando stream de audio de la sala...</p>
-                <p className="text-xs text-gray-500 max-w-sm">
-                  Iniciá la prueba de audio desde el panel de control o seleccioná una sala en vivo.
+              <div className="h-full flex flex-col items-center justify-center text-center text-[#64748b] p-6 space-y-3 font-mono">
+                <Activity className="w-10 h-10 text-[#1c2130] animate-pulse" />
+                <p className="text-xs tracking-wider uppercase">[ SINTONIZANDO ENLACE DE AUDIO CON GEMINI 2.5 ]</p>
+                <p className="text-[11px] text-[#475569] max-w-sm">
+                  Iniciá la prueba de audio desde el panel de control o seleccioná una sala activa.
                 </p>
               </div>
             ) : (
@@ -322,30 +348,30 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
                 return (
                   <div
                     key={chunk.id}
-                    className={`p-3.5 rounded-xl border transition-all animate-fade-in ${
+                    className={`transition-all ${
                       isLatest
-                        ? 'bg-[#1b2236]/90 border-[#00f0ff]/40 shadow-md'
-                        : 'bg-[#141a29]/60 border-[#2a344f]/60 hover:border-[#3a4768]'
+                        ? 'opacity-100 transform translate-y-0'
+                        : 'opacity-75 hover:opacity-100'
                     }`}
                   >
-                    <div className="flex items-center justify-between text-[11px] font-mono text-[#94a3b8] mb-1.5">
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-3 h-3" />
-                        <span>{new Date(chunk.timestamp).toLocaleTimeString()}</span>
-                        <span className="uppercase text-[9px] px-1 py-0.2 rounded bg-black/40 text-gray-400">
-                          {chunk.sourceLang} → {selectedLang.toUpperCase()}
-                        </span>
-                      </div>
+                    <div className="flex items-center gap-2 text-[10px] font-mono text-[#64748b] mb-1.5">
+                      <Clock className="w-3 h-3" />
+                      <span>{new Date(chunk.timestamp).toLocaleTimeString()}</span>
+                      <span>//</span>
+                      <span className="uppercase text-[#00f5ff]">
+                        {chunk.sourceLang} → {selectedLang.toUpperCase()}
+                      </span>
                       {isLatest && (
-                        <span className="text-[10px] text-[#00f0ff] font-semibold flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#00f0ff] animate-ping" />
-                          ÚLTIMO SEGMENTO
+                        <span className="flex items-center gap-1 text-[#ff5500] font-bold">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#ff5500] animate-ping" />
+                          LIVE_STREAM
                         </span>
                       )}
                     </div>
 
-                    <p className={`text-white ${getFontSizeClass()}`}>
+                    <p className={`text-white font-sans ${getFontSizeClass()} ${isLatest ? 'text-shadow-sm font-medium' : 'text-gray-300'}`}>
                       {renderTextWithGlossaryHighlights(displayText, chunk.techTerms || [])}
+                      {isLatest && <span className="inline-block w-2.5 h-5 ml-1 bg-[#00f5ff] animate-pulse" />}
                     </p>
                   </div>
                 );
@@ -354,248 +380,244 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
           </div>
         </div>
 
-        {/* Right: Technical Intelligence Sidebar */}
-        <div className="lg:col-span-5 bg-[#141a29] border border-[#2a344f] rounded-2xl flex flex-col h-[600px] shadow-xl overflow-hidden">
-          
-          {/* Sidebar Tabs */}
-          <div className="flex items-center border-b border-[#2a344f] bg-[#0f1422] p-1.5">
-            <button
-              onClick={() => setActiveSidebarTab('glossary')}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all ${
-                activeSidebarTab === 'glossary'
-                  ? 'bg-[#00f0ff] text-[#0c0f17] shadow-sm'
-                  : 'text-[#94a3b8] hover:text-white'
-              }`}
-            >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span>NerdGlosario</span>
-              {allDetectedTerms.length > 0 && (
-                <span className="ml-1 text-[10px] font-mono px-1.5 rounded-full bg-black/30">
-                  {allDetectedTerms.length}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => setActiveSidebarTab('takeaways')}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all ${
-                activeSidebarTab === 'takeaways'
-                  ? 'bg-[#8b5cf6] text-white shadow-sm'
-                  : 'text-[#94a3b8] hover:text-white'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Takeaways</span>
-            </button>
-
-            <button
-              onClick={() => setActiveSidebarTab('qa')}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all ${
-                activeSidebarTab === 'qa'
-                  ? 'bg-[#ff007a] text-white shadow-sm'
-                  : 'text-[#94a3b8] hover:text-white'
-              }`}
-            >
-              <HelpCircle className="w-3.5 h-3.5" />
-              <span>Q&A</span>
-            </button>
-
-            <button
-              onClick={() => setActiveSidebarTab('export')}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all ${
-                activeSidebarTab === 'export'
-                  ? 'bg-[#10b981] text-[#0c0f17] shadow-sm'
-                  : 'text-[#94a3b8] hover:text-white'
-              }`}
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Exportar</span>
-            </button>
-          </div>
-
-          {/* Sidebar Content Area */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* SIDEBAR INTELLIGENCE RACK (Glossary, Takeaways, QA, Export) */}
+        {!isFocusMode && (
+          <div className="lg:col-span-4 bg-[#0a0c13] border border-[#1c2130] rounded-2xl flex flex-col h-[640px] shadow-2xl overflow-hidden">
             
-            {/* TAB 1: NERD-GLOSARIO */}
-            {activeSidebarTab === 'glossary' && (
-              <div className="space-y-3">
-                <div className="text-xs text-[#94a3b8] bg-[#0c0f17] p-3 rounded-xl border border-[#2a344f]">
-                  <p>
-                    💡 <strong>NerdGlosario AI:</strong> Detección automática en tiempo real de jerga técnica, librerías, protocolos y arquitecturas mencionadas por el speaker.
-                  </p>
-                </div>
+            {/* Modular Sidebar Switcher Tabs */}
+            <div className="grid grid-cols-4 p-1.5 bg-[#0d0f17] border-b border-[#1c2130] text-[10px] font-mono gap-1">
+              <button
+                onClick={() => setActiveSidebarTab('glossary')}
+                className={`py-2 px-1 rounded-lg text-center font-bold transition-all ${
+                  activeSidebarTab === 'glossary'
+                    ? 'bg-[#181d2a] text-[#00f5ff] border border-[#00f5ff]/40 shadow-sm'
+                    : 'text-[#64748b] hover:text-white'
+                }`}
+              >
+                GLOSARIO
+                {allDetectedTerms.length > 0 && (
+                  <span className="ml-1 text-[9px] px-1 py-0.2 rounded bg-black/40 text-[#00f5ff]">
+                    {allDetectedTerms.length}
+                  </span>
+                )}
+              </button>
 
-                {selectedTerm && (
-                  <div className="p-4 rounded-xl bg-gradient-to-br from-[#00f0ff]/15 to-[#8b5cf6]/15 border-2 border-[#00f0ff] animate-fade-in relative">
-                    <button
-                      onClick={() => setSelectedTerm(null)}
-                      className="absolute top-2 right-2 text-xs text-gray-400 hover:text-white"
-                    >
-                      ✕
-                    </button>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-[#00f0ff] text-black">
-                        {selectedTerm.category}
-                      </span>
-                      <h4 className="text-base font-bold text-white">{selectedTerm.term}</h4>
+              <button
+                onClick={() => setActiveSidebarTab('takeaways')}
+                className={`py-2 px-1 rounded-lg text-center font-bold transition-all ${
+                  activeSidebarTab === 'takeaways'
+                    ? 'bg-[#181d2a] text-[#8b5cf6] border border-[#8b5cf6]/40 shadow-sm'
+                    : 'text-[#64748b] hover:text-white'
+                }`}
+              >
+                INSIGHTS
+              </button>
+
+              <button
+                onClick={() => setActiveSidebarTab('qa')}
+                className={`py-2 px-1 rounded-lg text-center font-bold transition-all ${
+                  activeSidebarTab === 'qa'
+                    ? 'bg-[#181d2a] text-[#ff1744] border border-[#ff1744]/40 shadow-sm'
+                    : 'text-[#64748b] hover:text-white'
+                }`}
+              >
+                Q&A
+              </button>
+
+              <button
+                onClick={() => setActiveSidebarTab('export')}
+                className={`py-2 px-1 rounded-lg text-center font-bold transition-all ${
+                  activeSidebarTab === 'export'
+                    ? 'bg-[#181d2a] text-[#00ff88] border border-[#00ff88]/40 shadow-sm'
+                    : 'text-[#64748b] hover:text-white'
+                }`}
+              >
+                EXPORT
+              </button>
+            </div>
+
+            {/* Sidebar Content Display */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 font-sans bottom-fade-mask">
+              
+              {/* TAB 1: NERD-GLOSARIO */}
+              {activeSidebarTab === 'glossary' && (
+                <div className="space-y-3">
+                  <div className="text-[11px] font-mono text-[#64748b] bg-[#07080c] p-2.5 rounded-xl border border-[#1c2130]">
+                    💡 <strong>NERD_GLOSSARY:</strong> Detección en vivo de términos DevOps, Cloud y arquitecturas complejas.
+                  </div>
+
+                  {selectedTerm && (
+                    <div className="p-3.5 rounded-xl bg-[#141824] border border-[#00f5ff] animate-fade-in relative">
+                      <button
+                        onClick={() => setSelectedTerm(null)}
+                        className="absolute top-2 right-2 text-xs font-mono text-gray-400 hover:text-white"
+                      >
+                        [✕]
+                      </button>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-[#00f5ff] text-black">
+                          {selectedTerm.category}
+                        </span>
+                        <h4 className="text-sm font-bold text-white">{selectedTerm.term}</h4>
+                      </div>
+                      <p className="text-xs text-gray-200 mt-2 leading-relaxed">
+                        {selectedTerm.definition}
+                      </p>
                     </div>
-                    <p className="text-xs text-gray-200 mt-2 leading-relaxed">
-                      {selectedTerm.definition}
-                    </p>
-                  </div>
-                )}
+                  )}
 
-                {allDetectedTerms.length === 0 ? (
-                  <div className="text-center py-12 text-[#94a3b8] text-xs">
-                    No se han detectado términos aún. A medida que el speaker mencione tecnologías, aparecerán aquí.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-2.5">
-                    {allDetectedTerms.map((term) => (
-                      <div
-                        key={term.term}
-                        onClick={() => setSelectedTerm(term)}
-                        className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                          selectedTerm?.term.toLowerCase() === term.term.toLowerCase()
-                            ? 'bg-[#1b2236] border-[#00f0ff]'
-                            : 'bg-[#0f1422] border-[#2a344f] hover:border-[#00f0ff]/50'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-bold text-white flex items-center gap-1.5">
-                            <span className="text-[#00f0ff] font-mono">•</span>
-                            {term.term}
-                          </span>
-                          <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-[#1b2236] text-[#a855f7] border border-[#a855f7]/30">
-                            {term.category}
-                          </span>
+                  {allDetectedTerms.length === 0 ? (
+                    <div className="text-center py-12 text-[#64748b] text-xs font-mono">
+                      [ SIN TÉRMINOS DETECTADOS AÚN ]
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {allDetectedTerms.map((term) => (
+                        <div
+                          key={term.term}
+                          onClick={() => setSelectedTerm(term)}
+                          className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
+                            selectedTerm?.term.toLowerCase() === term.term.toLowerCase()
+                              ? 'bg-[#181d2a] border-[#00f5ff]'
+                              : 'bg-[#0d0f17] border-[#1c2130] hover:border-[#00f5ff]/40'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-bold font-mono text-white flex items-center gap-1.5">
+                              <span className="text-[#00f5ff]">⟩</span>
+                              {term.term}
+                            </span>
+                            <span className="text-[8px] font-mono uppercase px-1 rounded bg-[#141722] text-[#8b5cf6]">
+                              {term.category}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-[#64748b] line-clamp-2 leading-snug">
+                            {term.definition}
+                          </p>
                         </div>
-                        <p className="text-xs text-[#94a3b8] line-clamp-2 leading-snug">
-                          {term.definition}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* TAB 2: LIVE TAKEAWAYS */}
-            {activeSidebarTab === 'takeaways' && (
-              <div className="space-y-3">
-                <div className="text-xs text-[#94a3b8] bg-[#0c0f17] p-3 rounded-xl border border-[#2a344f]">
-                  ✨ <strong>Live Key Takeaways:</strong> Resumen dinámico y puntos clave sintetizados en vivo mientras avanza la conferencia.
+                      ))}
+                    </div>
+                  )}
                 </div>
+              )}
 
-                {takeaways.length === 0 ? (
-                  <div className="text-center py-12 text-[#94a3b8] text-xs">
-                    Generando puntos clave de la charla...
+              {/* TAB 2: LIVE TAKEAWAYS */}
+              {activeSidebarTab === 'takeaways' && (
+                <div className="space-y-3">
+                  <div className="text-[11px] font-mono text-[#64748b] bg-[#07080c] p-2.5 rounded-xl border border-[#1c2130]">
+                    ⚡ <strong>LIVE_TAKEAWAYS:</strong> Síntesis generada en tiempo real por Gemini 2.5.
                   </div>
-                ) : (
-                  <div className="space-y-2.5">
-                    {takeaways.map((takeaway) => (
-                      <div
-                        key={takeaway.id}
-                        className="p-3 bg-[#0f1422] border border-[#2a344f] rounded-xl flex items-start gap-2.5 animate-fade-in"
-                      >
-                        <span className="text-[#8b5cf6] font-bold text-lg leading-none mt-0.5">•</span>
-                        <div className="flex-1">
-                          <p className="text-xs text-white leading-relaxed">{takeaway.bullet}</p>
-                          <span className="text-[9px] font-mono text-gray-500 uppercase mt-1 inline-block">
-                            {takeaway.category} • {new Date(takeaway.timestamp).toLocaleTimeString()}
-                          </span>
+
+                  {takeaways.length === 0 ? (
+                    <div className="text-center py-12 text-[#64748b] text-xs font-mono">
+                      [ SINTETIZANDO PUNTOS CLAVE... ]
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {takeaways.map((takeaway) => (
+                        <div
+                          key={takeaway.id}
+                          className="p-3 bg-[#0d0f17] border border-[#1c2130] rounded-xl flex items-start gap-2.5"
+                        >
+                          <span className="text-[#8b5cf6] font-mono font-bold">⟩</span>
+                          <div className="flex-1">
+                            <p className="text-xs text-gray-200 leading-relaxed">{takeaway.bullet}</p>
+                            <span className="text-[9px] font-mono text-[#475569] uppercase mt-1 inline-block">
+                              {takeaway.category} • {new Date(takeaway.timestamp).toLocaleTimeString()}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* TAB 3: SMART Q&A SUGGESTER */}
-            {activeSidebarTab === 'qa' && (
-              <div className="space-y-3">
-                <div className="text-xs text-[#94a3b8] bg-[#0c0f17] p-3 rounded-xl border border-[#2a344f]">
-                  ❓ <strong>Preguntas Sugeridas:</strong> Inspiración técnica para el bloque de preguntas y respuestas al finalizar la charla.
+                      ))}
+                    </div>
+                  )}
                 </div>
+              )}
 
-                {suggestedQuestions.length === 0 ? (
-                  <div className="text-center py-12 text-[#94a3b8] text-xs">
-                    Analizando el discurso para formular preguntas inteligentes...
+              {/* TAB 3: SMART Q&A */}
+              {activeSidebarTab === 'qa' && (
+                <div className="space-y-3">
+                  <div className="text-[11px] font-mono text-[#64748b] bg-[#07080c] p-2.5 rounded-xl border border-[#1c2130]">
+                    ❓ <strong>AUDIENCE_QA:</strong> Preguntas técnicas para el cierre de la charla.
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    {suggestedQuestions.map((q) => (
-                      <div
-                        key={q.id}
-                        className="p-3.5 bg-[#0f1422] border border-[#ff007a]/30 rounded-xl space-y-1.5 animate-fade-in"
-                      >
-                        <p className="text-xs font-semibold text-white leading-snug">
-                          {q.question}
-                        </p>
-                        <p className="text-[10px] text-gray-400 italic">
-                          Basado en: "{q.context}..."
-                        </p>
-                      </div>
-                    ))}
+
+                  {suggestedQuestions.length === 0 ? (
+                    <div className="text-center py-12 text-[#64748b] text-xs font-mono">
+                      [ FORMULANDO PREGUNTAS TÉCNICAS... ]
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {suggestedQuestions.map((q) => (
+                        <div
+                          key={q.id}
+                          className="p-3 bg-[#0d0f17] border border-[#ff1744]/30 rounded-xl space-y-1"
+                        >
+                          <p className="text-xs font-semibold text-white leading-snug">
+                            {q.question}
+                          </p>
+                          <p className="text-[10px] font-mono text-gray-400 italic">
+                            Contexto: "{q.context}..."
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 4: EXPORT */}
+              {activeSidebarTab === 'export' && (
+                <div className="space-y-3">
+                  <div className="text-[11px] font-mono text-[#64748b] bg-[#07080c] p-2.5 rounded-xl border border-[#1c2130]">
+                    💾 <strong>BROADCAST_EXPORT:</strong> Descarga de subtítulos en formatos estándar.
                   </div>
-                )}
-              </div>
-            )}
 
-            {/* TAB 4: EXPORT */}
-            {activeSidebarTab === 'export' && (
-              <div className="space-y-4">
-                <div className="text-xs text-[#94a3b8] bg-[#0c0f17] p-3 rounded-xl border border-[#2a344f]">
-                  💾 <strong>Exportación Post-Charla:</strong> Descargá la transcripción completa en formatos estándar para accesibilidad, subtítulos o documentación.
+                  <div className="grid grid-cols-2 gap-2.5 pt-1">
+                    <a
+                      href={getExportUrl(selectedStageId, 'srt', selectedLang)}
+                      download
+                      className="p-3 bg-[#0d0f17] border border-[#1c2130] hover:border-[#00ff88] rounded-xl flex flex-col items-center justify-center text-center transition-all group"
+                    >
+                      <Download className="w-4 h-4 text-[#00ff88] mb-1 group-hover:scale-110 transition-transform" />
+                      <span className="text-xs font-mono font-bold text-white">SRT SUBTITLES</span>
+                      <span className="text-[9px] font-mono text-gray-500">Para video edit</span>
+                    </a>
+
+                    <a
+                      href={getExportUrl(selectedStageId, 'vtt', selectedLang)}
+                      download
+                      className="p-3 bg-[#0d0f17] border border-[#1c2130] hover:border-[#00ff88] rounded-xl flex flex-col items-center justify-center text-center transition-all group"
+                    >
+                      <Download className="w-4 h-4 text-[#00ff88] mb-1 group-hover:scale-110 transition-transform" />
+                      <span className="text-xs font-mono font-bold text-white">WEBVTT (.vtt)</span>
+                      <span className="text-[9px] font-mono text-gray-500">HTML5 player</span>
+                    </a>
+
+                    <a
+                      href={getExportUrl(selectedStageId, 'md', selectedLang)}
+                      download
+                      className="p-3 bg-[#0d0f17] border border-[#1c2130] hover:border-[#00ff88] rounded-xl flex flex-col items-center justify-center text-center transition-all group"
+                    >
+                      <Download className="w-4 h-4 text-[#00ff88] mb-1 group-hover:scale-110 transition-transform" />
+                      <span className="text-xs font-mono font-bold text-white">MARKDOWN</span>
+                      <span className="text-[9px] font-mono text-gray-500">Con resumen</span>
+                    </a>
+
+                    <a
+                      href={getExportUrl(selectedStageId, 'txt', selectedLang)}
+                      download
+                      className="p-3 bg-[#0d0f17] border border-[#1c2130] hover:border-[#00ff88] rounded-xl flex flex-col items-center justify-center text-center transition-all group"
+                    >
+                      <Download className="w-4 h-4 text-[#00ff88] mb-1 group-hover:scale-110 transition-transform" />
+                      <span className="text-xs font-mono font-bold text-white">TEXTO PLANO</span>
+                      <span className="text-[9px] font-mono text-gray-500">Simple txt</span>
+                    </a>
+                  </div>
                 </div>
+              )}
 
-                <div className="grid grid-cols-2 gap-3">
-                  <a
-                    href={getExportUrl(selectedStageId, 'srt', selectedLang)}
-                    download
-                    className="p-3 bg-[#0f1422] border border-[#2a344f] hover:border-[#10b981] rounded-xl flex flex-col items-center justify-center text-center transition-all group"
-                  >
-                    <Download className="w-5 h-5 text-[#10b981] mb-1 group-hover:scale-110 transition-transform" />
-                    <span className="text-xs font-bold text-white">Subtítulos SRT</span>
-                    <span className="text-[10px] text-gray-500">SubRip Subtitle format</span>
-                  </a>
-
-                  <a
-                    href={getExportUrl(selectedStageId, 'vtt', selectedLang)}
-                    download
-                    className="p-3 bg-[#0f1422] border border-[#2a344f] hover:border-[#10b981] rounded-xl flex flex-col items-center justify-center text-center transition-all group"
-                  >
-                    <Download className="w-5 h-5 text-[#10b981] mb-1 group-hover:scale-110 transition-transform" />
-                    <span className="text-xs font-bold text-white">WebVTT (.vtt)</span>
-                    <span className="text-[10px] text-gray-500">HTML5 video player</span>
-                  </a>
-
-                  <a
-                    href={getExportUrl(selectedStageId, 'md', selectedLang)}
-                    download
-                    className="p-3 bg-[#0f1422] border border-[#2a344f] hover:border-[#10b981] rounded-xl flex flex-col items-center justify-center text-center transition-all group"
-                  >
-                    <Download className="w-5 h-5 text-[#10b981] mb-1 group-hover:scale-110 transition-transform" />
-                    <span className="text-xs font-bold text-white">Markdown (.md)</span>
-                    <span className="text-[10px] text-gray-500">Con takeaways y Q&A</span>
-                  </a>
-
-                  <a
-                    href={getExportUrl(selectedStageId, 'txt', selectedLang)}
-                    download
-                    className="p-3 bg-[#0f1422] border border-[#2a344f] hover:border-[#10b981] rounded-xl flex flex-col items-center justify-center text-center transition-all group"
-                  >
-                    <Download className="w-5 h-5 text-[#10b981] mb-1 group-hover:scale-110 transition-transform" />
-                    <span className="text-xs font-bold text-white">Texto Plano (.txt)</span>
-                    <span className="text-[10px] text-gray-500">Transcripción simple</span>
-                  </a>
-                </div>
-              </div>
-            )}
-
+            </div>
           </div>
-        </div>
+        )}
 
       </div>
 
