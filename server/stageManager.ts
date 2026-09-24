@@ -116,8 +116,16 @@ export class StageManager {
   }
 
   public getStageData(stageId: string): StageData | null {
-    const stage = this.stages.get(stageId);
-    if (!stage) return null;
+    let stage = this.stages.get(stageId);
+    if (!stage) {
+      stage = this.createStage({
+        id: stageId,
+        name: `Sala ${stageId.replace('stage-', '').toUpperCase()}`,
+        track: 'Track General',
+        speaker: 'Orador de Sala',
+        talkTitle: 'Transmisión en Vivo'
+      });
+    }
 
     return {
       stage,
@@ -130,6 +138,16 @@ export class StageManager {
   }
 
   public subscribe(ws: WebSocket, stageId: string, lang: SupportedLanguage = 'original') {
+    if (!this.stages.has(stageId)) {
+      this.createStage({
+        id: stageId,
+        name: `Sala ${stageId.replace('stage-', '').toUpperCase()}`,
+        track: 'Track General',
+        speaker: 'Orador de Sala',
+        talkTitle: 'Transmisión en Vivo'
+      });
+    }
+
     let subs = this.subscribers.get(stageId);
     if (!subs) {
       subs = new Set();
@@ -194,8 +212,16 @@ export class StageManager {
   }
 
   public async pushLiveTranscript(stageId: string, text: string, sourceLang: string = 'es') {
-    const stage = this.stages.get(stageId);
-    if (!stage) return;
+    let stage = this.stages.get(stageId);
+    if (!stage) {
+      stage = this.createStage({
+        id: stageId,
+        name: `Sala ${stageId.replace('stage-', '').toUpperCase()}`,
+        track: 'Track General',
+        speaker: 'Orador en Vivo',
+        talkTitle: 'Transmisión de Conferencia'
+      });
+    }
 
     this.stopDemo(stageId);
     stage.isLive = true;
@@ -210,8 +236,16 @@ export class StageManager {
   }
 
   public async pushAudioChunk(stageId: string, audioBuffer: Buffer, mimeType: string) {
-    const stage = this.stages.get(stageId);
-    if (!stage) return;
+    let stage = this.stages.get(stageId);
+    if (!stage) {
+      stage = this.createStage({
+        id: stageId,
+        name: `Sala ${stageId.replace('stage-', '').toUpperCase()}`,
+        track: 'Track General',
+        speaker: 'Orador en Vivo',
+        talkTitle: 'Transmisión de Conferencia'
+      });
+    }
 
     this.stopDemo(stageId);
     stage.isLive = true;

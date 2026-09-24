@@ -24,6 +24,15 @@ export async function fetchStageData(stageId: string): Promise<StageData> {
   return res.json();
 }
 
+export async function createStageApi(stageData: Partial<Stage>): Promise<{ stage: Stage }> {
+  const res = await fetch(`${API_BASE}/stages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(stageData),
+  });
+  return res.json();
+}
+
 export async function updateApiKey(apiKey: string, modelName?: string): Promise<{ success: boolean; geminiConfigured: boolean; model?: string }> {
   const res = await fetch(`${API_BASE}/config/key`, {
     method: 'POST',

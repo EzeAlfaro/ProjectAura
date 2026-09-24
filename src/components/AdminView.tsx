@@ -55,6 +55,7 @@ import {
 } from './HardwareControls.js';
 import { WSClient } from '../services/websocket.js';
 import { findBroadcastSplitIndex, formatBroadcastSubtitle } from '../utils/broadcastSegmenter.js';
+import { AddStageModal } from './AddStageModal.js';
 
 interface AdminViewProps {
   stages: Stage[];
@@ -78,6 +79,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
   onPushLiveTranscript,
 }) => {
   const [selectedStageId, setSelectedStageId] = useState<string>(stages[0]?.id || 'stage-1');
+  const [showAddStageModal, setShowAddStageModal] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [micSourceLang, setMicSourceLang] = useState<'es' | 'en'>('es');
   const [audioError, setAudioError] = useState<string | null>(null);
@@ -957,6 +959,25 @@ export const AdminView: React.FC<AdminViewProps> = ({
               </div>
             );
           })}
+
+          {/* DYNAMIC PROVISIONING CARD FOR ANY EVENT IN THE WORLD */}
+          <div 
+            onClick={() => setShowAddStageModal(true)}
+            className="bg-[#07090e]/60 hover:bg-[#0b0f17] rounded border-2 border-dashed border-[#202738] hover:border-[#00f5ff]/60 p-4 transition-all cursor-pointer flex flex-col items-center justify-center text-center space-y-2 group min-h-[140px]"
+            title="Conectar Mini PC o crear un nuevo escenario para cualquier evento"
+          >
+            <div className="w-10 h-10 rounded-full bg-[#111624] border border-[#232d42] group-hover:border-[#00f5ff] flex items-center justify-center text-[#00f5ff] transition-all">
+              <Plus className="w-5 h-5 group-hover:scale-110 transition-transform" />
+            </div>
+            <div>
+              <span className="font-mono text-xs font-bold text-white group-hover:text-[#00f5ff] transition-colors uppercase block">
+                + PROVISIONAR SALA
+              </span>
+              <span className="text-[10px] font-mono text-[#64748b] block mt-0.5">
+                Conectar Mini PC o crear nuevo canal
+              </span>
+            </div>
+          </div>
         </div>
       </RackUnit>
 
@@ -1618,6 +1639,15 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
         </div>
       </RackUnit>
+
+      {/* DYNAMIC STAGE PROVISIONING MODAL */}
+      <AddStageModal
+        isOpen={showAddStageModal}
+        onClose={() => setShowAddStageModal(false)}
+        onStageCreated={(newStage) => {
+          onSelectStage(newStage.id);
+        }}
+      />
 
     </div>
   );
