@@ -217,30 +217,46 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
               })}
             </div>
 
-            {/* Hardware Language Bus Rocker Switches */}
-            <div className="flex items-center gap-1 bg-[#07090e] p-1 rounded border border-[#1a202c]">
+            {/* Quick Language Switcher Bar with Flags & Dual Mode */}
+            <div className="flex items-center gap-1.5 flex-wrap bg-[#07090e] p-1.5 rounded-lg border border-[#1a202c]">
+              <span className="text-[10px] font-mono text-[#64748b] font-bold pl-1 hidden sm:inline">
+                TRADUCCIÓN:
+              </span>
               {[
-                { id: 'original', code: 'RAW // SOURCE', flag: '🎙️' },
-                { id: 'es', code: 'ES // ESPAÑOL', flag: '🇦🇷' },
-                { id: 'en', code: 'EN // ENGLISH', flag: '🇺🇸' },
-                { id: 'pt', code: 'PT // PORTUGUÊS', flag: '🇧🇷' },
+                { id: 'es', label: 'Español', flag: '🇦🇷' },
+                { id: 'en', label: 'English', flag: '🇬🇧' },
+                { id: 'pt', label: 'Português', flag: '🇧🇷' },
+                { id: 'original', label: 'Original', flag: '🎙️' },
               ].map((lang) => {
                 const isSelected = selectedLang === lang.id;
                 return (
                   <button
                     key={lang.id}
                     onClick={() => onSelectLang(lang.id as SupportedLanguage)}
-                    className={`hardware-btn flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-mono font-bold transition-all ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-mono font-bold transition-all ${
                       isSelected
-                        ? 'hardware-btn-active text-[#00f5ff] border-[#00f5ff]'
-                        : 'text-[#64748b] hover:text-white'
+                        ? 'bg-[#121c2d] border border-[#00f5ff] text-white shadow-[0_0_8px_rgba(0,245,255,0.3)]'
+                        : 'bg-[#0d1017] border border-[#1e2535] text-gray-400 hover:text-white hover:border-gray-600'
                     }`}
                   >
                     <span>{lang.flag}</span>
-                    <span>{lang.code}</span>
+                    <span>{lang.label}</span>
                   </button>
                 );
               })}
+
+              <button
+                onClick={() => setShowOriginal(!showOriginal)}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-mono font-bold transition-all border ${
+                  showOriginal
+                    ? 'bg-[#00f5ff]/20 border-[#00f5ff] text-[#00f5ff]'
+                    : 'bg-[#0d1017] border-[#1e2535] text-gray-400 hover:text-white'
+                }`}
+                title="Ver el idioma original arriba y la traducción abajo"
+              >
+                <span>⚡</span>
+                <span>DUAL {showOriginal ? 'ON' : 'OFF'}</span>
+              </button>
             </div>
           </div>
         </RackUnit>

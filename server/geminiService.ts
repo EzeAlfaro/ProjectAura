@@ -1,6 +1,7 @@
 import { GoogleGenAI, Type, Schema } from '@google/genai';
 import { SubtitleChunk, TechTerm } from './types.js';
 import { extractTechTerms, TECH_GLOSSARY, normalizePhoneticTechTerms } from './glossary.js';
+import { translateConferenceTextLocally } from './localTranslator.js';
 
 const SYSTEM_INSTRUCTION = `
 You are the official real-time transcription, simultaneous translation, and technical glossary engine for the Nerdearla Tech Conference in Buenos Aires.
@@ -183,8 +184,12 @@ export class GeminiService {
       }
     }
 
-    // Local instant translation fallback - PRESERVES EXACT USER WORDS
+    // Local instant translation fallback - PRESERVES EXACT USER WORDS & TRANSLATES OFFLINE
     const isSpanish = sourceLang === 'es' || !/[a-zA-Z]{4,}/.test(cleanText);
+    const localTrans = isSpanish 
+      ? translateConferenceTextLocally(cleanText)
+      : { enText: cleanText, ptText: cleanText };
+
     return {
       id: chunkId,
       stageId,
@@ -192,8 +197,8 @@ export class GeminiService {
       originalText: cleanText,
       sourceLang: isSpanish ? 'es' : 'en',
       esText: cleanText,
-      enText: isSpanish ? `[EN] ${cleanText}` : cleanText,
-      ptText: isSpanish ? `[PT] ${cleanText}` : cleanText,
+      enText: localTrans.enText || cleanText,
+      ptText: localTrans.ptText || cleanText,
       techTerms: detectedLocalTerms,
       confidence: 0.96,
       isFinal: true

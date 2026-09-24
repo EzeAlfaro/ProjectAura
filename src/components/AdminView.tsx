@@ -38,7 +38,8 @@ import {
   Unlock,
   Timer,
   RotateCcw,
-  ShieldCheck
+  ShieldCheck,
+  Languages
 } from 'lucide-react';
 import { 
   triggerDemo, 
@@ -799,8 +800,50 @@ export const AdminView: React.FC<AdminViewProps> = ({
         </div>
       )}
 
+      {/* QUICK STAGE SWITCHER BAR (MULTI-SALA INTUITIVO) */}
+      <div className="bg-[#0b0e15] border-2 border-[#1c2333] rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-mono font-bold text-[#00f5ff] flex items-center gap-1.5 uppercase">
+            <Radio className="w-4 h-4 text-[#00f5ff]" />
+            CONTROL DE SALAS:
+          </span>
+          <span className="text-xs font-mono text-gray-400">
+            (Haz clic en cualquier sala para conmutar la transmisión)
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
+          {stages.map((stg, index) => {
+            const isSelected = stg.id === selectedStageId;
+            return (
+              <button
+                key={stg.id}
+                onClick={() => {
+                  setSelectedStageId(stg.id);
+                  onSelectStage(stg.id);
+                }}
+                className={`px-3 py-1.5 rounded-lg border font-mono text-xs font-bold flex items-center gap-2 transition-all ${
+                  isSelected
+                    ? 'bg-[#121c2d] border-[#00f5ff] text-white shadow-[0_0_12px_rgba(0,245,255,0.25)]'
+                    : 'bg-[#07090e] border-[#1e2535] text-gray-400 hover:text-white hover:border-gray-600'
+                }`}
+              >
+                <span className={`w-2.5 h-2.5 rounded-full ${stg.isLive ? 'bg-[#ff1744] animate-pulse shadow-[0_0_6px_#ff1744]' : 'bg-[#2a3449]'}`} />
+                <span>CH 0{index + 1}: {stg.name}</span>
+                {stg.audienceCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded bg-black/40 text-[9px] text-[#00ff66]">
+                    {stg.audienceCount} 👤
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* 19" RACK UNIT 01: MASTER PRODUCTION DESK & TELEMETRY */}
       <RackUnit
+
 
         unitId="RACK_01"
         uHeight="1U"
@@ -1386,6 +1429,57 @@ export const AdminView: React.FC<AdminViewProps> = ({
                     [ Hablá al micrófono ahora... tus palabras aparecerán aquí en vivo palabra por palabra ]
                   </span>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* TRILINGUAL SIMULTANEOUS BROADCAST MONITOR */}
+          {chunks.length > 0 && (
+            <div className="p-3 bg-[#0d1017] border-2 border-[#1c2333] rounded-lg space-y-2 shadow-lg">
+              <div className="flex items-center justify-between text-[11px] font-mono border-b border-[#181d2a] pb-1.5">
+                <span className="font-bold text-white flex items-center gap-1.5">
+                  <Languages className="w-3.5 h-3.5 text-[#00f5ff]" />
+                  MONITOR DE TRADUCCIÓN SIMULTÁNEA EN VIVO // {currentStage.name.toUpperCase()}
+                </span>
+                <span className="text-[#00ff66] font-bold text-[10px] flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-[#00ff66] animate-pulse" />
+                  EMITIENDO EN 3 IDIOMAS SIMULTÁNEOS
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                {/* 1. ESPAÑOL */}
+                <div className="p-2.5 bg-[#07090e] border border-[#202738] rounded flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-[10px] font-mono text-[#00f5ff] mb-1 font-bold">
+                    <span>🇦🇷 ESPAÑOL (ORIGINAL)</span>
+                    <span className="px-1.5 py-0.2 bg-[#00f5ff]/15 rounded text-[9px]">SALA LOCAL</span>
+                  </div>
+                  <div className="text-white font-bold text-xs sm:text-sm leading-snug">
+                    "{chunks[chunks.length - 1].esText || chunks[chunks.length - 1].originalText}"
+                  </div>
+                </div>
+
+                {/* 2. INGLÉS */}
+                <div className="p-2.5 bg-[#07090e] border border-[#202738] rounded flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-[10px] font-mono text-[#38bdf8] mb-1 font-bold">
+                    <span>🇬🇧 ENGLISH (SIMULTANEOUS)</span>
+                    <span className="px-1.5 py-0.2 bg-[#38bdf8]/15 rounded text-[9px]">STREAM & OBS</span>
+                  </div>
+                  <div className="text-cyan-200 font-bold text-xs sm:text-sm leading-snug">
+                    "{chunks[chunks.length - 1].enText || chunks[chunks.length - 1].originalText}"
+                  </div>
+                </div>
+
+                {/* 3. PORTUGUÉS */}
+                <div className="p-2.5 bg-[#07090e] border border-[#202738] rounded flex flex-col justify-between">
+                  <div className="flex items-center justify-between text-[10px] font-mono text-[#00ff66] mb-1 font-bold">
+                    <span>🇧🇷 PORTUGUÊS (SIMULTÂNEO)</span>
+                    <span className="px-1.5 py-0.2 bg-[#00ff66]/15 rounded text-[9px]">LATAM FEED</span>
+                  </div>
+                  <div className="text-emerald-200 font-bold text-xs sm:text-sm leading-snug">
+                    "{chunks[chunks.length - 1].ptText || chunks[chunks.length - 1].esText || chunks[chunks.length - 1].originalText}"
+                  </div>
+                </div>
               </div>
             </div>
           )}
