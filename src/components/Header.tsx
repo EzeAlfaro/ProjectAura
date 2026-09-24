@@ -1,5 +1,5 @@
 import React from 'react';
-import { Radio, Tv, Sliders, KeyRound, Sparkles, Volume2, QrCode, Terminal, Activity, ShieldCheck } from 'lucide-react';
+import { Radio, Tv, Sliders, KeyRound, Sparkles, Volume2, QrCode, Terminal, Activity, ShieldCheck, Smartphone, Monitor } from 'lucide-react';
 
 interface HeaderProps {
   currentView: 'audience' | 'admin' | 'overlay' | 'kiosk';
@@ -79,54 +79,63 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               </div>
               <p className="text-[9px] font-mono text-[#64748b] hidden sm:block tracking-wide">
-                DUAL-ENGINE BROADCAST ACCESSIBILITY // SYSARMY 2026
+                BROADCAST ACCESSIBILITY & SIMULTANEOUS TRANSLATION
               </p>
             </div>
           </div>
         </div>
 
-        {/* Physical Hardware Channel/View Selector Switches */}
+        {/* Simplified, Intuitive Role/View Switcher */}
         <nav className="flex items-center bg-[#07090e] p-1 rounded-lg border border-[#1e2535] shadow-inner gap-1">
-          <button
-            onClick={() => onSelectView('audience')}
-            className={`hardware-btn flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded text-xs font-mono font-bold transition-all ${
-              currentView === 'audience' ? 'hardware-btn-active text-[#00f5ff]' : 'text-[#718096]'
-            }`}
-          >
-            <Radio className="w-3.5 h-3.5" />
-            <span>01 // AUDITORIO</span>
-          </button>
-
+          {/* 1. MESA TÉCNICA (Admin / Operador de sonido) */}
           <button
             onClick={() => onSelectView('admin')}
-            className={`hardware-btn flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded text-xs font-mono font-bold transition-all ${
+            className={`hardware-btn flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 rounded text-xs font-mono font-bold transition-all ${
               currentView === 'admin' ? 'hardware-btn-active text-[#ffb800]' : 'text-[#718096]'
             }`}
+            title="Consola de Audio, Vúmetros, Sound Check y Mini PC de Escenario"
           >
-            <Sliders className="w-3.5 h-3.5" />
-            <span>02 // CONTROL ROOM</span>
+            <Sliders className="w-3.5 h-3.5 text-[#ffb800]" />
+            <span className="hidden sm:inline">MESA TÉCNICA</span>
+            <span className="sm:hidden">MESA</span>
           </button>
 
+          {/* 2. AUDIENCIA MÓVIL (Audience / QR) */}
+          <button
+            onClick={() => onSelectView('audience')}
+            className={`hardware-btn flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 rounded text-xs font-mono font-bold transition-all ${
+              currentView === 'audience' ? 'hardware-btn-active text-[#00f5ff]' : 'text-[#718096]'
+            }`}
+            title="Vista para el celular de los asistentes (Solo lectura en tiempo real)"
+          >
+            <Smartphone className="w-3.5 h-3.5 text-[#00f5ff]" />
+            <span className="hidden sm:inline">AUDIENCIA (QR)</span>
+            <span className="sm:hidden">PÚBLICO</span>
+          </button>
+
+          {/* 3. vMIX / OBS LIVE (Broadcast Overlay) */}
           <button
             onClick={() => onSelectView('overlay')}
-            className={`hardware-btn flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded text-xs font-mono font-bold transition-all ${
+            className={`hardware-btn flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 rounded text-xs font-mono font-bold transition-all ${
               currentView === 'overlay' ? 'hardware-btn-active text-[#ff1744]' : 'text-[#718096]'
             }`}
-            title="OBS / vMix Studio Transparent Overlay"
+            title="Subtítulos con transparencia alfa para vMix Browser Input y OBS Studio"
           >
-            <Tv className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">03 // OVERLAY</span>
+            <Tv className="w-3.5 h-3.5 text-[#ff1744]" />
+            <span className="hidden md:inline">vMIX / OBS LIVE</span>
+            <span className="md:hidden">vMIX/OBS</span>
           </button>
 
+          {/* 4. PANTALLA SALA (Teleprompter / Retorno orador) */}
           <button
             onClick={() => onSelectView('kiosk')}
-            className={`hardware-btn flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded text-xs font-mono font-bold transition-all ${
+            className={`hardware-btn flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 rounded text-xs font-mono font-bold transition-all ${
               currentView === 'kiosk' ? 'hardware-btn-active text-[#00ff66]' : 'text-[#718096]'
             }`}
-            title="Nodo Autónomo de Mini PC para Sala (Audio 3.5mm + Proyector de Sala)"
+            title="Teleprompter de retorno para el orador y pantalla gigante de sala"
           >
-            <Radio className="w-3.5 h-3.5" />
-            <span className="hidden lg:inline">04 // NODO SALA</span>
+            <Monitor className="w-3.5 h-3.5 text-[#00ff66]" />
+            <span className="hidden lg:inline">PANTALLA SALA</span>
           </button>
         </nav>
 
@@ -137,11 +146,11 @@ export const Header: React.FC<HeaderProps> = ({
           {onOpenVMixModal && (
             <button
               onClick={onOpenVMixModal}
-              className="hardware-btn flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded text-xs font-mono font-bold text-[#ff1744] hover:border-[#ff1744] hover:bg-[#ff1744]/10 transition-all"
-              title="Abrir panel de integración de URLs y configuración para vMix y OBS Studio"
+              className="hardware-btn flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded text-xs font-mono font-bold text-[#ff1744] border-[#ff1744]/40 bg-[#ff1744]/10 hover:bg-[#ff1744]/20 hover:border-[#ff1744] transition-all"
+              title="Abrir panel de URLs y guía rápida para vMix y OBS Studio"
             >
-              <Tv className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">vMIX / OBS</span>
+              <Tv className="w-3.5 h-3.5 animate-pulse" />
+              <span className="hidden sm:inline font-bold">CONFIG vMIX</span>
             </button>
           )}
 
