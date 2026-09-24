@@ -4,6 +4,7 @@ import { AudienceView } from './components/AudienceView.js';
 import { AdminView } from './components/AdminView.js';
 import { OBSOverlayView } from './components/OBSOverlayView.js';
 import { ApiKeyModal } from './components/ApiKeyModal.js';
+import { QRCodeModal } from './components/QRCodeModal.js';
 import { WSClient } from './services/websocket.js';
 import { fetchStages, fetchStatus } from './services/api.js';
 import { Stage, SubtitleChunk, StageTakeaway, StageQA, SupportedLanguage } from './types.js';
@@ -20,6 +21,7 @@ export function App() {
   
   const [geminiConfigured, setGeminiConfigured] = useState<boolean>(false);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState<boolean>(false);
   const [isConnected, setIsConnected] = useState<boolean>(false);
 
   const wsClientRef = useRef<WSClient | null>(null);
@@ -131,6 +133,7 @@ export function App() {
         onSelectView={setCurrentView}
         geminiConfigured={geminiConfigured}
         onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
+        onOpenQrModal={() => setIsQrModalOpen(true)}
         isConnected={isConnected}
         activeStageName={currentStage?.name}
       />
@@ -147,6 +150,7 @@ export function App() {
             chunks={chunks}
             takeaways={takeaways}
             suggestedQuestions={suggestedQuestions}
+            onOpenQrModal={() => setIsQrModalOpen(true)}
           />
         )}
 
@@ -189,6 +193,16 @@ export function App() {
         geminiConfigured={geminiConfigured}
         onKeyUpdated={(configured) => setGeminiConfigured(configured)}
       />
+
+      {/* QR Code Attendee & Projector Modal */}
+      {currentStage && (
+        <QRCodeModal
+          isOpen={isQrModalOpen}
+          onClose={() => setIsQrModalOpen(false)}
+          stage={currentStage}
+          selectedLang={selectedLang}
+        />
+      )}
     </div>
   );
 }
