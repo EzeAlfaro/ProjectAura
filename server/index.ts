@@ -39,7 +39,7 @@ const upload = multer({
 app.get('/api/status', (req: Request, res: Response) => {
   res.json({
     status: 'online',
-    appName: 'NerdSub',
+    appName: 'Project Aura',
     version: '1.0.0',
     geminiConfigured: geminiService.isConfigured(),
     stagesCount: stageManager.getStages().length,
