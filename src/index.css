@@ -4,65 +4,171 @@
 
 @layer base {
   body {
-    background-color: #07080c;
+    background-color: #07090e;
     color: #e2e8f0;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11", "tnum";
     background-image: 
-      radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-      linear-gradient(to bottom, #07080c, #0a0c14);
-    background-size: 24px 24px, 100% 100%;
+      radial-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+      linear-gradient(to bottom, #07090e, #0a0d15);
+    background-size: 20px 20px, 100% 100%;
     min-height: 100vh;
   }
 }
 
-/* Custom Scrollbars - Industrial Slim */
+/* Custom Scrollbars - Industrial Slim Zero-Radius */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #090a0f;
+  background: #090b10;
+  border-left: 1px solid #141824;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1f2433;
-  border-radius: 2px;
+  background: #1f273b;
+  border-radius: 0px;
+  border: 1px solid #2b3550;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #00f5ff;
 }
 
-/* Dual-fade container (from modern-web-guidance soft-edge-content-fade) */
-.dual-fade-mask {
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 90%, transparent 100%);
-  mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 90%, transparent 100%);
+/* Phosphor Scope Grid */
+.oscilloscope-grid {
+  background-image: 
+    linear-gradient(rgba(0, 245, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 245, 255, 0.05) 1px, transparent 1px);
+  background-size: 20px 20px;
 }
 
-/* Bottom fade only */
+/* Dual-fade container (from modern-web-guidance soft-edge-content-fade) */
+.dual-fade-mask {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 88%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 88%, transparent 100%);
+}
+
 .bottom-fade-mask {
   -webkit-mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
   mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
 }
 
-/* Industrial Tactile Hardware Switcher Button */
-.hardware-btn {
+/* Industrial Mechanical Pushbutton & Keycap (Teenage Eng / Elektron / ATEM) */
+.hardware-btn, .hw-keycap {
   position: relative;
-  background: #11131a;
-  border: 1px solid #222636;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 4px rgba(0, 0, 0, 0.6);
-  transition: all 0.1s ease;
+  background: linear-gradient(180deg, #1f2533 0%, #12151e 100%);
+  border: 1px solid #2d3548;
+  border-top-color: #404b66;
+  border-bottom-color: #0c0e14;
+  border-radius: 4px;
+  box-shadow: 
+    0 3px 6px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.6);
+  transition: transform 0.06s ease, box-shadow 0.06s ease, background 0.06s ease;
+  user-select: none;
 }
-.hardware-btn:hover {
-  border-color: #3b4259;
-  background: #161922;
+.hardware-btn:hover, .hw-keycap:hover {
+  background: linear-gradient(180deg, #252d3d 0%, #161a24 100%);
+  border-color: #3e4963;
 }
-.hardware-btn:active {
-  transform: translateY(1px);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.8);
-}
-.hardware-btn-active {
-  background: #181d29;
+.hardware-btn:active, .hw-keycap:active, .hardware-btn-active, .hw-keycap-depressed {
+  transform: translateY(1.5px);
+  background: linear-gradient(180deg, #10121a 0%, #191e2b 100%);
+  box-shadow: 
+    0 1px 2px rgba(0, 0, 0, 0.8),
+    inset 0 2px 4px rgba(0, 0, 0, 0.9);
   border-color: #00f5ff;
-  box-shadow: 0 0 12px rgba(0, 245, 255, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+/* Active Tally States */
+.hw-keycap-pgm {
+  border-color: #ff1744 !important;
+  box-shadow: 0 0 12px rgba(255, 23, 68, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+}
+.hw-keycap-pvw {
+  border-color: #00ff88 !important;
+  box-shadow: 0 0 12px rgba(0, 255, 136, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Recessed LED Slit Tally Indicator */
+.hw-led-slit {
+  position: relative;
+  width: 16px;
+  height: 2.5px;
+  border-radius: 1px;
+  background-color: #1a1e29;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+.hw-led-slit.on-cyan {
+  background-color: #00f5ff;
+  box-shadow: 0 0 8px #00f5ff, 0 0 2px #ffffff;
+}
+.hw-led-slit.on-red {
+  background-color: #ff1744;
+  box-shadow: 0 0 8px #ff1744, 0 0 2px #ffffff;
+}
+.hw-led-slit.on-green {
+  background-color: #00ff88;
+  box-shadow: 0 0 8px #00ff88, 0 0 2px #ffffff;
+}
+
+/* CRT Oscilloscope Vector Graticule Grid */
+.hw-crt-graticule {
+  position: relative;
+  background-color: #05070a;
+  background-image: 
+    linear-gradient(to right, rgba(0, 245, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 245, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.35) 50%);
+  background-size: 20px 20px, 20px 20px, 100% 3px;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.95), inset 0 1px 1px rgba(255, 255, 255, 0.08);
+}
+
+/* Tally Lamp ON AIR */
+.tally-lamp-live {
+  background: #ff1744;
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(255, 23, 68, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  text-shadow: 0 0 4px rgba(255, 255, 255, 0.9);
+  animation: tally-flicker 2.5s infinite ease-in-out;
+}
+@keyframes tally-flicker {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 8px #ff1744); }
+  50% { opacity: 0.88; filter: drop-shadow(0 0 4px #ff1744); }
+}
+
+/* Discrete Segmented LED Meter Blocks */
+.led-segment {
+  width: 100%;
+  height: 4px;
+  border-radius: 1px;
+  margin-bottom: 2px;
+  background-color: #12151f;
+  transition: background-color 0.04s ease;
+}
+.led-segment.on-green {
+  background-color: #00ff66;
+  box-shadow: 0 0 6px #00ff66;
+}
+.led-segment.on-yellow {
+  background-color: #ffb800;
+  box-shadow: 0 0 6px #ffb800;
+}
+.led-segment.on-red {
+  background-color: #ff1744;
+  box-shadow: 0 0 8px #ff1744;
+}
+
+/* SMD Integrated Circuit Component Chip Tag */
+.smd-chip {
+  font-family: 'JetBrains Mono', monospace;
+  background: #111520;
+  border: 1px solid #232d42;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 4px rgba(0, 0, 0, 0.5);
+  border-radius: 3px;
+  position: relative;
+  letter-spacing: 0.03em;
 }
 
 /* Broadcast Overlay Text Shadow */
@@ -76,33 +182,18 @@
     1px 1px 0 #000;
 }
 
-/* Segmented LED Meter Blocks */
-.led-segment {
-  width: 100%;
-  height: 4px;
-  border-radius: 1px;
-  margin-bottom: 2px;
-  background-color: #161822;
-  transition: background-color 0.05s ease;
-}
-.led-segment.on-green {
-  background-color: #00ff88;
-  box-shadow: 0 0 6px #00ff88;
-}
-.led-segment.on-yellow {
-  background-color: #ffb700;
-  box-shadow: 0 0 6px #ffb700;
-}
-.led-segment.on-red {
-  background-color: #ff1744;
-  box-shadow: 0 0 8px #ff1744;
-}
-
-/* CRT / Phosphor scanline subtle line */
-.scanline-overlay {
-  background: linear-gradient(
-    rgba(18, 16, 16, 0) 50%, 
-    rgba(0, 0, 0, 0.25) 50%
-  );
-  background-size: 100% 4px;
+/* 19" Rack Mount Screws */
+.rack-screw {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #3d475e 0%, #151821 70%);
+  border: 1px solid #4a556d;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7px;
+  color: #64748b;
+  user-select: none;
 }
