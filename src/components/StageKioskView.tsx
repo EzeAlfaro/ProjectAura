@@ -646,8 +646,8 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
           </div>
 
           {/* Spoken Language Selector (Orador ES / EN) */}
-          <div className="flex items-center bg-[#07090e] p-0.5 rounded border border-[#1b2230] text-[10px] font-mono font-bold">
-            <span className="text-[9px] text-[#64748b] px-1.5 hidden lg:inline">ORADOR:</span>
+          <div className="flex items-center bg-[#07090e] p-0.5 rounded border border-[#1b2230] text-[10px] font-mono font-bold" title="Idioma en que habla el orador al micrófono">
+            <span className="text-[9px] text-[#64748b] px-1.5 hidden xl:inline">ORADOR:</span>
             <button
               onClick={() => handleSpokenLangChange('es')}
               className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
@@ -669,6 +669,44 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
               title="Speaker speaks in English (transcription en-US)"
             >
               <span>🇬🇧 EN</span>
+            </button>
+          </div>
+
+          {/* Subtitle Output Language Selector (Traducción en pantalla) */}
+          <div className="flex items-center bg-[#07090e] p-0.5 rounded border border-[#1b2230] text-[10px] font-mono font-bold" title="Idioma en que se muestran los subtítulos en esta pantalla">
+            <span className="text-[9px] text-[#00f5ff] px-1.5 hidden lg:inline font-bold">SUBTÍTULO:</span>
+            <button
+              onClick={() => onSelectLang('es')}
+              className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
+                selectedLang === 'es'
+                  ? 'bg-[#00f5ff] text-black font-black shadow-[0_0_8px_rgba(0,245,255,0.4)]'
+                  : 'text-[#64748b] hover:text-white'
+              }`}
+              title="Mostrar subtítulos en Español"
+            >
+              <span>🇦🇷 ES</span>
+            </button>
+            <button
+              onClick={() => onSelectLang('en')}
+              className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
+                selectedLang === 'en'
+                  ? 'bg-[#00f5ff] text-black font-black shadow-[0_0_8px_rgba(0,245,255,0.4)]'
+                  : 'text-[#64748b] hover:text-white'
+              }`}
+              title="Mostrar subtítulos traducidos al Inglés"
+            >
+              <span>🇬🇧 EN</span>
+            </button>
+            <button
+              onClick={() => onSelectLang('pt')}
+              className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
+                selectedLang === 'pt'
+                  ? 'bg-[#00f5ff] text-black font-black shadow-[0_0_8px_rgba(0,245,255,0.4)]'
+                  : 'text-[#64748b] hover:text-white'
+              }`}
+              title="Mostrar subtítulos traducidos al Portugués"
+            >
+              <span>🇧🇷 PT</span>
             </button>
           </div>
 
@@ -800,9 +838,17 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
                 )}
               </div>
 
-              {/* Discreet Speaker Tag */}
-              <div className="text-[11px] font-mono text-[#64748b] tracking-wider uppercase">
-                {stage?.speaker || 'TALK'} • {selectedLang.toUpperCase()}
+              {/* Discreet Telemetry & Language Tag */}
+              <div className="flex items-center justify-center gap-2 sm:gap-4 text-[10px] sm:text-[11px] font-mono tracking-wider uppercase">
+                <span className="text-[#94a3b8] font-bold">{stage?.speaker || 'TALK'}</span>
+                <span className="text-[#334155]">•</span>
+                <span className="text-[#00f5ff] font-bold bg-[#00f5ff]/10 px-2 py-0.5 rounded border border-[#00f5ff]/30">
+                  SUBTÍTULOS: {selectedLang === 'en' ? 'ENGLISH (EN)' : selectedLang === 'pt' ? 'PORTUGUÊS (PT)' : selectedLang === 'original' ? 'ORIGINAL' : 'ESPAÑOL (ES)'}
+                </span>
+                <span className="text-[#334155]">•</span>
+                <span className="text-gray-400">
+                  MIC: {spokenLang.toUpperCase()}
+                </span>
               </div>
 
             </div>
@@ -964,17 +1010,22 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
 
           {/* Language for On-Stage Display */}
           <div className="space-y-1">
-            <label className="text-[10px] text-gray-400 uppercase">IDIOMA EN PANTALLA DE SALA:</label>
-            <div className="grid grid-cols-3 gap-1">
-              {(['es', 'en', 'original'] as SupportedLanguage[]).map((l) => (
+            <label className="text-[10px] text-gray-400 uppercase">IDIOMA EN PANTALLA DE SALA (SUBTÍTULOS):</label>
+            <div className="grid grid-cols-4 gap-1">
+              {[
+                { id: 'es', label: '🇦🇷 ES' },
+                { id: 'en', label: '🇬🇧 EN' },
+                { id: 'pt', label: '🇧🇷 PT' },
+                { id: 'original', label: '🌐 ORIG' }
+              ].map((l) => (
                 <button
-                  key={l}
-                  onClick={() => onSelectLang(l)}
-                  className={`py-1 rounded border text-center uppercase font-bold ${
-                    selectedLang === l ? 'bg-[#141b29] border-[#00f5ff] text-[#00f5ff]' : 'bg-[#07090e] border-[#1e2535] text-gray-400'
+                  key={l.id}
+                  onClick={() => onSelectLang(l.id as SupportedLanguage)}
+                  className={`py-1 rounded border text-center uppercase font-bold text-xs ${
+                    selectedLang === l.id ? 'bg-[#00f5ff] border-[#00f5ff] text-black font-black' : 'bg-[#07090e] border-[#1e2535] text-gray-400'
                   }`}
                 >
-                  {l}
+                  {l.label}
                 </button>
               ))}
             </div>
