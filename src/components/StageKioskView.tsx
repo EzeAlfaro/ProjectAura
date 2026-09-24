@@ -28,7 +28,8 @@ import {
 import { HardwareVuMeter, HardwareOscilloscope } from './HardwareControls.js';
 import { WSClient } from '../services/websocket.js';
 import QRCode from 'qrcode';
-import { findBroadcastSplitIndex, formatBroadcastSubtitle } from '../utils/broadcastSegmenter.js';
+import { findBroadcastSplitIndex, formatBroadcastSubtitle, normalizePhoneticTechTerms } from '../utils/broadcastSegmenter.js';
+
 
 interface StageKioskViewProps {
   stage?: Stage;
@@ -88,6 +89,8 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
   const restartTimerRef = useRef<any>(null);
   const committedCharsRef = useRef(0);
   const silenceFlushTimerRef = useRef<any>(null);
+  const lastCommittedTextRef = useRef<string>('');
+  const lastCommittedTimeRef = useRef<number>(0);
 
   // Generate Corner QR Code
   useEffect(() => {
@@ -172,8 +175,22 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
   };
 
   const commitPhrase = (phrase: string, lang: 'es' | 'en') => {
-    const clean = phrase.trim();
-    if (!clean) return;
+    const raw = phrase.trim();
+    if (!raw) return;
+    const clean = normalizePhoneticTechTerms(raw);
+
+    // Strict client-side deduplication (reject if exact same phrase within 4s)
+    const now = Date.now();
+    if (
+      lastCommittedTextRef.current.toLowerCase() === clean.toLowerCase() &&
+      now - lastCommittedTimeRef.current < 4000
+    ) {
+      console.log('[Kiosk] Dropped duplicate phrase commit:', clean);
+      return;
+    }
+
+    lastCommittedTextRef.current = clean;
+    lastCommittedTimeRef.current = now;
 
     if (onPushLiveTranscript) {
       onPushLiveTranscript(clean, lang);
@@ -188,8 +205,8 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
 
   /**
    * Broadcast-Grade SpeechRecognition factory.
-   * Chunks long continuous speech into bite-sized 6-8 word broadcast subtitles.
-   * Flushes on 550ms acoustic pauses so fast speakers never generate monster paragraphs.
+   * Chunks long continuous speech into coherent 10-14 word broadcast subtitles.
+   * Natural breath pause timer (1400ms) prevents fragmented single-word cards.
    */
   const createAndStartRecognition = (overrideLang?: 'es' | 'en') => {
     if (!isRecordingRef.current) return;
@@ -230,7 +247,7 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
           if (res.isFinal) {
             // Commit any remaining uncommitted words from this utterance
             const finalRemaining = transcript.substring(committedCharsRef.current).trim();
-            if (finalRemaining) {
+            if (finalRemaining && finalRemaining.length > 1) {
               commitPhrase(finalRemaining, targetLang);
             }
             committedCharsRef.current = 0;
@@ -244,15 +261,15 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
               committedCharsRef.current = 0;
             }
 
-            // Rapid broadcast phrase chunking: cut at 7-8 words or natural conjunctions
+            // Broadcast phrase chunking: 10-14 words (never cut prematurely at 5 words!)
             while (true) {
               const uncommitted = transcript.substring(committedCharsRef.current).trimStart();
               if (!uncommitted) break;
 
               const splitPos = findBroadcastSplitIndex(uncommitted, {
-                maxWords: 8,
-                maxChars: 50,
-                minWordsBeforeCut: 5,
+                maxWords: 14,
+                maxChars: 75,
+                minWordsBeforeCut: 8,
               });
 
               if (splitPos === null) break;
@@ -273,18 +290,18 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
             }
 
             const remaining = transcript.substring(committedCharsRef.current).trim();
-            setLiveInterimText(remaining);
+            setLiveInterimText(normalizePhoneticTechTerms(remaining));
 
-            // Fast acoustic pause detection: 550ms of silence flushes any remaining speech immediately!
+            // Natural acoustic pause detection: 1400ms of silence flushes any finished thought
             if (remaining.length > 0) {
               silenceFlushTimerRef.current = setTimeout(() => {
                 const toFlush = transcript.substring(committedCharsRef.current).trim();
-                if (toFlush) {
+                if (toFlush && (toFlush.split(/\s+/).length >= 3 || /[.!?]$/.test(toFlush))) {
                   commitPhrase(toFlush, targetLang);
                   committedCharsRef.current = transcript.length;
                   setLiveInterimText('');
                 }
-              }, 550);
+              }, 1400);
             }
           }
         }
@@ -497,6 +514,43 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
 
   // In Classic mode, take only the last 2 chunks
   const classicChunks = chunks.slice(-2);
+
+  // Group chunks into coherent multi-word thoughts for clean teleprompter reading (Never display 1-word cards)
+  const prompterGroups = React.useMemo(() => {
+    const raw = chunks.slice(-10);
+    const groups: { id: string; text: string; isLatest: boolean }[] = [];
+    let currentText = '';
+    let currentId = '';
+
+    for (let i = 0; i < raw.length; i++) {
+      const text = getDisplayText(raw[i]).trim();
+      if (!text) continue;
+
+      // Duplicate guard
+      if (currentText.toLowerCase().includes(text.toLowerCase()) && text.length > 5) {
+        continue;
+      }
+
+      if (!currentText) {
+        currentText = text;
+        currentId = raw[i].id;
+      } else if (currentText.split(/\s+/).length < 9 && !/[.!?]$/.test(currentText)) {
+        // Append short fragment to current thought
+        currentText = `${currentText} ${text}`;
+      } else {
+        groups.push({ id: currentId, text: currentText, isLatest: false });
+        currentText = text;
+        currentId = raw[i].id;
+      }
+    }
+
+    if (currentText) {
+      groups.push({ id: currentId, text: currentText, isLatest: true });
+    }
+
+    return groups.slice(-4);
+  }, [chunks, selectedLang]);
+
 
   return (
     <div className="fixed inset-0 w-screen h-screen bg-[#06080d] text-white flex flex-col overflow-hidden select-none font-sans">
@@ -780,22 +834,21 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
             </div>
           ) : (
             <div className="space-y-4 w-full">
-              {chunks.slice(-6).map((chunk, index, arr) => {
-                const isLatest = index === arr.length - 1;
+              {prompterGroups.map((group) => {
                 return (
                   <div
-                    key={chunk.id}
-                    className={`p-4 rounded-xl transition-all duration-300 ${
-                      isLatest
-                        ? 'bg-black/50 border-l-4 border-[#00f5ff] text-white shadow-xl'
-                        : 'opacity-70 text-gray-300'
+                    key={group.id}
+                    className={`p-5 rounded-2xl transition-all duration-300 ${
+                      group.isLatest
+                        ? 'bg-black/80 border-l-4 border-[#00f5ff] text-white shadow-2xl backdrop-blur-md'
+                        : 'opacity-60 text-gray-300'
                     }`}
                   >
                     <p 
-                      className={`${getFontSizeClass()} tracking-wide`}
+                      className={`${getFontSizeClass()} tracking-wide leading-relaxed`}
                       style={{ textShadow: '0 2px 6px rgba(0,0,0,0.9)' }}
                     >
-                      {getDisplayText(chunk)}
+                      {group.text}
                     </p>
                   </div>
                 );
@@ -803,14 +856,15 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
 
               {/* In-Flight Live Interim Speech Words */}
               {liveInterimText && (
-                <div className="p-4 rounded-xl border-l-4 border-[#00f5ff] bg-[#00f5ff]/10 animate-pulse">
-                  <p className={`${getFontSizeClass()} text-[#00f5ff] font-bold`}>
+                <div className="p-5 rounded-2xl border-l-4 border-[#00f5ff] bg-[#00f5ff]/15 animate-fade-in shadow-xl backdrop-blur-sm">
+                  <p className={`${getFontSizeClass()} text-[#00f5ff] font-bold tracking-wide leading-relaxed`}>
                     "{liveInterimText}"
-                    <span className="inline-block w-3 h-6 bg-[#00f5ff] ml-2 animate-ping align-middle" />
+                    <span className="inline-block w-2.5 h-6 bg-[#00f5ff] ml-2 animate-pulse align-middle rounded-sm" />
                   </p>
                 </div>
               )}
             </div>
+
           )}
         </div>
       )}

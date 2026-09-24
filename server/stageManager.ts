@@ -320,6 +320,34 @@ export class StageManager {
 
   public addChunkToStage(stageId: string, chunk: SubtitleChunk) {
     const chunks = this.stageChunks.get(stageId) || [];
+    const incomingText = (chunk.originalText || '').trim();
+    if (!incomingText) return;
+
+    const last = chunks[chunks.length - 1];
+
+    // 1. Strict Duplicate Protection: Drop identical consecutive subtitle chunks
+    if (last && last.originalText.trim().toLowerCase() === incomingText.toLowerCase()) {
+      return;
+    }
+
+    // 2. Fragment Merging: If incoming chunk has 1-2 words and arrived quickly after previous chunk,
+    // merge it into the previous thought instead of creating an ugly orphan 1-word card!
+    const wordCount = incomingText.split(/\s+/).length;
+    if (last && wordCount <= 2 && (Date.now() - last.timestamp < 3000) && last.originalText.length < 85) {
+      last.originalText = `${last.originalText} ${incomingText}`;
+      if (chunk.esText) last.esText = `${last.esText || ''} ${chunk.esText}`.trim();
+      if (chunk.enText) last.enText = `${last.enText || ''} ${chunk.enText}`.trim();
+      if (chunk.ptText) last.ptText = `${last.ptText || ''} ${chunk.ptText}`.trim();
+      last.timestamp = Date.now();
+
+      this.stageChunks.set(stageId, chunks);
+      this.broadcastToStage(stageId, {
+        type: 'caption',
+        chunk: last
+      });
+      return;
+    }
+
     chunks.push(chunk);
     // Keep max 200 in memory to avoid heap leaks during 8-hour marathon
     if (chunks.length > 200) {
