@@ -21,84 +21,84 @@ export const Header: React.FC<HeaderProps> = ({
   activeStageName,
 }) => {
   return (
-    <header className="border-b border-[#1c2130] bg-[#090b10]/95 backdrop-blur-md sticky top-0 z-40 select-none">
+    <header className="border-b-2 border-[#1c2333] bg-[#090b10] sticky top-0 z-40 select-none shadow-xl">
       
       {/* Top micro-chassis telemetry bar */}
-      <div className="border-b border-[#141722] px-4 sm:px-6 py-1 flex items-center justify-between text-[10px] font-mono text-[#64748b]">
+      <div className="border-b border-[#141724] px-3 sm:px-6 py-1 flex items-center justify-between text-[10px] font-mono text-[#64748b]">
         <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1.5 text-gray-400">
-            <span className="text-[#00f5ff] font-bold">NERDSUB</span>
-            <span>//</span>
-            <span>SYSARMY_BROADCAST_SYSTEM_2026</span>
-          </span>
+          <div className="flex items-center gap-2 text-gray-300">
+            <span className="rack-screw">✕</span>
+            <span className="text-[#00f5ff] font-black tracking-wider">SYSARMY</span>
+            <span className="text-[#334155]">/</span>
+            <span className="text-white font-bold">NERDSUB RACK-1000 PRO</span>
+            <span className="text-[#334155]">/</span>
+            <span className="text-[#64748b] hidden sm:inline">SER: #2026-TX</span>
+          </div>
           <span className="hidden md:inline text-[#334155]">|</span>
-          <span className="hidden md:flex items-center gap-1.5">
-            <Activity className="w-3 h-3 text-[#00ff88]" />
-            <span className="text-gray-300">AUDIO BUS: 48kHz → 16kHz PCM</span>
+          <span className="hidden md:flex items-center gap-1.5 text-gray-300">
+            <Activity className="w-3 h-3 text-[#00ff66]" />
+            <span>BUS: 48kHz → 16kHz PCM (LE)</span>
           </span>
         </div>
 
         <div className="flex items-center gap-3">
           <span className="hidden sm:inline text-gray-400">
-            LOC: <strong className="text-gray-200">KONEX BUENOS AIRES</strong>
+            KONEX BUENOS AIRES // <strong className="text-gray-200">{activeStageName || 'STAGE 1'}</strong>
           </span>
           <span className="text-[#334155]">•</span>
-          <span className="flex items-center gap-1">
-            <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-[#00ff88]' : 'bg-[#ff1744]'}`} />
-            <span className={isConnected ? 'text-[#00ff88]' : 'text-[#ff1744]'}>
+          <span className="flex items-center gap-1.5 font-bold">
+            <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-[#00ff66] shadow-[0_0_8px_#00ff66]' : 'bg-[#ff1744]'}`} />
+            <span className={isConnected ? 'text-[#00ff66]' : 'text-[#ff1744]'}>
               {isConnected ? 'STREAM_SYNC_OK' : 'OFFLINE'}
             </span>
           </span>
+          <span className="rack-screw">✕</span>
         </div>
       </div>
 
-      {/* Main Console Navigation Bar */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      {/* Main Console Faceplate */}
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         
-        {/* Brand Unit Ident */}
+        {/* Brand Unit Ident & Tally Light */}
         <div className="flex items-center gap-3.5">
-          <div className="relative flex items-center justify-center w-9 h-9 rounded-lg bg-[#141824] border border-[#252c40] shadow-inner">
-            <span className="text-lg font-black text-[#00f5ff] font-mono tracking-tighter">
-              ⚡
-            </span>
-            <span className="absolute -bottom-1 -right-1 w-2 h-2 rounded-full bg-[#ff5500] ring-2 ring-[#090b10]" />
-          </div>
-
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-base font-black tracking-tight text-white uppercase">
-                NERD<span className="text-[#00f5ff]">SUB</span>
-              </span>
-              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#1c2233] text-[#00f5ff] border border-[#2d3752] font-bold tracking-widest uppercase">
-                TX-26
-              </span>
+          <div className="flex items-center gap-2">
+            <div className="relative flex items-center justify-center w-10 h-10 rounded bg-[#10131d] border-2 border-[#222a3d] shadow-inner">
+              <span className="text-xl font-black text-[#00f5ff] font-mono">⚡</span>
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#00ff66] shadow-[0_0_8px_#00ff66]" />
             </div>
-            <p className="text-[10px] font-mono text-[#64748b] hidden sm:block">
-              REAL-TIME TECHNICAL CAPTIONING ENGINE
-            </p>
+
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-base font-black tracking-tight text-white uppercase">
+                  NERD<span className="text-[#00f5ff]">SUB</span>
+                </span>
+                <span className="tally-lamp-live text-[9px] font-mono px-2 py-0.5 rounded font-black tracking-widest uppercase">
+                  ON AIR
+                </span>
+              </div>
+              <p className="text-[9px] font-mono text-[#64748b] hidden sm:block tracking-wide">
+                BROADCAST ACCESSIBILITY ENGINE // SYSARMY 2026
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Tactile Hardware Selector Switches */}
-        <nav className="flex items-center bg-[#0d0f17] p-1 rounded-xl border border-[#1c2130] shadow-inner gap-1">
+        {/* Physical Hardware Channel/View Selector Switches */}
+        <nav className="flex items-center bg-[#07090e] p-1 rounded-lg border border-[#1e2535] shadow-inner gap-1">
           <button
             onClick={() => onSelectView('audience')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all ${
-              currentView === 'audience'
-                ? 'bg-[#181d2a] text-[#00f5ff] border border-[#00f5ff]/40 shadow-sm shadow-[#00f5ff]/10'
-                : 'text-[#64748b] hover:text-white hover:bg-[#141722]'
+            className={`hardware-btn flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded text-xs font-mono font-bold transition-all ${
+              currentView === 'audience' ? 'hardware-btn-active text-[#00f5ff]' : 'text-[#718096]'
             }`}
           >
             <Radio className="w-3.5 h-3.5" />
-            <span>01 // AUDIENCIA</span>
+            <span>01 // AUDITORIO</span>
           </button>
 
           <button
             onClick={() => onSelectView('admin')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all ${
-              currentView === 'admin'
-                ? 'bg-[#181d2a] text-[#ffb700] border border-[#ffb700]/40 shadow-sm shadow-[#ffb700]/10'
-                : 'text-[#64748b] hover:text-white hover:bg-[#141722]'
+            className={`hardware-btn flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded text-xs font-mono font-bold transition-all ${
+              currentView === 'admin' ? 'hardware-btn-active text-[#ffb800]' : 'text-[#718096]'
             }`}
           >
             <Sliders className="w-3.5 h-3.5" />
@@ -107,10 +107,8 @@ export const Header: React.FC<HeaderProps> = ({
 
           <button
             onClick={() => onSelectView('overlay')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all ${
-              currentView === 'overlay'
-                ? 'bg-[#181d2a] text-[#ff1744] border border-[#ff1744]/40 shadow-sm shadow-[#ff1744]/10'
-                : 'text-[#64748b] hover:text-white hover:bg-[#141722]'
+            className={`hardware-btn flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded text-xs font-mono font-bold transition-all ${
+              currentView === 'overlay' ? 'hardware-btn-active text-[#ff1744]' : 'text-[#718096]'
             }`}
             title="OBS / vMix Studio Transparent Overlay"
           >
@@ -122,10 +120,10 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Right Console Actions: QR & Gemini Engine Status */}
         <div className="flex items-center gap-2 sm:gap-3">
           
-          {/* QR Code Quick-Launch */}
+          {/* QR Code Quick-Launch for Attendee Mobile Access */}
           <button
             onClick={onOpenQrModal}
-            className="hardware-btn flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono font-semibold text-gray-200 hover:text-white hover:border-[#00f5ff]/50"
+            className="hardware-btn flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-mono font-bold text-gray-200 hover:text-white"
             title="Generar QR para proyección en auditorio o celulares de los asistentes"
           >
             <QrCode className="w-3.5 h-3.5 text-[#00f5ff]" />
@@ -135,16 +133,14 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Gemini AI Status Switch */}
           <button
             onClick={onOpenApiKeyModal}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-mono font-semibold border transition-all ${
-              geminiConfigured
-                ? 'bg-[#00f5ff]/10 text-[#00f5ff] border-[#00f5ff]/30 hover:bg-[#00f5ff]/20'
-                : 'bg-[#ff5500]/10 text-[#ff5500] border-[#ff5500]/30 hover:bg-[#ff5500]/20'
+            className={`hardware-btn flex items-center gap-2 px-3 py-1.5 rounded text-xs font-mono font-bold transition-all ${
+              geminiConfigured ? 'border-[#00f5ff]/60 text-[#00f5ff]' : 'border-[#ffb800]/60 text-[#ffb800]'
             }`}
             title="Configuración de Motor Gemini"
           >
-            <span className={`w-2 h-2 rounded-full ${geminiConfigured ? 'bg-[#00f5ff] shadow-[0_0_8px_#00f5ff]' : 'bg-[#ff5500]'}`} />
+            <span className={`w-2 h-2 rounded-full ${geminiConfigured ? 'bg-[#00f5ff] shadow-[0_0_8px_#00f5ff]' : 'bg-[#ffb800]'}`} />
             <span className="hidden lg:inline">
-              {geminiConfigured ? 'GEMINI_2.5_ONLINE' : 'SIMULATION_MODE'}
+              {geminiConfigured ? 'GEMINI_2.5_PRO' : 'SIMULATION_MODE'}
             </span>
             <KeyRound className="w-3 h-3 opacity-70" />
           </button>
