@@ -93,3 +93,10 @@ export async function addGlossaryTerm(
 export function getExportUrl(stageId: string, format: 'srt' | 'vtt' | 'txt' | 'md', lang: SupportedLanguage): string {
   return `${API_BASE}/stages/${stageId}/export/${format}?lang=${lang}`;
 }
+
+export async function triggerDeepIntel(stageId: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/stages/${stageId}/deep-intel`, {
+    method: 'POST',
+  });
+  return res.json();
+}

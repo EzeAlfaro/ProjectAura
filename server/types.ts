@@ -56,4 +56,6 @@ export interface StageData {
   chunks: SubtitleChunk[];
   takeaways: StageTakeaway[];
   suggestedQuestions: StageQA[];
+  executiveSummary?: string;
+  intelModelUsed?: string;
 }

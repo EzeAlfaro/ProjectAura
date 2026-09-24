@@ -6,6 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Nerdearla](https://img.shields.io/badge/Conferencia-Nerdearla%202026-00f0ff)](https://nerdear.live)
 [![Powered by Gemini](https://img.shields.io/badge/AI%20Engine-Gemini%202.5%20Flash-8b5cf6)](https://aistudio.google.com)
+[![Orchestration: OpenCode](https://img.shields.io/badge/Orchestrator-OpenCode%20Engine-ff5500)](https://github.com/opencode-ai)
 [![Node.js](https://img.shields.io/badge/Node.js-v22-green)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue)](https://www.typescriptlang.org)
 
@@ -122,6 +123,9 @@ Abrí tu navegador en:
 ---
 
 ## 🎥 5. Guión del Video Demo (1-2 Minutos para el Jurado)
+
+> 📄 **Guión Segundo a Segundo Completo:** Ver [docs/GUION_VIDEO_DEMO.md](./docs/GUION_VIDEO_DEMO.md) para el libreto exacto palabra por palabra y las acciones de pantalla recomendadas.  
+> 🏆 **Documento de Postulación Devpost:** Ver [docs/DEVPOST_SUBMISSION.md](./docs/DEVPOST_SUBMISSION.md) para el pitch oficial de entrega.
 
 Para grabar el video demo requerido para la entrega en Devpost/YouTube:
 

@@ -97,6 +97,16 @@ app.post('/api/stages/:id/stop', (req: Request, res: Response) => {
   res.json({ success: true, message: `Stage ${req.params.id} stopped` });
 });
 
+// Trigger Gemini 2.5 Pro Deep Intel & Executive Summary
+app.post('/api/stages/:id/deep-intel', async (req: Request, res: Response) => {
+  try {
+    const result = await stageManager.triggerDeepIntel(req.params.id);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Error generating deep intel' });
+  }
+});
+
 // Upload and Process Audio File Chunk
 app.post('/api/stages/:id/audio', upload.single('audio'), async (req: Request, res: Response) => {
   const { id } = req.params;

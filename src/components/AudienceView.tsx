@@ -41,6 +41,10 @@ interface AudienceViewProps {
   takeaways: StageTakeaway[];
   suggestedQuestions: StageQA[];
   onOpenQrModal: () => void;
+  executiveSummary?: string;
+  intelModelUsed?: string;
+  onTriggerDeepIntel?: () => void;
+  isGeneratingIntel?: boolean;
 }
 
 export const AudienceView: React.FC<AudienceViewProps> = ({
@@ -53,6 +57,10 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
   takeaways,
   suggestedQuestions,
   onOpenQrModal,
+  executiveSummary,
+  intelModelUsed,
+  onTriggerDeepIntel,
+  isGeneratingIntel,
 }) => {
   const [autoScroll, setAutoScroll] = useState(true);
   const [fontSize, setFontSize] = useState<'normal' | 'large' | 'cinema'>('large');
@@ -530,25 +538,63 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
                 </div>
               )}
 
-              {/* TAB 2: LIVE AI KEY TAKEAWAYS */}
+              {/* TAB 2: LIVE AI KEY TAKEAWAYS & GEMINI PRO BRIEFING */}
               {activeSidebarTab === 'takeaways' && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between border-b border-[#1b2230] pb-2">
-                    <span className="text-[10px] font-bold text-[#64748b] uppercase">
-                      PUNTOS CLAVE EN VIVO
-                    </span>
-                    <span className="text-[9px] text-[#00ff66]">LIVE SUMMARY</span>
+                    <div>
+                      <span className="text-[10px] font-bold text-[#64748b] uppercase block">
+                        PUNTOS CLAVE & BRIEFING EJECUTIVO
+                      </span>
+                      <span className="text-[9px] text-[#00f5ff] font-mono">
+                        ENGINE: {intelModelUsed?.toUpperCase() || 'GEMINI 2.5 PRO'}
+                      </span>
+                    </div>
+                    {onTriggerDeepIntel && (
+                      <button
+                        onClick={onTriggerDeepIntel}
+                        disabled={isGeneratingIntel}
+                        className="hardware-btn px-2 py-1 rounded text-[10px] font-mono font-bold text-[#00f5ff] hover:border-[#00f5ff] transition-all flex items-center gap-1 disabled:opacity-50"
+                        title="Ejecutar análisis profundo con Gemini 2.5 Pro"
+                      >
+                        <Sparkles className={`w-3 h-3 ${isGeneratingIntel ? 'animate-spin' : ''}`} />
+                        <span>{isGeneratingIntel ? 'SINTETIZANDO...' : 'RE-ANALIZAR (PRO)'}</span>
+                      </button>
+                    )}
                   </div>
+
+                  {/* Executive Summary Card if available */}
+                  {executiveSummary && (
+                    <div className="p-3 bg-[#0a101d] border border-[#00f5ff]/30 rounded space-y-1.5 shadow-lg">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-mono font-bold text-[#00f5ff] uppercase flex items-center gap-1">
+                          <Cpu className="w-3 h-3" />
+                          RESUMEN EJECUTIVO (GEMINI 2.5 PRO)
+                        </span>
+                        <span className="text-[8px] font-mono px-1 rounded bg-[#00f5ff]/20 text-[#00f5ff]">
+                          DEEP REASONING
+                        </span>
+                      </div>
+                      <p className="text-white text-xs leading-relaxed font-sans">
+                        {executiveSummary}
+                      </p>
+                    </div>
+                  )}
 
                   {takeaways.length === 0 ? (
                     <div className="text-center py-8 text-[#64748b] text-[11px]">
-                      Gemini sintetizará los conceptos clave de la charla automáticamente cada pocos minutos.
+                      Gemini 2.5 Pro sintetizará los conceptos clave y arquitectura de la charla periódicamente o al presionar Re-analizar.
                     </div>
                   ) : (
                     takeaways.map((item, idx) => (
                       <div key={item.id || idx} className="p-2.5 bg-[#0c0f16] border border-[#1b2230] rounded space-y-1">
-                        <div className="text-[9px] text-[#00ff66] font-bold">
-                          PUNTO #{idx + 1}
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] text-[#00ff66] font-bold">
+                            INSIGHT #{idx + 1}
+                          </span>
+                          <span className="text-[8px] font-mono text-[#64748b] uppercase">
+                            [{item.category || 'TECH'}]
+                          </span>
                         </div>
                         <div className="text-white text-[11px] leading-relaxed">
                           {item.bullet}

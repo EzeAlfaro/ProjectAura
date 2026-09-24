@@ -9,6 +9,8 @@ export class StageManager {
   private stageChunks: Map<string, SubtitleChunk[]> = new Map();
   private stageTakeaways: Map<string, StageTakeaway[]> = new Map();
   private stageQuestions: Map<string, StageQA[]> = new Map();
+  private stageSummaries: Map<string, string> = new Map();
+  private stageIntelModel: Map<string, string> = new Map();
   private subscribers: Map<string, Set<{ ws: WebSocket; lang: SupportedLanguage }>> = new Map();
   private activeDemoTimers: Map<string, NodeJS.Timeout> = new Map();
 
@@ -69,6 +71,8 @@ export class StageManager {
       this.stageChunks.set(stage.id, []);
       this.stageTakeaways.set(stage.id, []);
       this.stageQuestions.set(stage.id, []);
+      this.stageSummaries.set(stage.id, '');
+      this.stageIntelModel.set(stage.id, 'gemini-2.5-pro');
       this.subscribers.set(stage.id, new Set());
     }
   }
@@ -103,6 +107,8 @@ export class StageManager {
     this.stageChunks.set(id, []);
     this.stageTakeaways.set(id, []);
     this.stageQuestions.set(id, []);
+    this.stageSummaries.set(id, '');
+    this.stageIntelModel.set(id, 'gemini-2.5-pro');
     this.subscribers.set(id, new Set());
 
     this.broadcastSystemUpdate();
@@ -117,7 +123,9 @@ export class StageManager {
       stage,
       chunks: (this.stageChunks.get(stageId) || []).slice(-50), // Last 50 chunks
       takeaways: this.stageTakeaways.get(stageId) || [],
-      suggestedQuestions: this.stageQuestions.get(stageId) || []
+      suggestedQuestions: this.stageQuestions.get(stageId) || [],
+      executiveSummary: this.stageSummaries.get(stageId) || '',
+      intelModelUsed: this.stageIntelModel.get(stageId) || 'gemini-2.5-pro'
     };
   }
 
@@ -227,14 +235,82 @@ export class StageManager {
     }
     this.stageChunks.set(stageId, chunks);
 
-    // Analyze if we should extract takeaways
+    // Analyze if we should extract takeaways locally
     this.updateTakeawaysAndQA(stageId, chunk);
+
+    // Periodic Gemini 2.5 Pro Deep Intel synthesis (every 6 chunks)
+    if (chunks.length >= 4 && chunks.length % 6 === 0) {
+      this.triggerDeepIntel(stageId).catch(err => {
+        console.warn(`[StageManager] Periodic Gemini Pro synthesis failed for ${stageId}:`, err);
+      });
+    }
 
     // Broadcast to audience and overlay clients
     this.broadcastToStage(stageId, {
       type: 'caption',
       chunk
     });
+  }
+
+  public async triggerDeepIntel(stageId: string): Promise<any> {
+    const stage = this.stages.get(stageId);
+    if (!stage) throw new Error(`Escenario ${stageId} no encontrado`);
+
+    const chunks = this.stageChunks.get(stageId) || [];
+    const transcriptText = chunks
+      .map(c => c.originalText || c.esText || '')
+      .filter(t => t.length > 5)
+      .join(' ');
+
+    const insights = await geminiService.generateDeepInsights(
+      stage.talkTitle,
+      stage.speaker,
+      transcriptText || `${stage.talkTitle} - Conferencia técnica en Nerdearla 2026.`
+    );
+
+    if (insights.takeaways && insights.takeaways.length > 0) {
+      const formattedTakeaways: StageTakeaway[] = insights.takeaways.map((t, idx) => ({
+        id: `pro-tw-${Date.now()}-${idx}`,
+        timestamp: Date.now(),
+        bullet: t.bullet,
+        category: t.category
+      }));
+      this.stageTakeaways.set(stageId, formattedTakeaways);
+    }
+
+    if (insights.questions && insights.questions.length > 0) {
+      const formattedQA: StageQA[] = insights.questions.map((q, idx) => ({
+        id: `pro-qa-${Date.now()}-${idx}`,
+        question: q.question,
+        context: q.context,
+        target: q.target as any
+      }));
+      this.stageQuestions.set(stageId, formattedQA);
+    }
+
+    if (insights.executiveSummary) {
+      this.stageSummaries.set(stageId, insights.executiveSummary);
+    }
+    this.stageIntelModel.set(stageId, insights.modelUsed);
+
+    // Broadcast deep intel update to all connected clients
+    this.broadcastToStage(stageId, {
+      type: 'deep_intel',
+      stageId,
+      takeaways: this.stageTakeaways.get(stageId) || [],
+      suggestedQuestions: this.stageQuestions.get(stageId) || [],
+      executiveSummary: this.stageSummaries.get(stageId) || '',
+      intelModelUsed: insights.modelUsed
+    });
+
+    return {
+      success: true,
+      stageId,
+      takeaways: this.stageTakeaways.get(stageId),
+      suggestedQuestions: this.stageQuestions.get(stageId),
+      executiveSummary: this.stageSummaries.get(stageId),
+      modelUsed: insights.modelUsed
+    };
   }
 
   public deleteLastChunk(stageId: string): boolean {

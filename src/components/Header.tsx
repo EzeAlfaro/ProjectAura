@@ -72,14 +72,14 @@ export const Header: React.FC<HeaderProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-mono text-base font-black tracking-tight text-white uppercase">
-                  NERD<span className="text-[#00f5ff]">SUB</span>
+                  PROJECT <span className="text-[#00f5ff]">AURA</span>
                 </span>
                 <span className="tally-lamp-live text-[9px] font-mono px-2 py-0.5 rounded font-black tracking-widest uppercase">
                   ON AIR
                 </span>
               </div>
               <p className="text-[9px] font-mono text-[#64748b] hidden sm:block tracking-wide">
-                BROADCAST ACCESSIBILITY ENGINE // SYSARMY 2026
+                DUAL-ENGINE BROADCAST ACCESSIBILITY // SYSARMY 2026
               </p>
             </div>
           </div>
@@ -161,11 +161,11 @@ export const Header: React.FC<HeaderProps> = ({
             className={`hardware-btn flex items-center gap-2 px-3 py-1.5 rounded text-xs font-mono font-bold transition-all ${
               geminiConfigured ? 'border-[#00f5ff]/60 text-[#00f5ff]' : 'border-[#ffb800]/60 text-[#ffb800]'
             }`}
-            title="Configuración de Motor Gemini"
+            title="Configuración de Motor Gemini (Dual Engine: Flash 2.5 + Pro 2.5)"
           >
             <span className={`w-2 h-2 rounded-full ${geminiConfigured ? 'bg-[#00f5ff] shadow-[0_0_8px_#00f5ff]' : 'bg-[#ffb800]'}`} />
             <span className="hidden lg:inline">
-              {geminiConfigured ? 'GEMINI_2.5_PRO' : 'SIMULATION_MODE'}
+              {geminiConfigured ? 'DUAL: FLASH + PRO' : 'SIMULATION_MODE'}
             </span>
             <KeyRound className="w-3 h-3 opacity-70" />
           </button>

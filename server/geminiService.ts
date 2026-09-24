@@ -42,6 +42,45 @@ const SUBTITLE_RESPONSE_SCHEMA: Schema = {
   required: ['originalText', 'sourceLang', 'esText', 'enText', 'ptText', 'confidence']
 };
 
+const DEEP_PRO_SYSTEM_INSTRUCTION = `You are a Principal Cloud & AI Architect summarizing technical sessions at Nerdearla 2026.
+Synthesize the spoken transcript into:
+1. High-impact architectural takeaways (trade-offs, operational lessons, best practices).
+2. Sharp, high-IQ Q&A questions for the speaker and audience.
+3. An executive summary briefing in markdown.
+Keep IT technical terms verbatim (Kubernetes, eBPF, WebAssembly, Zero-Trust, gRPC, etc.).
+Output JSON matching the schema.`;
+
+const DEEP_INSIGHTS_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    takeaways: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          bullet: { type: Type.STRING },
+          category: { type: Type.STRING }
+        },
+        required: ['bullet', 'category']
+      }
+    },
+    questions: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          question: { type: Type.STRING },
+          context: { type: Type.STRING },
+          target: { type: Type.STRING }
+        },
+        required: ['question', 'context', 'target']
+      }
+    },
+    executiveSummary: { type: Type.STRING }
+  },
+  required: ['takeaways', 'questions', 'executiveSummary']
+};
+
 export class GeminiService {
   private client: GoogleGenAI | null = null;
   private apiKey: string | null = null;
@@ -280,6 +319,97 @@ export class GeminiService {
       confidence: 0.98,
       isFinal: true
     };
+  }
+
+  /**
+   * Deep Intelligence Layer powered by Gemini 2.5 Pro (Dual-Engine Architecture)
+   * Asynchronously synthesizes the accumulated live transcript into:
+   * 1. Architectural takeaways
+   * 2. High-IQ Q&A questions for the speaker and audience
+   * 3. An executive summary briefing in markdown
+   */
+  public async generateDeepInsights(
+    stageTitle: string,
+    speaker: string,
+    transcriptText: string
+  ): Promise<{
+    takeaways: { bullet: string; category: string }[];
+    questions: { question: string; context: string; target: 'speaker' | 'audience' }[];
+    executiveSummary: string;
+    modelUsed: string;
+  }> {
+    const proModel = process.env.GEMINI_PRO_MODEL || 'gemini-2.5-pro';
+
+    if (!this.client || !this.apiKey || !transcriptText.trim()) {
+      return {
+        takeaways: [
+          { bullet: `Arquitectura de producción basada en ${stageTitle}`, category: 'architecture' },
+          { bullet: `Estrategias de resiliencia y mitigación de fallas en escala`, category: 'devops' }
+        ],
+        questions: [
+          {
+            question: `¿Qué compensaciones (trade-offs) evaluaron antes de optar por esta arquitectura?`,
+            context: `Contexto de la charla de ${speaker}`,
+            target: 'speaker'
+          }
+        ],
+        executiveSummary: `Resumen ejecutivo de la charla "${stageTitle}" presentada por ${speaker} en Nerdearla 2026. Se analizaron patrones de observabilidad, arquitecturas cloud-native y optimizaciones de rendimiento para cargas críticas de trabajo.`,
+        modelUsed: 'heuristic-fallback'
+      };
+    }
+
+    try {
+      const prompt = `Talk Title: "${stageTitle}"\nSpeaker: "${speaker}"\n\nLive Transcript:\n"""\n${transcriptText}\n"""\n\nExtract top architectural takeaways, 3 insightful Q&A questions, and a concise 2-paragraph executive summary.`;
+
+      const response = await this.client.models.generateContent({
+        model: proModel,
+        contents: [{ parts: [{ text: prompt }] }],
+        config: {
+          systemInstruction: { parts: [{ text: DEEP_PRO_SYSTEM_INSTRUCTION }] },
+          responseMimeType: 'application/json',
+          responseSchema: DEEP_INSIGHTS_SCHEMA,
+          temperature: 0.2
+        }
+      });
+
+      const parsed = JSON.parse(response.text?.trim() || '{}');
+      return {
+        takeaways: parsed.takeaways || [],
+        questions: parsed.questions || [],
+        executiveSummary: parsed.executiveSummary || '',
+        modelUsed: proModel
+      };
+    } catch (err) {
+      console.warn(`[GeminiService] Gemini Pro deep insights failed with ${proModel}, trying flash fallback:`, err);
+      try {
+        const fallbackResponse = await this.client.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: [{ parts: [{ text: `Summarize technical talk: ${stageTitle}. Speaker: ${speaker}. Transcript: ${transcriptText}` }] }],
+          config: {
+            systemInstruction: { parts: [{ text: DEEP_PRO_SYSTEM_INSTRUCTION }] },
+            responseMimeType: 'application/json',
+            responseSchema: DEEP_INSIGHTS_SCHEMA,
+            temperature: 0.2,
+            thinkingConfig: { thinkingBudget: 0 } as any
+          }
+        });
+        const fallbackParsed = JSON.parse(fallbackResponse.text?.trim() || '{}');
+        return {
+          takeaways: fallbackParsed.takeaways || [],
+          questions: fallbackParsed.questions || [],
+          executiveSummary: fallbackParsed.executiveSummary || '',
+          modelUsed: 'gemini-2.5-flash (fallback)'
+        };
+      } catch (fallbackErr) {
+        console.error('[GeminiService] Deep insights fallback also failed:', fallbackErr);
+        return {
+          takeaways: [],
+          questions: [],
+          executiveSummary: '',
+          modelUsed: 'error'
+        };
+      }
+    }
   }
 }
 
