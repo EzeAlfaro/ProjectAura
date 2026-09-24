@@ -88,13 +88,10 @@ export function findBroadcastSplitIndex(
 }
 
 /**
- * Truncates or formats a subtitle for classic broadcast lower-third display.
- * Guarantees that no subtitle card ever displays more than 2 lines (~75 chars).
+ * Formats a subtitle for broadcast display.
+ * Guarantees that 100% of spoken words are preserved without loss or ellipsis truncation.
  */
-export function formatBroadcastSubtitle(text: string, maxDisplayWords: number = 14): string {
+export function formatBroadcastSubtitle(text: string, _maxDisplayWords?: number): string {
   if (!text) return '';
-  const words = text.trim().split(/\s+/);
-  if (words.length <= maxDisplayWords) return text.trim();
-  // Return the most recent words (sliding window)
-  return '… ' + words.slice(-maxDisplayWords).join(' ');
+  return text.trim();
 }

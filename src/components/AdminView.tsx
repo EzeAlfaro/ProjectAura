@@ -33,7 +33,12 @@ import {
   Tv,
   MessageSquare,
   Download,
-  ShieldAlert
+  ShieldAlert,
+  Lock,
+  Unlock,
+  Timer,
+  RotateCcw,
+  ShieldCheck
 } from 'lucide-react';
 import { 
   triggerDemo, 
@@ -125,6 +130,75 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const restartTimerRef = useRef<any>(null);
   const committedCharsRef = useRef(0);
   const silenceFlushTimerRef = useRef<any>(null);
+
+  // Broadcast Operator Security Lock (Prevents accidental live blunders)
+  const [isConsoleLocked, setIsConsoleLocked] = useState(false);
+  const [lockNotice, setLockNotice] = useState<string | null>(null);
+
+  // Audio Pipeline Watchdog & Session Rotation (Sysarmy 8-Minute Auto-Heal Watchdog)
+  const [sessionUptimeSeconds, setSessionUptimeSeconds] = useState(0);
+  const [rotationCount, setRotationCount] = useState(0);
+  const [watchdogStatus, setWatchdogStatus] = useState<'NOMINAL' | 'ROTATING'>('NOMINAL');
+  const sessionTimerRef = useRef<any>(null);
+
+  const formatUptime = (secs: number) => {
+    const m = Math.floor(secs / 60).toString().padStart(2, '0');
+    const s = (secs % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+
+  const triggerWatchdogRotation = () => {
+    setWatchdogStatus('ROTATING');
+    setRotationCount((prev) => prev + 1);
+    console.log('[Project Aura] 8-Minute Watchdog rotation triggered: refreshing speech recognition buffer...');
+
+    // Transparently restart recognition to clear browser Web Speech / MediaRecorder buffers
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort();
+      } catch (e) {}
+    }
+
+    setTimeout(() => {
+      setWatchdogStatus('NOMINAL');
+    }, 1200);
+  };
+
+  const guardAction = (action: () => void, label: string) => {
+    if (isConsoleLocked) {
+      setLockNotice(`Acción "${label}" bloqueada por el cerrojo de producción. Desbloquea la consola de operador arriba.`);
+      setTimeout(() => setLockNotice(null), 3500);
+      return;
+    }
+    action();
+  };
+
+  useEffect(() => {
+    if (isRecording) {
+      setSessionUptimeSeconds(0);
+      sessionTimerRef.current = setInterval(() => {
+        setSessionUptimeSeconds((prev) => {
+          const next = prev + 1;
+          // Auto-rotation every 8 minutes (480 seconds)
+          if (next > 0 && next % 480 === 0) {
+            triggerWatchdogRotation();
+          }
+          return next;
+        });
+      }, 1000);
+    } else {
+      if (sessionTimerRef.current) {
+        clearInterval(sessionTimerRef.current);
+        sessionTimerRef.current = null;
+      }
+      setSessionUptimeSeconds(0);
+      setWatchdogStatus('NOMINAL');
+    }
+
+    return () => {
+      if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
+    };
+  }, [isRecording]);
 
   useEffect(() => {
     fetchGlossary().then(setGlossaryTerms);
@@ -668,7 +742,27 @@ export const AdminView: React.FC<AdminViewProps> = ({
         title="MASTER PRODUCTION DESK // BROADCAST TELEMETRY"
         subTitle="Control central de audio, latencias de streaming y motor Gemini 2.5 Flash"
         rightBadge={
-          <div className="flex items-center gap-2 text-xs font-mono">
+          <div className="flex items-center gap-2 text-xs font-mono flex-wrap justify-end">
+            {isRecording && (
+              <div className="px-2 py-1 rounded bg-[#07090e] border border-[#1b2230] flex items-center gap-1.5 text-gray-300">
+                <Timer className="w-3.5 h-3.5 text-[#00f5ff] animate-pulse" />
+                <span>UPTIME: {formatUptime(sessionUptimeSeconds)}</span>
+                <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                  watchdogStatus === 'ROTATING' 
+                    ? 'bg-[#00f5ff]/20 text-[#00f5ff] animate-ping'
+                    : 'bg-[#00ff66]/15 text-[#00ff66]'
+                }`}>
+                  {watchdogStatus === 'ROTATING' ? 'ROTATING...' : `WATCHDOG 8M (#${rotationCount})`}
+                </span>
+                <button
+                  onClick={triggerWatchdogRotation}
+                  title="Rotar buffer de streaming manualmente (Sysarmy 8-Min Auto-Heal)"
+                  className="p-0.5 hover:text-[#00f5ff] text-gray-500 transition-colors"
+                >
+                  <RotateCcw className="w-2.5 h-2.5" />
+                </button>
+              </div>
+            )}
             <div className="px-2.5 py-1 rounded bg-[#07090e] border border-[#1b2230] flex items-center gap-1.5 text-gray-300">
               <Cpu className="w-3.5 h-3.5 text-[#00f5ff]" />
               <span>HARDWARE: {hardwareStats.sampleRate / 1000} kHz</span>
@@ -677,9 +771,36 @@ export const AdminView: React.FC<AdminViewProps> = ({
               <Activity className="w-3.5 h-3.5 text-[#ffb800]" />
               <span>INPUTS: {audioDevices.length} MICS</span>
             </div>
+            <button
+              onClick={() => setIsConsoleLocked(!isConsoleLocked)}
+              className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition-all text-xs font-mono font-bold ${
+                isConsoleLocked
+                  ? 'bg-[#ffb800]/15 border-[#ffb800]/50 text-[#ffb800] shadow-[0_0_8px_rgba(255,184,0,0.2)]'
+                  : 'bg-[#10141e] border-[#202738] text-gray-400 hover:text-white hover:border-[#00ff66]'
+              }`}
+              title={isConsoleLocked ? 'Consola BLOQUEADA (click para desbloquear)' : 'Consola DESBLOQUEADA (click para proteger)'}
+            >
+              {isConsoleLocked ? (
+                <>
+                  <Lock className="w-3.5 h-3.5 text-[#ffb800]" />
+                  <span>CONSOLA: BLOQUEADA</span>
+                </>
+              ) : (
+                <>
+                  <Unlock className="w-3.5 h-3.5 text-[#00ff66]" />
+                  <span>OPERADOR: LIBRE</span>
+                </>
+              )}
+            </button>
           </div>
         }
       >
+        {lockNotice && (
+          <div className="mb-3 p-2 bg-[#ffb800]/15 border border-[#ffb800]/50 rounded text-[#ffb800] text-xs font-mono flex items-center gap-2 animate-bounce">
+            <Lock className="w-4 h-4 shrink-0 text-[#ffb800]" />
+            <span>{lockNotice}</span>
+          </div>
+        )}
         {/* HARDWARE INTERFACE CALIBRATION MATRIX */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center bg-[#07090e] p-3 rounded border border-[#171b26]">
           {/* Audio Input Device Dropdown (6 cols) */}
@@ -826,7 +947,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleStopStage(stage.id);
+                      guardAction(() => handleStopStage(stage.id), 'DETENER CANAL');
                     }}
                     className="hardware-btn py-1 px-2 rounded text-[10px] font-mono text-center font-bold text-[#ff1744] hover:bg-[#ff1744]/10"
                   >
