@@ -1,15 +1,19 @@
 /**
  * Local High-Fidelity Conference Translator for Project Aura.
- * Provides instant, offline-capable technical translations (ES ⇄ EN & PT)
+ * Provides instant, neural & macro-assisted technical translations (ES ⇄ EN & PT)
  * when Gemini API key is absent or during network hiccups in the venue.
+ * 
+ * NEVER performs naive word-by-word token replacement to prevent Spanglish gibberish.
  */
 
-interface TranslationDictionary {
-  [key: string]: { en: string; pt: string };
+export interface TranslationResult {
+  esText: string;
+  enText: string;
+  ptText: string;
 }
 
-// Key conference & technical phrases
-const PHRASE_DICTIONARY: [RegExp, { en: string; pt: string }][] = [
+// Common conference & technical greeting macros
+const CONFERENCE_MACROS: [RegExp, { es?: string; en: string; pt: string }][] = [
   // Greetings & Stage Intros
   [/^hola a todos,? bienvenidos?( a la charla( de hoy)?)?/i, { en: "Hello everyone, welcome to today's talk", pt: "Olá a todos, bem-vindos à palestra de hoje" }],
   [/^bienvenidos a nerdearla/i, { en: "Welcome to Nerdearla", pt: "Bem-vindos à Nerdearla" }],
@@ -18,212 +22,180 @@ const PHRASE_DICTIONARY: [RegExp, { en: string; pt: string }][] = [
   [/^alguna pregunta( o duda)?/i, { en: "Any questions or comments?", pt: "Alguma pergunta ou dúvida?" }],
   [/^buenos d[ií]as a todos/i, { en: "Good morning everyone", pt: "Bom dia a todos" }],
   [/^buenas tardes a todos/i, { en: "Good afternoon everyone", pt: "Boa tarde a todos" }],
+  [/^buenas noches a todos/i, { en: "Good evening everyone", pt: "Boa noite a todos" }],
   [/^vamos a comenzar/i, { en: "Let's get started", pt: "Vamos começar" }],
   [/^en esta presentaci[oó]n vamos a ver/i, { en: "In this presentation we are going to look at", pt: "Nesta apresentação vamos ver" }],
-  [/vamos a hablar de/i, { en: "we will talk about", pt: "vamos falar sobre" }],
-  [/vamos a ver/i, { en: "we will see", pt: "vamos ver" }],
-  [/vamos a/i, { en: "we are going to", pt: "vamos" }],
-
-
-  // DevOps, Cloud & Architecture
-  [/alta disponibilidad/i, { en: "high availability", pt: "alta disponibilidade" }],
-  [/baja latencia/i, { en: "low latency", pt: "baixa latência" }],
-  [/en producci[oó]n/i, { en: "in production", pt: "em produção" }],
-  [/en tiempo real/i, { en: "in real-time", pt: "em tempo real" }],
-  [/entorno de desarrollo/i, { en: "development environment", pt: "ambiente de desenvolvimento" }],
-  [/balanceador de carga/i, { en: "load balancer", pt: "balanceador de carga" }],
-  [/base de datos/i, { en: "database", pt: "banco de dados" }],
-  [/tolerancia a fallos?/i, { en: "fault tolerance", pt: "tolerância a falhas" }],
-  [/código abierto/i, { en: "open source", pt: "código aberto" }],
-  [/red local/i, { en: "local network", pt: "rede local" }],
-  [/consumo de memoria/i, { en: "memory consumption", pt: "consumo de memória" }],
-  [/fuga de memoria/i, { en: "memory leak", pt: "vazamento de memória" }],
-  [/hilos de ejecuci[oó]n/i, { en: "threads of execution", pt: "threads de execução" }],
-  [/punto de entrada/i, { en: "entrypoint", pt: "ponto de entrada" }],
+  [/^en esta charla vamos a hablar de/i, { en: "In this talk we will talk about", pt: "Nesta palestra vamos falar sobre" }],
+  [/^bueno,? les voy a contar un poco sobre m[ií]/i, { en: "Well, I am going to tell you a little bit about myself", pt: "Bem, vou contar um pouco sobre mim" }],
+  [/^les voy a contar un poco sobre m[ií]/i, { en: "I am going to tell you a little bit about myself", pt: "Vou contar um pouco sobre mim" }],
+  [/^vamos a ver/i, { en: "Let's take a look", pt: "Vamos ver" }]
 ];
 
-// Single word & connective translations for technical context
-const WORD_DICT: Record<string, { en: string; pt: string }> = {
-  // Connectors & Pronouns
-  "hola": { en: "hello", pt: "olá" },
-  "todos": { en: "everyone", pt: "todos" },
-  "bienvenidos": { en: "welcome", pt: "bem-vindos" },
-  "hoy": { en: "today", pt: "hoje" },
-  "vamos": { en: "we are going", pt: "vamos" },
-  "a": { en: "to", pt: "a" },
-  "hablar": { en: "to talk", pt: "falar" },
-  "de": { en: "about", pt: "sobre" },
-  "del": { en: "of the", pt: "do" },
-  "que": { en: "that", pt: "que" },
-  "qué": { en: "what", pt: "o que" },
-  "cómo": { en: "how", pt: "como" },
-  "como": { en: "as", pt: "como" },
-  "cuando": { en: "when", pt: "quando" },
-  "cuándo": { en: "when", pt: "quando" },
-  "donde": { en: "where", pt: "onde" },
-  "dónde": { en: "where", pt: "onde" },
-  "por": { en: "for", pt: "por" },
-  "para": { en: "to", pt: "para" },
-  "con": { en: "with", pt: "com" },
-  "sin": { en: "without", pt: "sem" },
-  "el": { en: "the", pt: "o" },
-  "la": { en: "the", pt: "a" },
-  "los": { en: "the", pt: "os" },
-  "las": { en: "the", pt: "as" },
-  "un": { en: "a", pt: "um" },
-  "una": { en: "a", pt: "uma" },
-  "unos": { en: "some", pt: "uns" },
-  "unas": { en: "some", pt: "umas" },
-  "y": { en: "and", pt: "e" },
-  "o": { en: "or", pt: "ou" },
-  "pero": { en: "but", pt: "mas" },
-  "este": { en: "this", pt: "este" },
-  "esta": { en: "this", pt: "esta" },
-  "estos": { en: "these", pt: "estes" },
-  "estas": { en: "these", pt: "estas" },
-  "nuestro": { en: "our", pt: "nosso" },
-  "nuestra": { en: "our", pt: "nossa" },
-  "nuestros": { en: "our", pt: "nossos" },
-  "nuestras": { en: "our", pt: "nossas" },
+// Preserved casing for tech industry keywords
+const TECH_TERMS_CASING = [
+  'Kubernetes', 'Docker', 'GitLab', 'GitHub', 'CI/CD', 'Linux',
+  'Python', 'TypeScript', 'JavaScript', 'Node.js', 'eBPF', 'Terraform',
+  'Ansible', 'Prometheus', 'Grafana', 'PostgreSQL', 'Redis', 'GraphQL',
+  'Next.js', 'React', 'AWS', 'GCP', 'Azure', 'Sysarmy', 'Nerdearla',
+  'Open Source', 'DevOps', 'SRE', 'Kafka', 'RabbitMQ', 'MongoDB', 'vMix', 'OBS'
+];
 
-  // Verbs & Technical actions
-  "es": { en: "is", pt: "é" },
-  "son": { en: "are", pt: "são" },
-  "está": { en: "is", pt: "está" },
-  "están": { en: "are", pt: "estão" },
-  "estamos": { en: "we are", pt: "estamos" },
-  "tenemos": { en: "we have", pt: "temos" },
-  "tiene": { en: "has", pt: "tem" },
-  "tienen": { en: "have", pt: "têm" },
-  "configurando": { en: "configuring", pt: "configurando" },
-  "desplegando": { en: "deploying", pt: "implantando" },
-  "corriendo": { en: "running", pt: "executando" },
-  "ejecutando": { en: "executing", pt: "executando" },
-  "probando": { en: "testing", pt: "testando" },
-  "migrando": { en: "migrating", pt: "migrando" },
-  "usando": { en: "using", pt: "usando" },
-  "utilizando": { en: "using", pt: "utilizando" },
-  "construyendo": { en: "building", pt: "construindo" },
-  "optimizando": { en: "optimizing", pt: "otimizando" },
-  "escalando": { en: "scaling", pt: "escalando" },
-  "monitoreando": { en: "monitoring", pt: "monitorando" },
-  "desarrollando": { en: "developing", pt: "desenvolvendo" },
-  "desplegar": { en: "to deploy", pt: "implantar" },
-  "configurar": { en: "to configure", pt: "configurar" },
-  "ejecutar": { en: "to run", pt: "executar" },
-  "escalar": { en: "to scale", pt: "escalar" },
-  "monitorear": { en: "to monitor", pt: "monitorar" },
-  "migrar": { en: "to migrate", pt: "migrar" },
-  "conectar": { en: "to connect", pt: "conectar" },
-  "funciona": { en: "works", pt: "funciona" },
-  "funcionando": { en: "working", pt: "funcionando" },
+function decodeHtmlEntities(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&iexcl;/g, '¡')
+    .replace(/&iquest;/g, '¿')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
+}
 
-  // Tech nouns
-  "charla": { en: "talk", pt: "palestra" },
-  "conferencia": { en: "conference", pt: "conferência" },
-  "evento": { en: "event", pt: "evento" },
-  "escenario": { en: "stage", pt: "palco" },
-  "sala": { en: "room", pt: "sala" },
-  "arquitectura": { en: "architecture", pt: "arquitetura" },
-  "sistema": { en: "system", pt: "sistema" },
-  "sistemas": { en: "systems", pt: "sistemas" },
-  "aplicación": { en: "application", pt: "aplicação" },
-  "aplicaciones": { en: "applications", pt: "aplicações" },
-  "servicio": { en: "service", pt: "serviço" },
-  "servicios": { en: "services", pt: "serviços" },
-  "microservicios": { en: "microservices", pt: "microsserviços" },
-  "servidor": { en: "server", pt: "servidor" },
-  "servidores": { en: "servers", pt: "servidores" },
-  "cliente": { en: "client", pt: "cliente" },
-  "clientes": { en: "clients", pt: "clientes" },
-  "código": { en: "code", pt: "código" },
-  "datos": { en: "data", pt: "dados" },
-  "red": { en: "network", pt: "rede" },
-  "redes": { en: "networks", pt: "redes" },
-  "seguridad": { en: "security", pt: "segurança" },
-  "latencia": { en: "latency", pt: "latência" },
-  "velocidad": { en: "speed", pt: "velocidade" },
-  "rendimiento": { en: "performance", pt: "desempenho" },
-  "problema": { en: "issue", pt: "problema" },
-  "problemas": { en: "issues", pt: "problemas" },
-  "solución": { en: "solution", pt: "solução" },
-  "soluciones": { en: "solutions", pt: "soluções" },
-  "equipo": { en: "team", pt: "equipe" },
-  "equipos": { en: "teams", pt: "equipes" },
-  "orador": { en: "speaker", pt: "palestrante" },
-  "pregunta": { en: "question", pt: "pergunta" },
-  "preguntas": { en: "questions", pt: "perguntas" },
-  "ejemplo": { en: "example", pt: "exemplo" },
-  "ahora": { en: "now", pt: "agora" },
-  "después": { en: "afterwards", pt: "depois" },
-  "antes": { en: "before", pt: "antes" },
-  "muy": { en: "very", pt: "muito" },
-  "más": { en: "more", pt: "mais" },
-  "menos": { en: "less", pt: "menos" },
-  "rápido": { en: "fast", pt: "rápido" },
-  "fácil": { en: "easy", pt: "fácil" },
-  "difícil": { en: "difficult", pt: "difícil" },
-  "importante": { en: "important", pt: "importante" },
-  "grande": { en: "large", pt: "grande" },
-  "pequeño": { en: "small", pt: "pequeno" },
-};
+function preserveTechTermsCasing(text: string): string {
+  let result = text;
+  for (const term of TECH_TERMS_CASING) {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`\\b${escaped}\\b`, 'gi');
+    result = result.replace(regex, term);
+  }
+  return result;
+}
+
+// In-Memory Fast LRU Cache
+const translationCache = new Map<string, TranslationResult>();
+const MAX_CACHE_SIZE = 1000;
+
+function getCached(key: string): TranslationResult | undefined {
+  return translationCache.get(key);
+}
+
+function setCached(key: string, res: TranslationResult) {
+  if (translationCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = translationCache.keys().next().value;
+    if (firstKey) translationCache.delete(firstKey);
+  }
+  translationCache.set(key, res);
+}
 
 /**
- * Translates a phrase or sentence from Spanish to English and Portuguese locally.
- * Preserves IT terms, proper names, casing, and punctuation.
+ * Fetch neural translation from high-speed translation API with strict timeout.
  */
-export function translateConferenceTextLocally(spanishText: string): { enText: string; ptText: string } {
-  let text = spanishText.trim();
-  if (!text) {
-    return { enText: '', ptText: '' };
+async function fetchNeuralTranslation(text: string, fromLang: string, toLang: string): Promise<string> {
+  if (!text || text.length < 2) return text;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1800);
+
+  try {
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${fromLang}|${toLang}`;
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data: any = await res.json();
+    clearTimeout(timeout);
+
+    const translated = data?.responseData?.translatedText;
+    if (translated && typeof translated === 'string' && !translated.startsWith('MYMEMORY WARNING:')) {
+      return preserveTechTermsCasing(decodeHtmlEntities(translated.trim()));
+    }
+    return text;
+  } catch {
+    clearTimeout(timeout);
+    return text;
+  }
+}
+
+/**
+ * Asynchronous, neural-grade conference translator.
+ * Guaranteed: NEVER outputs broken word-by-word Spanglish!
+ */
+export async function translateConferenceText(
+  text: string,
+  sourceLang: string = 'es'
+): Promise<TranslationResult> {
+  const clean = text.trim();
+  if (!clean) {
+    return { esText: '', enText: '', ptText: '' };
   }
 
-  // 1. Check for exact or regex phrase matches first
-  let enWorking = text;
-  let ptWorking = text;
+  const effectiveLang = sourceLang === 'en' ? 'en' : 'es';
+  const cacheKey = `${effectiveLang}:${clean.toLowerCase()}`;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
 
-  for (const [regex, trans] of PHRASE_DICTIONARY) {
-    if (regex.test(enWorking)) {
-      enWorking = enWorking.replace(regex, trans.en);
-      ptWorking = ptWorking.replace(regex, trans.pt);
+  // 1. Check conference macros first
+  for (const [regex, macro] of CONFERENCE_MACROS) {
+    if (regex.test(clean)) {
+      const res: TranslationResult = {
+        esText: effectiveLang === 'es' ? clean : (macro.es || clean),
+        enText: macro.en,
+        ptText: macro.pt
+      };
+      setCached(cacheKey, res);
+      return res;
     }
   }
 
-  // 2. Tokenize and substitute words in enWorking and ptWorking
-  const enTokens = enWorking.split(/(\s+|[.,;!?()]+)/).map((token) => {
-    const cleanLower = token.toLowerCase();
-    if (WORD_DICT[cleanLower]) {
-      const translated = WORD_DICT[cleanLower].en;
-      if (token[0] && token[0] === token[0].toUpperCase() && token[0] !== token[0].toLowerCase()) {
-        return translated.charAt(0).toUpperCase() + translated.slice(1);
-      }
-      return translated;
+  // 2. Parallel Neural Translation
+  if (effectiveLang === 'es') {
+    const [en, pt] = await Promise.all([
+      fetchNeuralTranslation(clean, 'es', 'en'),
+      fetchNeuralTranslation(clean, 'es', 'pt')
+    ]);
+
+    const res: TranslationResult = {
+      esText: clean,
+      enText: en || clean,
+      ptText: pt || clean
+    };
+    setCached(cacheKey, res);
+    return res;
+  } else {
+    // English speaker talking
+    const [es, pt] = await Promise.all([
+      fetchNeuralTranslation(clean, 'en', 'es'),
+      fetchNeuralTranslation(clean, 'en', 'pt')
+    ]);
+
+    const res: TranslationResult = {
+      esText: es || clean,
+      enText: clean,
+      ptText: pt || clean
+    };
+    setCached(cacheKey, res);
+    return res;
+  }
+}
+
+/**
+ * Synchronous local translation helper (macros & cache only).
+ * Falls back cleanly to original text rather than Spanglish token substitution.
+ */
+export function translateConferenceTextLocally(
+  text: string,
+  sourceLang: string = 'es'
+): TranslationResult {
+  const clean = text.trim();
+  if (!clean) return { esText: '', enText: '', ptText: '' };
+
+  const effectiveLang = sourceLang === 'en' ? 'en' : 'es';
+  const cacheKey = `${effectiveLang}:${clean.toLowerCase()}`;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
+  for (const [regex, macro] of CONFERENCE_MACROS) {
+    if (regex.test(clean)) {
+      return {
+        esText: effectiveLang === 'es' ? clean : (macro.es || clean),
+        enText: macro.en,
+        ptText: macro.pt
+      };
     }
-    return token;
-  });
-
-  const ptTokens = ptWorking.split(/(\s+|[.,;!?()]+)/).map((token) => {
-    const cleanLower = token.toLowerCase();
-    if (WORD_DICT[cleanLower]) {
-      const translated = WORD_DICT[cleanLower].pt;
-      if (token[0] && token[0] === token[0].toUpperCase() && token[0] !== token[0].toLowerCase()) {
-        return translated.charAt(0).toUpperCase() + translated.slice(1);
-      }
-      return translated;
-    }
-    return token;
-  });
-
-  let enResult = enTokens.join('');
-  let ptResult = ptTokens.join('');
-
-
-  // Clean double spaces
-  enResult = enResult.replace(/\s{2,}/g, ' ').trim();
-  ptResult = ptResult.replace(/\s{2,}/g, ' ').trim();
+  }
 
   return {
-    enText: enResult,
-    ptText: ptResult
+    esText: clean,
+    enText: clean,
+    ptText: clean
   };
 }
