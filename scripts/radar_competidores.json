@@ -1,0 +1,52 @@
+{
+  "event": "Nerdearla Vibeathon 2026",
+  "our_team": {
+    "lead": "Ezequiel Alfaro",
+    "project": "NerdSub",
+    "target": "1er Puesto 🇲🇽"
+  },
+  "high_priority_watch": [
+    {
+      "name": "Gonzalo Gramaglia",
+      "devpost": "https://devpost.com/gonzagramaglia",
+      "github_search": "https://github.com/search?q=user%3Agonzagramaglia&type=repositories",
+      "flags": ["whisper", "temporal.io", "speech-to-text", "next.js"],
+      "threat_level": "CRITICAL"
+    },
+    {
+      "name": "Ricardo Nigrelli",
+      "devpost": "https://devpost.com/ricanigrelli996",
+      "github_search": "https://github.com/search?q=user%3Aricanigrelli996&type=repositories",
+      "flags": ["websockets", "accessibility", "rag", "llm"],
+      "threat_level": "CRITICAL"
+    },
+    {
+      "name": "Leonardo Martinelli",
+      "devpost": "https://devpost.com/martinelli-leo71",
+      "github_search": "https://github.com/search?q=user%3Amartinelli-leo71&type=repositories",
+      "flags": ["fastapi", "websockets", "distributed-systems"],
+      "threat_level": "HIGH"
+    },
+    {
+      "name": "Lucas Aguirre",
+      "devpost": "https://devpost.com/lucasagui2205",
+      "github_search": "https://github.com/search?q=user%3Alucasagui2205&type=repositories",
+      "flags": ["rust", "voice skills", "tauri"],
+      "threat_level": "HIGH"
+    },
+    {
+      "name": "Juan Ignacio Llaberia",
+      "devpost": "https://devpost.com/juanillaberia2002",
+      "github_search": "https://github.com/search?q=user%3Ajuanillaberia2002&type=repositories",
+      "flags": ["langchain", "langraph", "llms"],
+      "threat_level": "MEDIUM-HIGH"
+    },
+    {
+      "name": "Sergio Alejandro Ribera Costa",
+      "devpost": "https://devpost.com/SergioRibera",
+      "github_search": "https://github.com/search?q=user%3ASergioRibera&type=repositories",
+      "flags": ["rust", "axum", "5 projects"],
+      "threat_level": "MEDIUM-HIGH"
+    }
+  ]
+}
