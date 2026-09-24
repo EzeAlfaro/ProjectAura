@@ -768,13 +768,40 @@ export const AdminView: React.FC<AdminViewProps> = ({
     setTimeout(() => setFormSuccess(false), 2000);
   };
 
+  const isSecureContext = typeof window !== 'undefined' 
+    ? (window.isSecureContext || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    : true;
+
   const currentStage = stages.find((s) => s.id === selectedStageId) || stages[0];
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 space-y-4">
       
+      {/* INSECURE CONTEXT / HTTP LAN SECURITY ALERT */}
+      {!isSecureContext && (
+        <div className="p-4 bg-gradient-to-r from-amber-950/80 to-[#121622] border-2 border-amber-500/70 rounded-xl text-amber-200 font-mono text-sm shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 animate-pulse">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 font-bold text-amber-400">
+              <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0" />
+              <span>ALERTA DE SEGURIDAD DEL NAVEGADOR: HTTP DETECTADO EN RED LOCAL</span>
+            </div>
+            <p className="text-xs text-gray-300 font-sans leading-relaxed">
+              Google Chrome y los navegadores modernos bloquean el micrófono y las interfaces de audio fuera de <code className="text-amber-300 bg-black/40 px-1 py-0.5 rounded">localhost</code> a menos que la conexión use <strong>HTTPS</strong>.
+            </p>
+          </div>
+          <a
+            href={typeof window !== 'undefined' ? window.location.href.replace(/^http:/, 'https:') : '#'}
+            className="shrink-0 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-mono font-bold text-xs rounded uppercase tracking-wider flex items-center gap-2 shadow-lg transition-all"
+          >
+            <Lock className="w-4 h-4" />
+            <span>ACTIVAR HTTPS Y DESBLOQUEAR MIC</span>
+          </a>
+        </div>
+      )}
+
       {/* 19" RACK UNIT 01: MASTER PRODUCTION DESK & TELEMETRY */}
       <RackUnit
+
         unitId="RACK_01"
         uHeight="1U"
         title="MASTER PRODUCTION DESK // BROADCAST TELEMETRY"
