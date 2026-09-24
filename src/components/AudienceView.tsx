@@ -33,6 +33,7 @@ interface AudienceViewProps {
   chunks: SubtitleChunk[];
   takeaways: StageTakeaway[];
   suggestedQuestions: StageQA[];
+  onOpenQrModal: () => void;
 }
 
 export const AudienceView: React.FC<AudienceViewProps> = ({
@@ -44,6 +45,7 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
   chunks,
   takeaways,
   suggestedQuestions,
+  onOpenQrModal,
 }) => {
   const [autoScroll, setAutoScroll] = useState(true);
   const [fontSize, setFontSize] = useState<'normal' | 'large' | 'xlarge'>('normal');
@@ -190,6 +192,16 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
             );
           })}
         </div>
+
+        {/* QR Code Attendee & Auditorium Projector Button */}
+        <button
+          onClick={onOpenQrModal}
+          className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#8b5cf6]/20 to-[#00f0ff]/20 border border-[#8b5cf6]/40 hover:border-[#00f0ff] text-white text-xs font-bold transition-all shadow-sm"
+          title="Abrir en celular o proyectar en pantalla de sala"
+        >
+          <span className="text-sm">📱</span>
+          <span>QR Sala & Celular</span>
+        </button>
       </div>
 
       {/* Current Talk Info Banner */}

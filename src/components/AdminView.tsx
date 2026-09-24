@@ -17,7 +17,15 @@ import {
   BookOpen, 
   Sparkles, 
   Activity,
-  Layers
+  Layers,
+  Cpu,
+  Settings2,
+  HardDrive,
+  Check,
+  RefreshCw,
+  Headphones,
+  VolumeX,
+  Gauge
 } from 'lucide-react';
 import { 
   triggerDemo, 
@@ -45,6 +53,29 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [audioError, setAudioError] = useState<string | null>(null);
   const [glossaryTerms, setGlossaryTerms] = useState<TechTerm[]>([]);
   
+  // Audio Devices & Hardware Diagnostics
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
+  const [hardwareStats, setHardwareStats] = useState({
+    audioContextSupported: false,
+    mediaRecorderSupported: false,
+    sampleRate: 0,
+    webSocketSupported: typeof WebSocket !== 'undefined',
+  });
+
+  // Sound Check / Pre-flight state
+  const [isSoundChecking, setIsSoundChecking] = useState(false);
+  const [soundCheckProgress, setSoundCheckProgress] = useState(0);
+  const [soundCheckResult, setSoundCheckResult] = useState<{
+    peakDb: number;
+    avgDb: number;
+    status: 'optimal' | 'low' | 'clipping';
+  } | null>(null);
+
+  // Metering state
+  const [currentDbfs, setCurrentDbfs] = useState(-60);
+  const [isClipping, setIsClipping] = useState(false);
+
   // Custom term form state
   const [newTerm, setNewTerm] = useState('');
   const [newDefinition, setNewDefinition] = useState('');
@@ -58,29 +89,85 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
+  // Sound check stream ref
+  const soundCheckStreamRef = useRef<MediaStream | null>(null);
+  const recordedBlobsRef = useRef<Blob[]>([]);
+
   useEffect(() => {
     fetchGlossary().then(setGlossaryTerms);
+    refreshAudioDevices();
+    checkHardwareCompatibility();
+
+    return () => {
+      stopMicStreaming();
+      stopSoundCheck();
+    };
   }, []);
+
+  const checkHardwareCompatibility = () => {
+    const hasAudioCtx = typeof window !== 'undefined' && ('AudioContext' in window || 'webkitAudioContext' in window);
+    const hasMediaRec = typeof window !== 'undefined' && 'MediaRecorder' in window;
+    let sr = 48000;
+    if (hasAudioCtx) {
+      try {
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        sr = ctx.sampleRate;
+        ctx.close();
+      } catch (e) {}
+    }
+
+    setHardwareStats({
+      audioContextSupported: hasAudioCtx,
+      mediaRecorderSupported: hasMediaRec,
+      sampleRate: sr,
+      webSocketSupported: typeof WebSocket !== 'undefined',
+    });
+  };
+
+  const refreshAudioDevices = async () => {
+    try {
+      if (!navigator.mediaDevices?.enumerateDevices) return;
+      // Request initial permission to get device labels
+      await navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+        stream.getTracks().forEach((t) => t.stop());
+      }).catch(() => {});
+
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const mics = devices.filter((d) => d.kind === 'audioinput');
+      setAudioDevices(mics);
+      if (mics.length > 0 && !selectedDeviceId) {
+        setSelectedDeviceId(mics[0].deviceId);
+      }
+    } catch (e) {
+      console.warn('Device enumeration error:', e);
+    }
+  };
 
   const currentStage = stages.find((s) => s.id === selectedStageId) || stages[0];
 
   // Start Live Microphone Streaming
   const startMicStreaming = async () => {
     setAudioError(null);
+    stopSoundCheck();
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const constraints: MediaStreamConstraints = {
+        audio: selectedDeviceId
+          ? { deviceId: { exact: selectedDeviceId } }
+          : true,
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       
-      // Setup Web Audio Analyser for visualizer
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
       const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 64;
+      analyser.fftSize = 128;
       const source = audioCtx.createMediaStreamSource(stream);
       source.connect(analyser);
 
       audioContextRef.current = audioCtx;
       analyserRef.current = analyser;
 
-      // Setup MediaRecorder with 3-second slices
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
       mediaRecorderRef.current = mediaRecorder;
 
@@ -119,9 +206,94 @@ export const AdminView: React.FC<AdminViewProps> = ({
       cancelAnimationFrame(animationFrameRef.current);
     }
     setIsRecording(false);
+    setCurrentDbfs(-60);
+    setIsClipping(false);
   };
 
-  // Draw Audio Visualizer Bars
+  // Pre-flight 5-Second Sound Check for the AV Tech
+  const startSoundCheck = async () => {
+    setSoundCheckResult(null);
+    setSoundCheckProgress(0);
+    setIsSoundChecking(true);
+    recordedBlobsRef.current = [];
+
+    try {
+      const constraints: MediaStreamConstraints = {
+        audio: selectedDeviceId
+          ? { deviceId: { exact: selectedDeviceId } }
+          : true,
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      soundCheckStreamRef.current = stream;
+
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      const source = audioCtx.createMediaStreamSource(stream);
+      source.connect(analyser);
+
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Float32Array(bufferLength);
+
+      let peak = -Infinity;
+      let sumSquares = 0;
+      let samplesCount = 0;
+
+      const startTime = Date.now();
+      const duration = 4000; // 4 seconds test
+
+      const interval = setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(100, Math.round((elapsed / duration) * 100));
+        setSoundCheckProgress(progress);
+
+        analyser.getFloatTimeDomainData(dataArray);
+        for (let i = 0; i < bufferLength; i++) {
+          const val = dataArray[i];
+          const abs = Math.abs(val);
+          if (abs > peak) peak = abs;
+          sumSquares += val * val;
+          samplesCount++;
+        }
+
+        if (elapsed >= duration) {
+          clearInterval(interval);
+          stream.getTracks().forEach((t) => t.stop());
+          audioCtx.close();
+          setIsSoundChecking(false);
+
+          const rms = Math.sqrt(sumSquares / samplesCount) || 0.0001;
+          const peakDb = Math.round(20 * Math.log10(peak || 0.0001));
+          const avgDb = Math.round(20 * Math.log10(rms));
+
+          let status: 'optimal' | 'low' | 'clipping' = 'optimal';
+          if (peakDb >= -1) status = 'clipping';
+          else if (peakDb < -22) status = 'low';
+
+          setSoundCheckResult({
+            peakDb: Math.max(-60, peakDb),
+            avgDb: Math.max(-60, avgDb),
+            status,
+          });
+        }
+      }, 100);
+
+    } catch (err: any) {
+      setIsSoundChecking(false);
+      setAudioError(err.message || 'Error en prueba de sonido');
+    }
+  };
+
+  const stopSoundCheck = () => {
+    if (soundCheckStreamRef.current) {
+      soundCheckStreamRef.current.getTracks().forEach((t) => t.stop());
+      soundCheckStreamRef.current = null;
+    }
+    setIsSoundChecking(false);
+  };
+
+  // Draw Audio Visualizer Bars & Calculate dBFS Meter
   const drawVisualizer = () => {
     if (!canvasRef.current || !analyserRef.current) return;
     const canvas = canvasRef.current;
@@ -137,15 +309,30 @@ export const AdminView: React.FC<AdminViewProps> = ({
       analyser.getByteFrequencyData(dataArray);
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const barWidth = (canvas.width / bufferLength) * 2;
+      const barWidth = (canvas.width / bufferLength) * 2.5;
       let x = 0;
+      let maxVal = 0;
 
       for (let i = 0; i < bufferLength; i++) {
-        const barHeight = (dataArray[i] / 255) * canvas.height;
-        ctx.fillStyle = `rgb(0, ${Math.min(255, dataArray[i] + 100)}, 255)`;
+        const val = dataArray[i];
+        if (val > maxVal) maxVal = val;
+        const barHeight = (val / 255) * canvas.height;
+        
+        // Gradient color based on intensity
+        const r = Math.min(255, val * 1.5);
+        const g = Math.max(0, 255 - val);
+        const b = 255;
+
+        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
         ctx.fillRect(x, canvas.height - barHeight, barWidth - 1, barHeight);
         x += barWidth;
       }
+
+      // Calculate dBFS (-60 to 0)
+      const normalized = maxVal / 255;
+      const db = normalized > 0.001 ? Math.round(20 * Math.log10(normalized)) : -60;
+      setCurrentDbfs(db);
+      setIsClipping(db >= -1);
     };
 
     render();
@@ -176,32 +363,142 @@ export const AdminView: React.FC<AdminViewProps> = ({
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       
-      {/* Title & Quick Stats */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#141a29] border border-[#2a344f] p-5 rounded-2xl">
-        <div className="flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-[#8b5cf6]/20 border border-[#8b5cf6]/30 text-[#8b5cf6]">
+      {/* Top Banner: Control Room Title & Sound Tech Hardware Diagnostic */}
+      <div className="bg-[#141a29] border border-[#2a344f] p-5 rounded-3xl shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="p-3 rounded-2xl bg-gradient-to-br from-[#00f0ff]/20 to-[#8b5cf6]/20 border border-[#00f0ff]/30 text-[#00f0ff]">
             <Sliders className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
-              Panel de Producción y Control Room
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-extrabold text-white">
+                Consola de Sonido & Control Room
+              </h2>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/40 text-emerald-400 border border-emerald-800 font-bold">
+                BROADCAST READY
+              </span>
+            </div>
             <p className="text-xs text-[#94a3b8]">
-              Orquestación simultánea multi-escenario para operadores de sonido y streaming
+              Orquestador de audio profesional para técnicos del evento y transmisiones simultáneas
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Hardware Status Badges */}
+        <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+          <div className="px-3 py-1.5 rounded-xl bg-[#0c0f17] border border-[#2a344f] flex items-center gap-2 text-gray-300">
+            <Cpu className="w-3.5 h-3.5 text-[#00f0ff]" />
+            <span>Web Audio: {hardwareStats.audioContextSupported ? 'Activo' : 'N/A'}</span>
+          </div>
+
+          <div className="px-3 py-1.5 rounded-xl bg-[#0c0f17] border border-[#2a344f] flex items-center gap-2 text-gray-300">
+            <HardDrive className="w-3.5 h-3.5 text-[#8b5cf6]" />
+            <span>Muestreo: {hardwareStats.sampleRate / 1000} kHz</span>
+          </div>
+
           {!geminiConfigured && (
             <button
               onClick={onOpenApiKeyModal}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold hover:bg-amber-500/20 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 font-semibold hover:bg-amber-500/20 transition-colors"
             >
-              <AlertCircle className="w-4 h-4" />
-              <span>Configurar Gemini API Key</span>
+              <AlertCircle className="w-3.5 h-3.5" />
+              <span>Conectar Gemini API Key</span>
             </button>
           )}
+        </div>
+      </div>
+
+      {/* AUDIO HARDWARE DIAGNOSTICS & SOUND CHECK (AV Technician friendly) */}
+      <div className="bg-[#141a29] border border-[#2a344f] rounded-3xl p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#2a344f] pb-3 gap-2">
+          <div>
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <Settings2 className="w-4 h-4 text-[#00f0ff]" />
+              Diagnóstico de Hardware & Dispositivos de Audio Conectados
+            </h3>
+            <p className="text-xs text-[#94a3b8]">
+              Verificación física de interfaces de sonido, micrófonos y prueba de nivel antes de salir al aire
+            </p>
+          </div>
+
+          <button
+            onClick={refreshAudioDevices}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1b2236] hover:bg-[#232c45] border border-[#2a344f] text-gray-300 text-xs rounded-xl transition-colors self-start sm:self-auto"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Detectar Dispositivos</span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+          
+          {/* Device Selector (6 cols) */}
+          <div className="md:col-span-6 space-y-1.5">
+            <label className="block text-xs font-semibold text-gray-300 flex items-center justify-between">
+              <span>Entrada de Audio de la Sala (Micrófono / Consola USB):</span>
+              <span className="text-[10px] text-emerald-400 font-mono">
+                {audioDevices.length} detectados
+              </span>
+            </label>
+            <select
+              value={selectedDeviceId}
+              onChange={(e) => setSelectedDeviceId(e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-[#0c0f17] border border-[#2a344f] rounded-xl text-xs text-white focus:outline-none focus:border-[#00f0ff] font-mono"
+            >
+              {audioDevices.length === 0 ? (
+                <option value="">(No se detectaron micrófonos o permiso no otorgado)</option>
+              ) : (
+                audioDevices.map((d, index) => (
+                  <option key={d.deviceId || index} value={d.deviceId}>
+                    {d.label || `Micrófono / Entrada de línea ${index + 1}`}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+
+          {/* Pre-Flight Sound Check Button & Result (6 cols) */}
+          <div className="md:col-span-6 flex flex-col justify-end space-y-2">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={startSoundCheck}
+                disabled={isSoundChecking || isRecording}
+                className="flex items-center gap-2 px-4 py-2.5 bg-[#1b2236] hover:bg-[#232c45] disabled:opacity-50 border border-[#00f0ff]/40 text-[#00f0ff] text-xs font-bold rounded-xl transition-all shadow-sm"
+              >
+                <Gauge className="w-4 h-4" />
+                <span>{isSoundChecking ? `Muestreando audio (${soundCheckProgress}%)...` : 'Hacer Prueba de Nivel (4s)'}</span>
+              </button>
+
+              {soundCheckResult && (
+                <div
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-mono font-bold border ${
+                    soundCheckResult.status === 'optimal'
+                      ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800'
+                      : soundCheckResult.status === 'clipping'
+                      ? 'bg-red-950/40 text-red-400 border-red-800'
+                      : 'bg-yellow-950/40 text-yellow-400 border-yellow-800'
+                  }`}
+                >
+                  {soundCheckResult.status === 'optimal' && <Check className="w-3.5 h-3.5" />}
+                  {soundCheckResult.status === 'clipping' && <AlertCircle className="w-3.5 h-3.5" />}
+                  <span>
+                    Pico: {soundCheckResult.peakDb} dBFS • {soundCheckResult.status.toUpperCase()}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Sound Check Progress Bar */}
+            {isSoundChecking && (
+              <div className="w-full bg-[#0c0f17] h-2 rounded-full overflow-hidden">
+                <div
+                  className="bg-[#00f0ff] h-full transition-all duration-100"
+                  style={{ width: `${soundCheckProgress}%` }}
+                />
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
 
@@ -275,15 +572,15 @@ export const AdminView: React.FC<AdminViewProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
           {/* Audio Source Controller (7 cols) */}
-          <div className="lg:col-span-7 bg-[#141a29] border border-[#2a344f] rounded-2xl p-5 space-y-5">
+          <div className="lg:col-span-7 bg-[#141a29] border border-[#2a344f] rounded-3xl p-5 space-y-5">
             <div className="flex items-center justify-between border-b border-[#2a344f] pb-3">
               <div>
                 <h4 className="text-sm font-bold text-white flex items-center gap-2">
                   <Radio className="w-4 h-4 text-[#00f0ff]" />
-                  Control de Ingesta de Audio: <span className="text-[#00f0ff]">{currentStage.name}</span>
+                  Control de Ingesta: <span className="text-[#00f0ff]">{currentStage.name}</span>
                 </h4>
                 <p className="text-xs text-[#94a3b8]">
-                  Elegí la fuente de audio en vivo para alimentar la transcripción y traducción de Gemini
+                  Elegí la fuente para alimentar la transcripción y traducción en tiempo real
                 </p>
               </div>
 
@@ -298,8 +595,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
               )}
             </div>
 
-            {/* Source A: Live Microphone */}
-            <div className="p-4 bg-[#0f1422] border border-[#2a344f] rounded-xl space-y-3">
+            {/* Source A: Live Microphone with dBFS Meter and Oscilloscope */}
+            <div className="p-4 bg-[#0f1422] border border-[#2a344f] rounded-2xl space-y-3">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-xs font-bold text-white flex items-center gap-2">
@@ -307,7 +604,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                     <span>Micrófono de Cabina / Sonido del Escenario</span>
                   </div>
                   <p className="text-[11px] text-gray-400">
-                    Captura directa en 16kHz PCM procesada por Gemini en tiempo real
+                    Captura en PCM 16kHz enviada a Gemini Live / Multimodal
                   </p>
                 </div>
 
@@ -317,7 +614,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                     className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-colors animate-pulse"
                   >
                     <Square className="w-3.5 h-3.5" />
-                    <span>Detener Mic</span>
+                    <span>Detener Transmisión</span>
                   </button>
                 ) : (
                   <button
@@ -325,15 +622,35 @@ export const AdminView: React.FC<AdminViewProps> = ({
                     className="flex items-center gap-2 px-4 py-2 bg-[#00f0ff] hover:bg-[#00f0ff]/90 text-black text-xs font-bold rounded-xl transition-all shadow-md shadow-[#00f0ff]/20"
                   >
                     <Mic className="w-3.5 h-3.5" />
-                    <span>Transmitir Mi Micrófono</span>
+                    <span>Transmitir en Vivo</span>
                   </button>
                 )}
               </div>
 
-              {/* Real-time Canvas Waveform */}
+              {/* Real-time Oscilloscope & dBFS Meter */}
               {isRecording && (
-                <div className="mt-2 bg-[#0c0f17] p-2 rounded-xl border border-[#2a344f]">
-                  <canvas ref={canvasRef} width={500} height={40} className="w-full h-10" />
+                <div className="space-y-2 mt-2">
+                  <div className="bg-[#0c0f17] p-2.5 rounded-xl border border-[#2a344f]">
+                    <canvas ref={canvasRef} width={500} height={45} className="w-full h-11" />
+                  </div>
+
+                  {/* Broadcast dBFS VU Bar */}
+                  <div className="flex items-center gap-2 text-[10px] font-mono">
+                    <span className="text-gray-400 w-12 text-right">{currentDbfs} dBFS</span>
+                    <div className="flex-1 bg-[#0c0f17] h-2.5 rounded-full overflow-hidden p-0.5 border border-[#2a344f]">
+                      <div
+                        className={`h-full rounded-full transition-all duration-75 ${
+                          isClipping ? 'bg-red-500 animate-pulse' : 'bg-gradient-to-r from-emerald-500 via-yellow-400 to-red-500'
+                        }`}
+                        style={{ width: `${Math.min(100, Math.max(0, ((currentDbfs + 60) / 60) * 100))}%` }}
+                      />
+                    </div>
+                    {isClipping && (
+                      <span className="px-1.5 py-0.2 bg-red-600 text-white rounded font-bold text-[9px] animate-pulse">
+                        CLIP!
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -345,15 +662,15 @@ export const AdminView: React.FC<AdminViewProps> = ({
               )}
             </div>
 
-            {/* Source B: 1-Click Nerdearla Sample Talk Demos (Critical for Evaluation!) */}
-            <div className="p-4 bg-[#0f1422] border border-[#2a344f] rounded-xl space-y-3">
+            {/* Source B: 1-Click Nerdearla Sample Talk Demos */}
+            <div className="p-4 bg-[#0f1422] border border-[#2a344f] rounded-2xl space-y-3">
               <div>
                 <div className="text-xs font-bold text-white flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-[#8b5cf6]" />
-                  <span>Prueba con Charlas Reales de Nerdearla (1-Click Test para Jurado)</span>
+                  <span>Charlas Reales de Nerdearla (1-Click Test para el Jurado)</span>
                 </div>
                 <p className="text-[11px] text-gray-400">
-                  Simula la señal de audio de conferencias reales para evaluar precisión y latencia
+                  Simulación de audio de conferencias técnicas reales para evaluar Spanglish y precisión
                 </p>
               </div>
 
@@ -394,7 +711,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
             </div>
 
             {/* Source C: File Upload */}
-            <div className="p-4 bg-[#0f1422] border border-[#2a344f] rounded-xl flex items-center justify-between">
+            <div className="p-4 bg-[#0f1422] border border-[#2a344f] rounded-2xl flex items-center justify-between">
               <div>
                 <div className="text-xs font-bold text-white flex items-center gap-2">
                   <Upload className="w-4 h-4 text-emerald-400" />
@@ -424,7 +741,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
           </div>
 
           {/* Dynamic Technical Glossary Injector (5 cols) */}
-          <div className="lg:col-span-5 bg-[#141a29] border border-[#2a344f] rounded-2xl p-5 space-y-4">
+          <div className="lg:col-span-5 bg-[#141a29] border border-[#2a344f] rounded-3xl p-5 space-y-4">
             <div className="border-b border-[#2a344f] pb-3">
               <h4 className="text-sm font-bold text-white flex items-center gap-2">
                 <BookOpen className="w-4 h-4 text-[#00f0ff]" />

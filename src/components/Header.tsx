@@ -6,6 +6,7 @@ interface HeaderProps {
   onSelectView: (view: 'audience' | 'admin' | 'overlay') => void;
   geminiConfigured: boolean;
   onOpenApiKeyModal: () => void;
+  onOpenQrModal: () => void;
   isConnected: boolean;
   activeStageName?: string;
 }
@@ -15,6 +16,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectView,
   geminiConfigured,
   onOpenApiKeyModal,
+  onOpenQrModal,
   isConnected,
   activeStageName,
 }) => {
@@ -103,6 +105,16 @@ export const Header: React.FC<HeaderProps> = ({
             />
             <span className="hidden sm:inline">{isConnected ? 'LIVE' : 'DESCONECTADO'}</span>
           </div>
+
+          {/* QR Code Attendee & Projector Button */}
+          <button
+            onClick={onOpenQrModal}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#8b5cf6]/10 text-[#a855f7] border border-[#8b5cf6]/30 hover:bg-[#8b5cf6]/20 transition-all"
+            title="Generar QR para Asistentes y Pantalla de Sala"
+          >
+            <span className="text-sm">📱</span>
+            <span className="hidden sm:inline">QR Sala</span>
+          </button>
 
           {/* Gemini API Status Badge & Modal Trigger */}
           <button
