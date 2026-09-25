@@ -123,229 +123,201 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       ) : (
         /* ========================================================
-            DESKTOP STUDIO 19" RACK CONSOLE (>= 1024px)
+            DESKTOP STUDIO RACK CONSOLE (>= 1024px)
         ======================================================== */
-        <>
-          {/* Top micro-chassis telemetry bar */}
-          <div className="border-b border-[#141724] px-6 py-1 flex items-center justify-between text-[10px] font-mono text-[#64748b]">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 text-gray-300">
-                <span className="rack-screw">✕</span>
-                <span className="text-[#00f5ff] font-black tracking-wider">SYSARMY</span>
-                <span className="text-[#334155]">/</span>
-                <span className="text-white font-bold">AURA RACK-1000 PRO</span>
-                <span className="text-[#334155]">/</span>
-                <span className="text-[#64748b]">SER: #2026-TX</span>
-                <span className="text-[#334155]">/</span>
-                <span className="px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800 text-[9px] font-mono font-bold" title="Herramienta creada por técnicos de escenario para técnicos de escenario">AV-CREW BUILT 🛠️</span>
-              </div>
-              <span className="text-[#334155]">|</span>
-              <span className="flex items-center gap-1.5 text-gray-300">
-                <Activity className="w-3 h-3 text-[#00ff66]" />
-                <span>BUS: 48kHz → 16kHz PCM (LE)</span>
-              </span>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <span className="text-gray-400">
-                KONEX BUENOS AIRES // <strong className="text-gray-200">{activeStageName || 'STAGE 1'}</strong>
-              </span>
-              <span className="text-[#334155]">•</span>
-              <span className="flex items-center gap-1.5 font-bold">
-                <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-[#00ff66] shadow-[0_0_8px_#00ff66]' : 'bg-[#ff1744]'}`} />
-                <span className={isConnected ? 'text-[#00ff66]' : 'text-[#ff1744]'}>
-                  {isConnected ? 'STREAM_SYNC_OK' : 'OFFLINE'}
-                </span>
-              </span>
-              <span className="rack-screw">✕</span>
-            </div>
-          </div>
-
-          {/* Main Console Faceplate */}
-          <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-            {/* Brand Unit Ident & Tally Light */}
-            <div className="flex items-center gap-3.5">
-              <div className="flex items-center gap-2">
-                <div className="relative flex items-center justify-center w-10 h-10 rounded bg-[#10131d] border-2 border-[#222a3d] shadow-inner">
-                  <span className="text-xl font-black text-[#00f5ff] font-mono">⚡</span>
-                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#00ff66] shadow-[0_0_8px_#00ff66]" />
-                </div>
-
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-base font-black tracking-tight text-white uppercase">
-                      PROJECT <span className="text-[#00f5ff]">AURA</span>
-                    </span>
-                    <span className="tally-lamp-live text-[9px] font-mono px-2 py-0.5 rounded font-black tracking-widest uppercase">
-                      ON AIR
-                    </span>
-                  </div>
-                  <p className="text-[9px] font-mono text-[#64748b] tracking-wide">
-                    BROADCAST ACCESSIBILITY & SIMULTANEOUS TRANSLATION
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* 4 Core Roles: AUDIENCIA, MESA TÉCNICA, MULTIVIEWER, TRANSMISIÓN */}
-            <nav className="flex items-center bg-[#07090e] p-1 rounded-lg border border-[#1e2535] shadow-inner gap-1">
-              {/* 1. AUDIENCIA */}
-              <button
-                onClick={() => onSelectView('audience')}
-                className={`hardware-btn flex items-center gap-2 px-3.5 py-1.5 rounded text-xs font-mono font-bold transition-all ${
-                  currentView === 'audience' ? 'hardware-btn-active text-[#00f5ff]' : 'text-[#718096]'
-                }`}
-                title="Vista para asistentes en sala y celulares"
-              >
-                <Smartphone className="w-3.5 h-3.5 text-[#00f5ff]" />
-                <span>AUDIENCIA</span>
-              </button>
-
-              {/* 2. MESA TÉCNICA */}
-              <button
-                onClick={() => onSelectView('admin')}
-                className={`hardware-btn flex items-center gap-2 px-3.5 py-1.5 rounded text-xs font-mono font-bold transition-all ${
-                  currentView === 'admin' ? 'hardware-btn-active text-[#ffb800]' : 'text-[#718096]'
-                }`}
-                title="Consola de Sonido AV: Vúmetros, Sound Check y Control de Salas"
-              >
-                <Sliders className="w-3.5 h-3.5 text-[#ffb800]" />
-                <span>MESA TÉCNICA</span>
-              </button>
-
-              {/* 3. MULTIVIEWER (VISOR GENERAL) */}
-              <button
-                onClick={() => onSelectView('multiview')}
-                className={`hardware-btn flex items-center gap-2 px-3.5 py-1.5 rounded text-xs font-mono font-bold transition-all ${
-                  currentView === 'multiview' ? 'hardware-btn-active text-purple-400' : 'text-[#718096]'
-                }`}
-                title="Visor General Multi-Sala: Muro de Monitoreo Centralizado de Subtítulos en Vivo para Control y Jurado"
-              >
-                <Eye className="w-3.5 h-3.5 text-purple-400" />
-                <span>MULTIVIEWER</span>
-              </button>
-
-              {/* 4. TRANSMISIÓN & TV */}
-              <button
-                onClick={() => onSelectView('overlay')}
-                className={`hardware-btn flex items-center gap-2 px-3.5 py-1.5 rounded text-xs font-mono font-bold transition-all ${
-                  currentView === 'overlay' ? 'hardware-btn-active text-[#ff1744]' : 'text-[#718096]'
-                }`}
-                title="Proyección de Sala (TV con QR) y Señal Limpia para OBS Studio"
-              >
-                <Tv className="w-3.5 h-3.5 text-[#ff1744]" />
-                <span>TRANSMISIÓN & TV</span>
-              </button>
-            </nav>
-
-            {/* Right Console Actions: Nueva Pestaña, Mic, vMix/OBS, Manual, Agenda, Temas, Motor AI */}
+        <div className="max-w-[1800px] mx-auto px-4 lg:px-6 h-14 flex items-center justify-between gap-3">
+          {/* Left: Brand Unit & Tally */}
+          <div className="shrink-0 flex items-center gap-3 whitespace-nowrap">
             <div className="flex items-center gap-2">
-              {/* Quick Popout to New Tab */}
-              <button
-                onClick={() => {
-                  const target = currentView === 'multiview' ? 'multiview' : currentView === 'overlay' ? 'overlay' : currentView === 'admin' ? 'admin' : 'kiosk';
-                  window.open(`/?view=${target}`, '_blank');
-                }}
-                className="hardware-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-mono text-cyan-300 hover:text-white border border-[#232f48] bg-[#0c101c] hover:border-[#00f5ff] transition-all"
-                title="Abrir la vista actual en una pestaña independiente del navegador para proyectores o segundo monitor"
-              >
-                <ExternalLink className="w-3.5 h-3.5 text-[#00f5ff]" />
-                <span className="hidden xl:inline text-[11px] font-bold">NUEVA PESTAÑA</span>
-              </button>
-              {/* Micrófono Móvil de Emergencia */}
-              <button
-                onClick={() => onSelectView('mic')}
-                className={`hardware-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-mono font-bold transition-all ${
-                  currentView === 'mic' ? 'text-red-400 border-red-500 bg-red-950/40' : 'text-gray-400 hover:text-white'
-                }`}
-                title="Micrófono inalámbrico de emergencia"
-              >
-                <Mic className="w-3.5 h-3.5 text-red-400" />
-                <span className="hidden xl:inline">MIC MÓVIL</span>
-              </button>
+              <div className="relative flex items-center justify-center w-8 h-8 rounded-lg bg-[#0e121d] border border-[#222a3d] shadow-inner">
+                <span className="text-base font-black text-[#00f5ff] font-mono">⚡</span>
+                <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${isConnected ? 'bg-[#00ff66] shadow-[0_0_6px_#00ff66]' : 'bg-[#ff1744]'}`} />
+              </div>
 
-              {/* Generador Links vMix / OBS */}
-              {onOpenVMixModal && (
-                <button
-                  onClick={onOpenVMixModal}
-                  className="hardware-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-mono font-bold text-[#00f5ff] hover:text-white border border-[#00f5ff]/30 bg-[#00f5ff]/10 hover:bg-[#00f5ff]/20 transition-all"
-                  title="Generador de links y overlays por sala para vMix y OBS Studio"
-                >
-                  <Tv className="w-3.5 h-3.5 text-[#00f5ff]" />
-                  <span className="hidden xl:inline">vMIX / OBS</span>
-                </button>
-              )}
-
-              {/* Manual de Operaciones */}
-              {onOpenManualModal && (
-                <button
-                  onClick={onOpenManualModal}
-                  className="hardware-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-mono font-bold text-cyan-300 hover:text-white border border-[#222a3d] bg-[#10141e] transition-all"
-                  title="Manual de Operaciones y Runbook Técnico (Bilingüe)"
-                >
-                  <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
-                  <span className="hidden xl:inline">MANUAL</span>
-                </button>
-              )}
-
-              {/* Agenda */}
-              {onOpenScheduleModal && (
-                <button
-                  onClick={onOpenScheduleModal}
-                  className="hardware-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-mono font-bold text-gray-300 hover:text-white border border-[#222a3d] bg-[#10141e] transition-all"
-                  title="Agenda oficial de Nerdearla 2026"
-                >
-                  <Calendar className="w-3.5 h-3.5 text-cyan-400" />
-                  <span className="hidden xl:inline">AGENDA</span>
-                </button>
-              )}
-
-              {/* Temas Visuales */}
-              {onOpenThemeModal && (
-                <button
-                  onClick={onOpenThemeModal}
-                  className="hardware-btn p-2 rounded text-gray-400 hover:text-amber-400 border border-[#222a3d] bg-[#10141e] transition-all"
-                  title="Cambiar tema visual"
-                >
-                  <Palette className="w-3.5 h-3.5 text-amber-400" />
-                </button>
-              )}
-
-              {/* Logs */}
-              {onOpenLogModal && (
-                <button
-                  onClick={onOpenLogModal}
-                  className="hardware-btn p-2 rounded text-gray-400 hover:text-[#00f5ff] border border-[#222a3d] bg-[#10141e] transition-all"
-                  title="Ver telemetría y logs del sistema"
-                >
-                  <Terminal className="w-3.5 h-3.5 text-[#00f5ff]" />
-                </button>
-              )}
-
-              {/* Engine Status / API Key Modal */}
-              <button
-                onClick={onOpenApiKeyModal}
-                className={`hardware-btn flex items-center gap-2 px-3 py-1.5 rounded text-xs font-mono font-bold transition-all ${
-                  activeEngine === 'gemini-cloud'
-                    ? 'border-[#00f5ff]/60 text-[#00f5ff] bg-[#00f5ff]/10'
-                    : activeEngine === 'gemma-local'
-                    ? 'border-[#00ff66]/60 text-[#00ff66] bg-[#00ff66]/10'
-                    : 'border-[#ffb800]/60 text-[#ffb800] bg-[#ffb800]/10'
-                }`}
-                title="Consola de Motores de IA y Llaves"
-              >
-                <span className={`w-2 h-2 rounded-full ${
-                  activeEngine === 'gemini-cloud'
-                    ? 'bg-[#00f5ff] shadow-[0_0_8px_#00f5ff]'
-                    : activeEngine === 'gemma-local'
-                    ? 'bg-[#00ff66] shadow-[0_0_8px_#00ff66]'
-                    : 'bg-[#ffb800]'
-                }`} />
-                <span>{activeEngine === 'gemini-cloud' ? 'GEMINI LIVE' : activeEngine === 'gemma-local' ? 'GEMMA' : 'LOCAL'}</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-sm lg:text-base font-black tracking-wider text-white uppercase whitespace-nowrap">
+                  AURA <span className="text-[#00f5ff]">PRO</span>
+                </span>
+                <span className="tally-lamp-live text-[9px] font-mono px-1.5 py-0.5 rounded font-black tracking-widest uppercase shrink-0">
+                  ON AIR
+                </span>
+                <span className="hidden xl:inline-block px-1.5 py-0.5 rounded bg-cyan-950/70 text-cyan-300 border border-cyan-800/60 text-[9px] font-mono font-bold tracking-wider shrink-0" title="Herramienta creada por y para técnicos de escenario">
+                  AV-CREW
+                </span>
+              </div>
             </div>
           </div>
-        </>
+
+          {/* Center: 4 Core Roles (AUDIENCIA, MESA TÉCNICA, MULTIVIEWER, TRANSMISIÓN & TV) */}
+          <nav className="shrink-0 flex items-center bg-[#07090e] p-1 rounded-lg border border-[#1e2535] shadow-inner gap-1 whitespace-nowrap">
+            {/* 1. AUDIENCIA */}
+            <button
+              onClick={() => onSelectView('audience')}
+              className={`hardware-btn flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-mono font-bold transition-all whitespace-nowrap shrink-0 ${
+                currentView === 'audience' ? 'hardware-btn-active text-[#00f5ff]' : 'text-[#718096]'
+              }`}
+              title="Vista para asistentes en sala y celulares"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-[#00f5ff]" />
+              <span>AUDIENCIA</span>
+            </button>
+
+            {/* 2. MESA TÉCNICA */}
+            <button
+              onClick={() => onSelectView('admin')}
+              className={`hardware-btn flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-mono font-bold transition-all whitespace-nowrap shrink-0 ${
+                currentView === 'admin' ? 'hardware-btn-active text-[#ffb800]' : 'text-[#718096]'
+              }`}
+              title="Consola de Sonido AV: Vúmetros, Sound Check y Control de Salas"
+            >
+              <Sliders className="w-3.5 h-3.5 text-[#ffb800]" />
+              <span>MESA TÉCNICA</span>
+            </button>
+
+            {/* 3. MULTIVIEWER (VISOR GENERAL) */}
+            <button
+              onClick={() => onSelectView('multiview')}
+              className={`hardware-btn flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-mono font-bold transition-all whitespace-nowrap shrink-0 ${
+                currentView === 'multiview' ? 'hardware-btn-active text-purple-400' : 'text-[#718096]'
+              }`}
+              title="Visor General Multi-Sala: Muro de Monitoreo Centralizado de Subtítulos en Vivo para Control y Jurado"
+            >
+              <Eye className="w-3.5 h-3.5 text-purple-400" />
+              <span>MULTIVIEWER</span>
+            </button>
+
+            {/* 4. TRANSMISIÓN & TV */}
+            <button
+              onClick={() => onSelectView('overlay')}
+              className={`hardware-btn flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-mono font-bold transition-all whitespace-nowrap shrink-0 ${
+                currentView === 'overlay' ? 'hardware-btn-active text-[#ff1744]' : 'text-[#718096]'
+              }`}
+              title="Proyección de Sala (TV con QR) y Señal Limpia para OBS Studio"
+            >
+              <Tv className="w-3.5 h-3.5 text-[#ff1744]" />
+              <span>TRANSMISIÓN & TV</span>
+            </button>
+          </nav>
+
+          {/* Right: Quick Action Controls & Status */}
+          <div className="shrink-0 flex items-center gap-1.5 xl:gap-2 whitespace-nowrap">
+            {/* Popout to New Tab */}
+            <button
+              onClick={() => {
+                const target = currentView === 'multiview' ? 'multiview' : currentView === 'overlay' ? 'overlay' : currentView === 'admin' ? 'admin' : 'kiosk';
+                window.open(`/?view=${target}`, '_blank');
+              }}
+              className="hardware-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-mono text-cyan-300 hover:text-white border border-[#232f48] bg-[#0c101c] hover:border-[#00f5ff] transition-all shrink-0"
+              title="Abrir la vista actual en una pestaña independiente del navegador para proyectores o segundo monitor"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-[#00f5ff]" />
+              <span className="hidden 2xl:inline text-[11px] font-bold">PESTAÑA</span>
+            </button>
+
+            {/* Emergency Mobile Mic */}
+            <button
+              onClick={() => onSelectView('mic')}
+              className={`hardware-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-mono font-bold transition-all shrink-0 ${
+                currentView === 'mic' ? 'text-red-400 border-red-500 bg-red-950/40 shadow-[0_0_8px_rgba(239,68,68,0.3)] animate-pulse' : 'text-gray-400 hover:text-white border border-[#232f48] bg-[#0c101c]'
+              }`}
+              title="Micrófono inalámbrico de emergencia"
+            >
+              <Mic className="w-3.5 h-3.5 text-red-400" />
+              <span className="hidden 2xl:inline">MIC</span>
+            </button>
+
+            {/* vMix / OBS Link Generator */}
+            {onOpenVMixModal && (
+              <button
+                onClick={onOpenVMixModal}
+                className="hardware-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-mono font-bold text-[#00f5ff] hover:text-white border border-[#00f5ff]/30 bg-[#00f5ff]/10 hover:bg-[#00f5ff]/20 transition-all shrink-0"
+                title="Generador de links y overlays por sala para vMix y OBS Studio"
+              >
+                <Tv className="w-3.5 h-3.5 text-[#00f5ff]" />
+                <span className="hidden 2xl:inline">vMIX</span>
+              </button>
+            )}
+
+            {/* Manual Runbook */}
+            {onOpenManualModal && (
+              <button
+                onClick={onOpenManualModal}
+                className="hardware-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-mono font-bold text-cyan-300 hover:text-white border border-[#222a3d] bg-[#10141e] transition-all shrink-0"
+                title="Manual de Operaciones y Runbook Técnico (Bilingüe)"
+              >
+                <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="hidden 2xl:inline">MANUAL</span>
+              </button>
+            )}
+
+            {/* Schedule */}
+            {onOpenScheduleModal && (
+              <button
+                onClick={onOpenScheduleModal}
+                className="hardware-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-mono font-bold text-gray-300 hover:text-white border border-[#222a3d] bg-[#10141e] transition-all shrink-0"
+                title="Agenda oficial de Nerdearla 2026"
+              >
+                <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="hidden 2xl:inline">AGENDA</span>
+              </button>
+            )}
+
+            {/* Visual Themes */}
+            {onOpenThemeModal && (
+              <button
+                onClick={onOpenThemeModal}
+                className="hardware-btn p-1.5 rounded text-gray-400 hover:text-amber-400 border border-[#222a3d] bg-[#10141e] transition-all shrink-0"
+                title="Cambiar tema visual"
+              >
+                <Palette className="w-3.5 h-3.5 text-amber-400" />
+              </button>
+            )}
+
+            {/* Logs */}
+            {onOpenLogModal && (
+              <button
+                onClick={onOpenLogModal}
+                className="hardware-btn p-1.5 rounded text-gray-400 hover:text-[#00f5ff] border border-[#222a3d] bg-[#10141e] transition-all shrink-0"
+                title="Ver telemetría y logs del sistema"
+              >
+                <Terminal className="w-3.5 h-3.5 text-[#00f5ff]" />
+              </button>
+            )}
+
+            {/* Engine Status / API Key Modal */}
+            <button
+              onClick={onOpenApiKeyModal}
+              className={`hardware-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-mono font-bold transition-all shrink-0 ${
+                activeEngine === 'gemini-cloud'
+                  ? 'border-[#00f5ff]/60 text-[#00f5ff] bg-[#00f5ff]/10'
+                  : activeEngine === 'gemma-local'
+                  ? 'border-[#00ff66]/60 text-[#00ff66] bg-[#00ff66]/10'
+                  : 'border-[#ffb800]/60 text-[#ffb800] bg-[#ffb800]/10'
+              }`}
+              title="Consola de Motores de IA y Llaves"
+            >
+              <span className={`w-2 h-2 rounded-full ${
+                activeEngine === 'gemini-cloud'
+                  ? 'bg-[#00f5ff] shadow-[0_0_8px_#00f5ff]'
+                  : activeEngine === 'gemma-local'
+                  ? 'bg-[#00ff66] shadow-[0_0_8px_#00ff66]'
+                  : 'bg-[#ffb800]'
+              }`} />
+              <span className="text-[11px]">{activeEngine === 'gemini-cloud' ? 'GEMINI' : activeEngine === 'gemma-local' ? 'GEMMA' : 'LOCAL'}</span>
+            </button>
+
+            {/* Stream Sync Status Badge */}
+            <div 
+              className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#0b0e17] border border-[#1d2538] text-[10px] font-mono shrink-0"
+              title={isConnected ? `Conectado a WebSocket // Sala: ${activeStageName || 'SALA 01'}` : 'Desconectado del servidor WebSocket'}
+            >
+              <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-[#00ff66] shadow-[0_0_6px_#00ff66]' : 'bg-[#ff1744]'}`} />
+              <span className={`hidden xl:inline font-bold ${isConnected ? 'text-[#00ff66]' : 'text-[#ff1744]'}`}>
+                {isConnected ? 'SYNC' : 'OFFLINE'}
+              </span>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ========================================================
@@ -360,7 +332,7 @@ export const Header: React.FC<HeaderProps> = ({
               <div className="flex items-center gap-2">
                 <span className="text-xl">⚡</span>
                 <h3 className="font-mono font-extrabold text-base text-white">
-                  PROJECT AURA • MENÚ
+                  AURA PRO • MENÚ
                 </h3>
               </div>
               <button
@@ -387,19 +359,7 @@ export const Header: React.FC<HeaderProps> = ({
                   }`}
                 >
                   <Smartphone className="w-4 h-4 text-cyan-400" />
-                  <span>Subtítulos en Vivo</span>
-                </button>
-
-                <button
-                  onClick={() => handleSelectMobileView('mic')}
-                  className={`p-3 rounded-xl border text-left font-mono text-xs font-bold flex items-center gap-2.5 transition-all ${
-                    currentView === 'mic'
-                      ? 'bg-red-950/80 border-red-500 text-red-300 shadow-sm'
-                      : 'bg-[#121622] border-[#222a3d] text-gray-300'
-                  }`}
-                >
-                  <Mic className="w-4 h-4 text-red-400 animate-pulse" />
-                  <span>Micrófono Móvil</span>
+                  <span>Audiencia</span>
                 </button>
 
                 <button
@@ -415,6 +375,30 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
 
                 <button
+                  onClick={() => handleSelectMobileView('multiview')}
+                  className={`p-3 rounded-xl border text-left font-mono text-xs font-bold flex items-center gap-2.5 transition-all ${
+                    currentView === 'multiview'
+                      ? 'bg-purple-950/80 border-purple-400 text-purple-300 shadow-sm'
+                      : 'bg-[#121622] border-[#222a3d] text-gray-300'
+                  }`}
+                >
+                  <Eye className="w-4 h-4 text-purple-400" />
+                  <span>Multiviewer</span>
+                </button>
+
+                <button
+                  onClick={() => handleSelectMobileView('overlay')}
+                  className={`p-3 rounded-xl border text-left font-mono text-xs font-bold flex items-center gap-2.5 transition-all ${
+                    currentView === 'overlay'
+                      ? 'bg-red-950/80 border-red-500 text-red-300 shadow-sm'
+                      : 'bg-[#121622] border-[#222a3d] text-gray-300'
+                  }`}
+                >
+                  <Tv className="w-4 h-4 text-[#ff1744]" />
+                  <span>Transmisión TV</span>
+                </button>
+
+                <button
                   onClick={() => handleSelectMobileView('kiosk')}
                   className={`p-3 rounded-xl border text-left font-mono text-xs font-bold flex items-center gap-2.5 transition-all ${
                     currentView === 'kiosk'
@@ -423,7 +407,19 @@ export const Header: React.FC<HeaderProps> = ({
                   }`}
                 >
                   <Monitor className="w-4 h-4 text-green-400" />
-                  <span>Pantalla Sala</span>
+                  <span>Pantalla Kiosk</span>
+                </button>
+
+                <button
+                  onClick={() => handleSelectMobileView('mic')}
+                  className={`p-3 rounded-xl border text-left font-mono text-xs font-bold flex items-center gap-2.5 transition-all ${
+                    currentView === 'mic'
+                      ? 'bg-red-950/80 border-red-500 text-red-300 shadow-sm'
+                      : 'bg-[#121622] border-[#222a3d] text-gray-300'
+                  }`}
+                >
+                  <Mic className="w-4 h-4 text-red-400 animate-pulse" />
+                  <span>Micrófono Móvil</span>
                 </button>
               </div>
             </div>
