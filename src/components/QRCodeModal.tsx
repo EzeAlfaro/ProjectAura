@@ -22,6 +22,8 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({
   const [networkIp, setNetworkIp] = useState<string>('');
   const [useLocalhost, setUseLocalhost] = useState<boolean>(false);
 
+  const [selectedPort, setSelectedPort] = useState<string>(() => window.location.port || '3000');
+
   useEffect(() => {
     fetch('/api/status')
       .then(res => res.json())
@@ -36,8 +38,11 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({
   const effectiveHost = useLocalhost || !networkIp
     ? window.location.hostname
     : networkIp;
-  const effectivePort = window.location.port ? `:${window.location.port}` : '';
-  const shareUrl = `${window.location.protocol}//${effectiveHost}${effectivePort}/?stage=${stage.id}&lang=${selectedLang}`;
+  // Always use http on local Wi-Fi to avoid mobile SSL cert rejections
+  const isLocalIp = effectiveHost !== 'localhost' && !effectiveHost.includes('.');
+  const protocol = window.location.protocol === 'https:' && !networkIp ? 'https:' : 'http:';
+  const effectivePort = selectedPort ? `:${selectedPort}` : '';
+  const shareUrl = `${protocol}//${effectiveHost}${effectivePort}/?stage=${stage.id}&lang=${selectedLang}`;
 
   useEffect(() => {
     if (isOpen) {
@@ -137,33 +142,60 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({
               <span className="uppercase text-purple-400 font-bold">{selectedLang}</span>
             </div>
 
-            {/* Network Host Toggle (Wi-Fi vs Localhost) */}
-            {networkIp && (
-              <div className="flex items-center gap-1.5 text-[10px] font-mono">
-                <span className="text-gray-400">HOST:</span>
+            {/* Network Host & Port Toggles */}
+            <div className="flex flex-wrap items-center justify-center gap-2 text-[10px] font-mono">
+              {networkIp && (
+                <div className="flex items-center gap-1 bg-[#0c0f17] p-1 rounded-lg border border-[#1e2535]">
+                  <span className="text-gray-500 pl-1">HOST:</span>
+                  <button
+                    onClick={() => setUseLocalhost(false)}
+                    className={`px-2 py-0.5 rounded font-bold transition-all ${
+                      !useLocalhost
+                        ? 'bg-[#00f5ff]/20 text-[#00f5ff] border border-[#00f5ff]/40 shadow-sm'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Wi-Fi ({networkIp})
+                  </button>
+                  <button
+                    onClick={() => setUseLocalhost(true)}
+                    className={`px-2 py-0.5 rounded font-bold transition-all ${
+                      useLocalhost
+                        ? 'bg-[#00f5ff]/20 text-[#00f5ff] border border-[#00f5ff]/40 shadow-sm'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Localhost
+                  </button>
+                </div>
+              )}
+
+              <div className="flex items-center gap-1 bg-[#0c0f17] p-1 rounded-lg border border-[#1e2535]">
+                <span className="text-gray-500 pl-1">PORT:</span>
                 <button
-                  onClick={() => setUseLocalhost(false)}
+                  onClick={() => setSelectedPort('3000')}
                   className={`px-2 py-0.5 rounded font-bold transition-all ${
-                    !useLocalhost
+                    selectedPort === '3000'
                       ? 'bg-[#00f5ff]/20 text-[#00f5ff] border border-[#00f5ff]/40 shadow-sm'
-                      : 'text-gray-400 bg-[#0c0f17] border border-[#1e2535]'
+                      : 'text-gray-400 hover:text-white'
                   }`}
-                  title="Ideal para que la cámara del celular conecte directo"
+                  title="Puerto de desarrollo Vite (con HMR)"
                 >
-                  Wi-Fi ({networkIp})
+                  :3000 (Vite)
                 </button>
                 <button
-                  onClick={() => setUseLocalhost(true)}
+                  onClick={() => setSelectedPort('3001')}
                   className={`px-2 py-0.5 rounded font-bold transition-all ${
-                    useLocalhost
-                      ? 'bg-[#00f5ff]/20 text-[#00f5ff] border border-[#00f5ff]/40 shadow-sm'
-                      : 'text-gray-400 bg-[#0c0f17] border border-[#1e2535]'
+                    selectedPort === '3001'
+                      ? 'bg-[#00ff66]/20 text-[#00ff66] border border-[#00ff66]/40 shadow-sm'
+                      : 'text-gray-400 hover:text-white'
                   }`}
+                  title="Puerto de producción Express (ideal para celulares)"
                 >
-                  Localhost
+                  :3001 (Server)
                 </button>
               </div>
-            )}
+            </div>
 
             {/* Copyable Link */}
             <div className="w-full flex items-center gap-2 bg-[#0c0f17] border border-[#2a344f] rounded-xl p-2 text-xs">

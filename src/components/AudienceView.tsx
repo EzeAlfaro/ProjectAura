@@ -133,7 +133,19 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
     return () => clearInterval(interval);
   }, [fetchQuestions]);
 
-  const currentStage = stages.find((s) => s.id === selectedStageId) || stages[0];
+  const fallbackStage: Stage = {
+    id: selectedStageId || 'stage-1',
+    name: 'Escenario Principal',
+    speaker: 'Conferencia en vivo',
+    talkTitle: 'Nerdearla 2026 • Live Subtitles & Intelligence',
+    track: 'Main Stage',
+    isLive: true,
+    audienceCount: 1,
+    detectedLang: 'es',
+    latencyMs: 140,
+    audioLevel: 0
+  };
+  const currentStage = stages.find((s) => s.id === selectedStageId) || stages[0] || fallbackStage;
   const subtitlesContainerRef = useRef<HTMLDivElement>(null);
 
   // Screen WakeLock: prevents attendee phone screen from sleeping while reading subtitles
