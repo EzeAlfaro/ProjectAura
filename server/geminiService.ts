@@ -375,6 +375,40 @@ export class GeminiService {
   }
 
   public async testModelConnection(apiKey?: string, modelName: string = config.ai.flashModel || 'gemini-3.5-flash'): Promise<{ success: boolean; model: string; message: string; latencyMs: number }> {
+    // 1. If testing local Gemma (Ollama on-premise)
+    if (modelName === 'gemma-local' || modelName.includes('ollama') || modelName === config.ai.gemmaModel) {
+      const start = performance.now();
+      try {
+        const available = await this.checkGemmaAvailability();
+        if (!available) {
+          const latencyMs = Math.round(performance.now() - start);
+          return {
+            success: false,
+            model: `Google Gemma (Local Ollama: ${config.ai.gemmaModel})`,
+            message: `Ollama no detectado en ${config.ai.ollamaBaseUrl} (${latencyMs}ms). Para probar Gemma en local: 1) Instalar Ollama, 2) Ejecutar 'ollama run ${config.ai.gemmaModel}'.`,
+            latencyMs
+          };
+        }
+        const resp = await this.queryGemma('Ping test: respond OK');
+        const latencyMs = Math.round(performance.now() - start);
+        return {
+          success: true,
+          model: `Google Gemma (Local Ollama: ${config.ai.gemmaModel})`,
+          message: `Conexión verificada con Gemma local (${latencyMs}ms). Respuesta: "${resp || 'OK'}"`,
+          latencyMs
+        };
+      } catch (err: any) {
+        const latencyMs = Math.round(performance.now() - start);
+        return {
+          success: false,
+          model: `Google Gemma (Local Ollama: ${config.ai.gemmaModel})`,
+          message: `Error al conectar con Gemma local: ${err?.message || err}`,
+          latencyMs
+        };
+      }
+    }
+
+    // 2. Cloud Models (Gemini 3.5, 3.8, Gemma 2 Cloud, etc.)
     const keyToUse = apiKey?.trim() || this.apiKey;
     if (!keyToUse) {
       return { success: false, model: modelName, message: 'No hay API Key configurada para probar. Ingresá una clave.', latencyMs: 0 };

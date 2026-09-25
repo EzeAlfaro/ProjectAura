@@ -9,6 +9,9 @@
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "build": "vite build",
     "benchmark": "tsx scripts/benchmark.ts",
+    "test": "tsx scripts/test-gemma.ts",
+    "test:gemma": "tsx scripts/test-gemma.ts",
+    "test:all": "tsx scripts/benchmark.ts && tsx scripts/test-gemma.ts",
     "start": "tsx server/index.ts"
   },
   "license": "MIT",

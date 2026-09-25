@@ -452,6 +452,15 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                   <option value="gemini-2.5-pro">
                     🧠 gemini-2.5-pro (Google Deep Reasoning & Q&A)
                   </option>
+                  <option value="gemma-2-2b-it">
+                    💎 gemma-2-2b-it (Google Gemma 2 — Open Model en Google AI Studio)
+                  </option>
+                  <option value="gemma-2-9b-it">
+                    💎 gemma-2-9b-it (Google Gemma 2 Instrucción — Alta Fidelidad)
+                  </option>
+                  <option value="gemma-local">
+                    💻 gemma2:2b (Ollama Local Edge On-Premise en :11434)
+                  </option>
                   <option value="gemini-3.1-flash-lite">
                     🚀 gemini-3.1-flash-lite (Speech Stream)
                   </option>
