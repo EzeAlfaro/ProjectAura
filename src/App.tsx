@@ -4,6 +4,7 @@ import { AudienceView } from './components/AudienceView.js';
 import { AdminView } from './components/AdminView.js';
 import { OBSOverlayView } from './components/OBSOverlayView.js';
 import { StageKioskView } from './components/StageKioskView.js';
+import { MultiStageMonitorView } from './components/MultiStageMonitorView.js';
 import { ApiKeyModal } from './components/ApiKeyModal.js';
 import { QRCodeModal } from './components/QRCodeModal.js';
 import { VMixModal } from './components/VMixModal.js';
@@ -17,7 +18,24 @@ import { fetchStages, fetchStatus, triggerDeepIntel } from './services/api.js';
 import { Stage, SubtitleChunk, StageTakeaway, StageQA, SupportedLanguage } from './types.js';
 
 export function App() {
-  const [currentView, setCurrentView] = useState<'audience' | 'admin' | 'overlay' | 'kiosk' | 'mic'>('audience');
+  const [currentView, setCurrentView] = useState<'audience' | 'admin' | 'overlay' | 'kiosk' | 'mic' | 'multiview'>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const queryView = params.get('view');
+      const path = window.location.pathname;
+      if (queryView === 'kiosk' || path.includes('kiosk') || params.has('kiosk')) return 'kiosk';
+      if (queryView === 'overlay' || queryView === 'tv' || params.get('mode') === 'tv' || params.has('tv') || path.includes('overlay') || path.includes('/tv') || params.has('overlay') || window.location.hash.includes('overlay')) return 'overlay';
+      if (queryView === 'mic' || path.includes('mic') || params.has('mic')) return 'mic';
+      if (queryView === 'multiview' || queryView === 'monitor' || path.includes('multiview')) return 'multiview';
+      if (queryView === 'admin' || path.includes('admin')) return 'admin';
+
+      const saved = localStorage.getItem('aura_current_view');
+      if (saved === 'admin' || saved === 'multiview' || saved === 'audience' || saved === 'kiosk') {
+        return saved as any;
+      }
+    }
+    return 'audience';
+  });
   const [stages, setStages] = useState<Stage[]>([]);
   const [selectedStageId, setSelectedStageId] = useState<string>(() => {
     if (typeof window !== 'undefined') {
@@ -69,6 +87,10 @@ export function App() {
       setCurrentView('overlay');
     } else if (queryView === 'mic' || path.includes('mic') || params.has('mic')) {
       setCurrentView('mic');
+    } else if (queryView === 'multiview' || queryView === 'monitor' || path.includes('multiview')) {
+      setCurrentView('multiview');
+    } else if (queryView === 'admin' || path.includes('admin')) {
+      setCurrentView('admin');
     }
   }, []);
 
@@ -186,6 +208,26 @@ export function App() {
     wsClientRef.current?.setLanguage(lang);
   };
 
+  // View switcher with URL query sync and localStorage persistence
+  const handleSelectView = (view: 'audience' | 'admin' | 'overlay' | 'kiosk' | 'mic' | 'multiview') => {
+    setCurrentView(view);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('aura_current_view', view);
+      const url = new URL(window.location.href);
+      if (view === 'audience') {
+        url.searchParams.delete('view');
+      } else {
+        url.searchParams.set('view', view);
+      }
+      window.history.replaceState({}, '', url.toString());
+    }
+    if (view === 'multiview') {
+      wsClientRef.current?.setStage('*', selectedLang);
+    } else if (selectedStageId) {
+      wsClientRef.current?.setStage(selectedStageId, selectedLang);
+    }
+  };
+
   const currentStage = stages.find((s) => s.id === selectedStageId);
 
   // If in pure OBS Overlay view, render without header/layout
@@ -197,7 +239,7 @@ export function App() {
           chunks={chunks}
           selectedLang={selectedLang}
           onSelectLang={handleSelectLang}
-          onExit={() => setCurrentView('admin')}
+          onExit={() => handleSelectView('admin')}
           interimText={interimText}
         />
       </div>
@@ -219,7 +261,7 @@ export function App() {
           onPushLiveTranscript={(text: string, sourceLang?: string) => {
             wsClientRef.current?.sendLiveTranscript(selectedStageId, text, sourceLang || 'es');
           }}
-          onExit={() => setCurrentView('admin')}
+          onExit={() => handleSelectView('admin')}
           geminiConfigured={geminiConfigured}
           activeEngine={activeEngine}
           onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
@@ -281,7 +323,7 @@ export function App() {
         selectedStageId={selectedStageId}
         onSelectStage={handleSelectStage}
         wsClient={wsClientRef.current}
-        onExit={() => setCurrentView('audience')}
+        onExit={() => handleSelectView('audience')}
         chunks={chunks}
       />
     );
@@ -292,7 +334,7 @@ export function App() {
       {/* Top Header */}
       <Header
         currentView={currentView}
-        onSelectView={setCurrentView}
+        onSelectView={handleSelectView}
         geminiConfigured={geminiConfigured}
         gemmaAvailable={gemmaAvailable}
         activeEngine={activeEngine}
@@ -327,7 +369,7 @@ export function App() {
             isGeneratingIntel={isGeneratingIntel}
             interimText={interimText}
             wsClient={wsClientRef.current}
-            onOpenMobileMic={() => setCurrentView('mic')}
+            onOpenMobileMic={() => handleSelectView('mic')}
           />
         )}
 
@@ -343,6 +385,25 @@ export function App() {
             onPushLiveTranscript={(text: string, sourceLang?: string) => {
               wsClientRef.current?.sendLiveTranscript(selectedStageId, text, sourceLang || 'es');
             }}
+            onSwitchView={handleSelectView}
+          />
+        )}
+
+        {currentView === 'multiview' && (
+          <MultiStageMonitorView
+            stages={stages}
+            chunks={chunks}
+            wsClient={wsClientRef.current}
+            onSelectStage={(stageId) => {
+              handleSelectStage(stageId);
+              handleSelectView('admin');
+            }}
+            onSwitchToAdmin={(stageId) => {
+              if (stageId) handleSelectStage(stageId);
+              handleSelectView('admin');
+            }}
+            onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
+            geminiConfigured={geminiConfigured}
           />
         )}
       </main>

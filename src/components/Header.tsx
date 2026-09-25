@@ -17,13 +17,15 @@ import {
   Menu,
   X,
   Mic,
-  BookOpen
+  BookOpen,
+  Eye,
+  ExternalLink
 } from 'lucide-react';
 import { useIsMobile } from '../hooks/useIsMobile.js';
 
 interface HeaderProps {
-  currentView: 'audience' | 'admin' | 'overlay' | 'kiosk' | 'mic';
-  onSelectView: (view: 'audience' | 'admin' | 'overlay' | 'kiosk' | 'mic') => void;
+  currentView: 'audience' | 'admin' | 'overlay' | 'kiosk' | 'mic' | 'multiview';
+  onSelectView: (view: 'audience' | 'admin' | 'overlay' | 'kiosk' | 'mic' | 'multiview') => void;
   geminiConfigured: boolean;
   gemmaAvailable?: boolean;
   activeEngine?: 'gemini-cloud' | 'gemma-local' | 'native-offline';
@@ -59,7 +61,7 @@ export const Header: React.FC<HeaderProps> = ({
   const isMobile = useIsMobile(1024);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const handleSelectMobileView = (view: 'audience' | 'admin' | 'overlay' | 'kiosk' | 'mic') => {
+  const handleSelectMobileView = (view: 'audience' | 'admin' | 'overlay' | 'kiosk' | 'mic' | 'multiview') => {
     onSelectView(view);
     setMobileMenuOpen(false);
   };
@@ -185,7 +187,7 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             </div>
 
-            {/* 3 Core Roles: AUDIENCIA, MESA TÉCNICA, TRANSMISIÓN */}
+            {/* 4 Core Roles: AUDIENCIA, MESA TÉCNICA, MULTIVIEWER, TRANSMISIÓN */}
             <nav className="flex items-center bg-[#07090e] p-1 rounded-lg border border-[#1e2535] shadow-inner gap-1">
               {/* 1. AUDIENCIA */}
               <button
@@ -211,7 +213,19 @@ export const Header: React.FC<HeaderProps> = ({
                 <span>MESA TÉCNICA</span>
               </button>
 
-              {/* 3. TRANSMISIÓN & TV */}
+              {/* 3. MULTIVIEWER (VISOR GENERAL) */}
+              <button
+                onClick={() => onSelectView('multiview')}
+                className={`hardware-btn flex items-center gap-2 px-3.5 py-1.5 rounded text-xs font-mono font-bold transition-all ${
+                  currentView === 'multiview' ? 'hardware-btn-active text-purple-400' : 'text-[#718096]'
+                }`}
+                title="Visor General Multi-Sala: Muro de Monitoreo Centralizado de Subtítulos en Vivo para Control y Jurado"
+              >
+                <Eye className="w-3.5 h-3.5 text-purple-400" />
+                <span>MULTIVIEWER</span>
+              </button>
+
+              {/* 4. TRANSMISIÓN & TV */}
               <button
                 onClick={() => onSelectView('overlay')}
                 className={`hardware-btn flex items-center gap-2 px-3.5 py-1.5 rounded text-xs font-mono font-bold transition-all ${
@@ -224,8 +238,20 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             </nav>
 
-            {/* Right Console Actions: Mic, vMix/OBS, Manual, Agenda, Temas, Motor AI */}
+            {/* Right Console Actions: Nueva Pestaña, Mic, vMix/OBS, Manual, Agenda, Temas, Motor AI */}
             <div className="flex items-center gap-2">
+              {/* Quick Popout to New Tab */}
+              <button
+                onClick={() => {
+                  const target = currentView === 'multiview' ? 'multiview' : currentView === 'overlay' ? 'overlay' : currentView === 'admin' ? 'admin' : 'kiosk';
+                  window.open(`/?view=${target}`, '_blank');
+                }}
+                className="hardware-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-mono text-cyan-300 hover:text-white border border-[#232f48] bg-[#0c101c] hover:border-[#00f5ff] transition-all"
+                title="Abrir la vista actual en una pestaña independiente del navegador para proyectores o segundo monitor"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-[#00f5ff]" />
+                <span className="hidden xl:inline text-[11px] font-bold">NUEVA PESTAÑA</span>
+              </button>
               {/* Micrófono Móvil de Emergencia */}
               <button
                 onClick={() => onSelectView('mic')}

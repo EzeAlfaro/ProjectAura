@@ -292,6 +292,35 @@ export class StageManager {
   }
 
   public subscribe(ws: WebSocket, stageId: string, lang: SupportedLanguage = 'original') {
+    // Wildcard subscriber for Multiviewer / Subtitle Master Wall
+    if (stageId === '*' || stageId === 'all') {
+      let subs = this.subscribers.get('*');
+      if (!subs) {
+        subs = new Set();
+        this.subscribers.set('*', subs);
+      }
+      for (const [, set] of this.subscribers.entries()) {
+        for (const entry of Array.from(set)) {
+          if (entry.ws === ws) {
+            set.delete(entry);
+          }
+        }
+      }
+      subs.add({ ws, lang });
+      const allChunks: SubtitleChunk[] = [];
+      for (const chunks of this.stageChunks.values()) {
+        allChunks.push(...chunks.slice(-10));
+      }
+      allChunks.sort((a, b) => a.timestamp - b.timestamp);
+      ws.send(JSON.stringify({
+        type: 'initial_state',
+        isMultiview: true,
+        chunks: allChunks,
+        stages: this.getStages()
+      }));
+      return;
+    }
+
     if (!this.stages.has(stageId)) {
       this.createStage({
         id: stageId,
@@ -829,11 +858,13 @@ export class StageManager {
   }
 
   public broadcastToStage(stageId: string, payload: any) {
-    const subs = this.subscribers.get(stageId);
-    if (!subs) return;
+    const stageSubs = this.subscribers.get(stageId) || new Set();
+    const globalSubs = this.subscribers.get('*') || new Set();
+    if (stageSubs.size === 0 && globalSubs.size === 0) return;
 
+    const all = new Set([...stageSubs, ...globalSubs]);
     const msg = JSON.stringify(payload);
-    for (const { ws } of subs) {
+    for (const { ws } of all) {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(msg);
       }

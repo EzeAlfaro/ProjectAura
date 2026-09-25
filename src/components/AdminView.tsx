@@ -48,7 +48,8 @@ import {
   ThumbsUp,
   Key,
   Video,
-  ExternalLink
+  ExternalLink,
+  Smartphone
 } from 'lucide-react';
 import { 
   triggerDemo, 
@@ -83,6 +84,7 @@ interface AdminViewProps {
   chunks?: SubtitleChunk[];
   wsClient?: WSClient | null;
   onPushLiveTranscript?: (text: string, sourceLang?: string) => void;
+  onSwitchView?: (view: 'audience' | 'admin' | 'overlay' | 'kiosk' | 'mic' | 'multiview') => void;
 }
 
 export const AdminView: React.FC<AdminViewProps> = ({
@@ -94,8 +96,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
   chunks = [],
   wsClient,
   onPushLiveTranscript,
+  onSwitchView,
 }) => {
   const [selectedStageId, setSelectedStageId] = useState<string>(stages[0]?.id || 'stage-1');
+  const selectedStage = stages.find(s => s.id === selectedStageId) || stages[0];
   const [showAddStageModal, setShowAddStageModal] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [micSourceLang, setMicSourceLang] = useState<'es' | 'en'>('es');
@@ -1209,46 +1213,114 @@ export const AdminView: React.FC<AdminViewProps> = ({
       )}
 
       {/* QUICK STAGE SWITCHER BAR (MULTI-SALA INTUITIVO) */}
-      <div className="bg-[#0b0e15] border-2 border-[#1c2333] rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-lg">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-mono font-bold text-[#00f5ff] flex items-center gap-1.5 uppercase">
-            <Radio className="w-4 h-4 text-[#00f5ff]" />
-            CONTROL DE SALAS:
-          </span>
-          <span className="text-xs font-mono text-gray-400">
-            (Haz clic en cualquier sala para conmutar la transmisión)
-          </span>
+      <div className="bg-[#0b0e15] border-2 border-[#1c2333] rounded-xl p-3 flex flex-col gap-3 shadow-lg">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono font-bold text-[#00f5ff] flex items-center gap-1.5 uppercase">
+              <Radio className="w-4 h-4 text-[#00f5ff]" />
+              CONTROL DE SALAS:
+            </span>
+            <span className="text-xs font-mono text-gray-400">
+              (Haz clic en cualquier sala para conmutar la transmisión)
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
+            {stages.map((stg, index) => {
+              const isSelected = stg.id === selectedStageId;
+              return (
+                <button
+                  key={stg.id}
+                  onClick={() => handleSelectStage(stg.id)}
+                  className={`px-3 py-1.5 rounded-lg border font-mono text-xs font-bold flex items-center gap-2 transition-all ${
+                    isSelected
+                      ? 'bg-[#121c2d] border-[#00f5ff] text-white shadow-[0_0_12px_rgba(0,245,255,0.25)]'
+                      : 'bg-[#07090e] border-[#1e2535] text-gray-400 hover:text-white hover:border-gray-600'
+                  }`}
+                >
+                  <span className={`w-2.5 h-2.5 rounded-full ${stg.isLive ? 'bg-[#ff1744] animate-pulse shadow-[0_0_6px_#ff1744]' : 'bg-[#2a3449]'}`} />
+                  <span>CH 0{index + 1}: {stg.name}</span>
+                  {stageRouting[stg.id]?.deviceId && (
+                    <span className="px-1.5 py-0.5 rounded bg-[#101522] border border-[#20293d] text-[9px] text-[#00f5ff] flex items-center gap-1">
+                      <Mic className="w-2.5 h-2.5" />
+                      <span className="max-w-[70px] truncate">{stageRouting[stg.id]?.deviceLabel || 'Mic'}</span>
+                    </span>
+                  )}
+                  {stg.audienceCount > 0 && (
+                    <span className="px-1.5 py-0.2 rounded bg-black/40 text-[9px] text-[#00ff66]">
+                      {stg.audienceCount} 👤
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
-          {stages.map((stg, index) => {
-            const isSelected = stg.id === selectedStageId;
-            return (
+        {/* QUICK POPOUT & MULTIVIEWER ACTION ROW */}
+        <div className="w-full pt-2.5 border-t border-[#1c2333] flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+          <div className="flex items-center gap-2">
+            <span className="text-gray-400">ACCESOS RÁPIDOS // SALA:</span>
+            <span className="font-bold text-[#00f5ff] uppercase px-2 py-0.5 rounded bg-[#00f5ff]/10 border border-[#00f5ff]/30 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-[#00f5ff] animate-ping" />
+              {selectedStage?.name || selectedStageId}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              onClick={() => window.open(`/?view=kiosk&stage=${selectedStageId}`, '_blank')}
+              className="px-2.5 py-1 rounded bg-[#0e1626] hover:bg-[#15233d] border border-[#00f5ff]/40 text-[#00f5ff] font-bold flex items-center gap-1.5 transition-all shadow-sm"
+              title="Abre la pantalla de confianza del escenario en una nueva pestaña"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>↗ KIOSK ESCENARIO</span>
+            </button>
+
+            <button
+              onClick={() => window.open(`/?view=overlay&stage=${selectedStageId}&lang=es&theme=vmix`, '_blank')}
+              className="px-2.5 py-1 rounded bg-[#1e111a] hover:bg-[#2b1725] border border-[#ff1744]/40 text-[#ff1744] font-bold flex items-center gap-1.5 transition-all shadow-sm"
+              title="Abre el overlay transparente para OBS Studio o vMix"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>↗ OVERLAY OBS/vMIX</span>
+            </button>
+
+            <button
+              onClick={() => window.open(`/?stage=${selectedStageId}`, '_blank')}
+              className="px-2.5 py-1 rounded bg-[#0d1e16] hover:bg-[#142e22] border border-[#00ff66]/40 text-[#00ff66] font-bold flex items-center gap-1.5 transition-all shadow-sm"
+              title="Abre la vista web para asistentes y teléfonos móviles"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-[#00ff66]" />
+              <span>↗ MÓVIL AUDIENCIA</span>
+            </button>
+
+            <div className="h-4 w-px bg-[#2a3449] mx-1" />
+
+            {onSwitchView && (
               <button
-                key={stg.id}
-                onClick={() => handleSelectStage(stg.id)}
-                className={`px-3 py-1.5 rounded-lg border font-mono text-xs font-bold flex items-center gap-2 transition-all ${
-                  isSelected
-                    ? 'bg-[#121c2d] border-[#00f5ff] text-white shadow-[0_0_12px_rgba(0,245,255,0.25)]'
-                    : 'bg-[#07090e] border-[#1e2535] text-gray-400 hover:text-white hover:border-gray-600'
-                }`}
+                onClick={() => onSwitchView('multiview')}
+                className="px-2.5 py-1 rounded bg-[#2e1065]/60 hover:bg-[#2e1065] border border-[#a855f7] text-[#c084fc] font-bold flex items-center gap-1.5 transition-all shadow-sm"
+                title="Conmuta al monitor maestro multiviewer con todas las salas en vivo"
               >
-                <span className={`w-2.5 h-2.5 rounded-full ${stg.isLive ? 'bg-[#ff1744] animate-pulse shadow-[0_0_6px_#ff1744]' : 'bg-[#2a3449]'}`} />
-                <span>CH 0{index + 1}: {stg.name}</span>
-                {stageRouting[stg.id]?.deviceId && (
-                  <span className="px-1.5 py-0.5 rounded bg-[#101522] border border-[#20293d] text-[9px] text-[#00f5ff] flex items-center gap-1">
-                    <Mic className="w-2.5 h-2.5" />
-                    <span className="max-w-[70px] truncate">{stageRouting[stg.id]?.deviceLabel || 'Mic'}</span>
-                  </span>
-                )}
-                {stg.audienceCount > 0 && (
-                  <span className="px-1.5 py-0.2 rounded bg-black/40 text-[9px] text-[#00ff66]">
-                    {stg.audienceCount} 👤
-                  </span>
-                )}
+                <Layers className="w-3.5 h-3.5 text-[#a855f7]" />
+                <span>👁️ MULTIVIEWER GENERAL</span>
               </button>
-            );
-          })}
+            )}
+
+            <button
+              onClick={() => {
+                stages.forEach((stg) => {
+                  window.open(`/?view=kiosk&stage=${stg.id}`, '_blank');
+                });
+              }}
+              className="px-2 py-1 rounded bg-[#10141e] hover:bg-[#1a2233] border border-gray-700 text-gray-300 hover:text-white flex items-center gap-1 transition-all"
+              title="Abre todas las salas en pestañas separadas del navegador para pruebas simultáneas"
+            >
+              <ExternalLink className="w-3 h-3 text-amber-400" />
+              <span>ABRIR TODAS ({stages.length})</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -2698,7 +2770,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
                             try {
                               const res = await deleteStageApi(stg.id);
                               if (res.success) {
-                                window.location.reload();
+                                if (selectedStage?.id === stg.id) {
+                                  const remaining = stages.filter(s => s.id !== stg.id);
+                                  if (remaining.length > 0) {
+                                    onSelectStage(remaining[0].id);
+                                  }
+                                }
                               } else {
                                 alert(res.error || 'No se pudo eliminar la sala');
                               }
@@ -2750,19 +2827,40 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   <div className="grid grid-cols-2 gap-1.5">
                     <button
                       onClick={() => window.open(`/?view=kiosk&stage=${stg.id}`, '_blank')}
-                      className="py-1 px-2 rounded bg-[#10141e] hover:bg-[#161c28] border border-[#202738] text-gray-300 hover:text-white flex items-center justify-center gap-1"
+                      className="py-1 px-2 rounded bg-[#10141e] hover:bg-[#161c28] border border-[#202738] text-gray-300 hover:text-white flex items-center justify-center gap-1 transition-colors"
+                      title="Abre la pantalla de orador y proyector de sala"
                     >
                       <Radio className="w-3 h-3 text-[#00f5ff]" />
-                      <span>ABRIR KIOSK</span>
+                      <span>↗ KIOSK</span>
                     </button>
 
                     <button
                       onClick={() => window.open(`/?view=overlay&stage=${stg.id}&lang=es&theme=vmix`, '_blank')}
-                      className="py-1 px-2 rounded bg-[#10141e] hover:bg-[#161c28] border border-[#202738] text-gray-300 hover:text-white flex items-center justify-center gap-1"
+                      className="py-1 px-2 rounded bg-[#10141e] hover:bg-[#161c28] border border-[#202738] text-gray-300 hover:text-white flex items-center justify-center gap-1 transition-colors"
+                      title="Abre el overlay transparente de vMix / OBS Studio"
                     >
                       <Tv className="w-3 h-3 text-[#ff1744]" />
-                      <span>vMIX OVERLAY</span>
+                      <span>↗ vMIX / OBS</span>
                     </button>
+
+                    <button
+                      onClick={() => window.open(`/?stage=${stg.id}`, '_blank')}
+                      className="py-1 px-2 rounded bg-[#10141e] hover:bg-[#161c28] border border-[#202738] text-gray-300 hover:text-white flex items-center justify-center gap-1 transition-colors"
+                      title="Abre la vista móvil de la audiencia"
+                    >
+                      <Smartphone className="w-3 h-3 text-[#00ff66]" />
+                      <span>↗ MÓVIL QR</span>
+                    </button>
+
+                    <a
+                      href={`/api/stages/${stg.id}/export?format=srt`}
+                      download={`subtitulos_${stg.id}.srt`}
+                      className="py-1 px-2 rounded bg-[#10141e] hover:bg-[#161c28] border border-[#202738] text-gray-300 hover:text-white flex items-center justify-center gap-1 transition-colors"
+                      title="Descargar subtítulos de la charla en formato .SRT oficial"
+                    >
+                      <Download className="w-3 h-3 text-amber-400" />
+                      <span>📥 .SRT</span>
+                    </a>
                   </div>
                 </div>
 
