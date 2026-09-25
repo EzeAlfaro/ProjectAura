@@ -1968,6 +1968,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
       {/* DYNAMIC STAGE PROVISIONING MODAL */}
       <AddStageModal
         isOpen={showAddStageModal}
+        existingStagesCount={stages.length}
         onClose={() => setShowAddStageModal(false)}
         onStageCreated={(newStage) => {
           onSelectStage(newStage.id);

@@ -176,7 +176,16 @@ export class StageManager {
   }
 
   public createStage(stageData: Partial<Stage>): Stage {
-    const id = stageData.id || `stage-${Date.now()}`;
+    let id = (stageData.id || '').trim().toLowerCase();
+    if (!id) {
+      // Calculate next clean sequential ID: stage-4, stage-5, etc.
+      let nextIndex = this.stages.size + 1;
+      while (this.stages.has(`stage-${nextIndex}`)) {
+        nextIndex++;
+      }
+      id = `stage-${nextIndex}`;
+    }
+
     const newStage: Stage = {
       id,
       name: stageData.name || 'Nuevo Escenario',
