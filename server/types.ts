@@ -35,6 +35,8 @@ export interface Stage {
   latencyMs: number;
   detectedLang: 'es' | 'en' | 'pt';
   startedAt?: number;
+  assignedDeviceId?: string;
+  assignedDeviceLabel?: string;
 }
 
 export interface StageTakeaway {

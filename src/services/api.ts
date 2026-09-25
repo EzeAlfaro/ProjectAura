@@ -1,4 +1,36 @@
-import { Stage, StageData, TechTerm, SupportedLanguage, AudienceQuestion } from '../types.js';
+import { Stage, StageData, TechTerm, SupportedLanguage, AudienceQuestion, StageAudioRouting, StageAudioRoutingMap } from '../types.js';
+
+export const STAGE_AUDIO_ROUTING_KEY = 'aura_stage_audio_routing';
+
+export function getStageAudioRouting(): StageAudioRoutingMap {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(STAGE_AUDIO_ROUTING_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    console.warn('[AudioRouting] Error reading stage audio routing from localStorage:', e);
+    return {};
+  }
+}
+
+export function saveStageAudioRouting(routing: StageAudioRoutingMap): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(STAGE_AUDIO_ROUTING_KEY, JSON.stringify(routing));
+  } catch (e) {
+    console.warn('[AudioRouting] Error saving stage audio routing to localStorage:', e);
+  }
+}
+
+export function setStageAudioRouting(stageId: string, config: StageAudioRouting): StageAudioRoutingMap {
+  const current = getStageAudioRouting();
+  const updated: StageAudioRoutingMap = {
+    ...current,
+    [stageId]: config,
+  };
+  saveStageAudioRouting(updated);
+  return updated;
+}
 
 const API_BASE = '/api';
 
@@ -71,6 +103,20 @@ export async function deleteStageApi(stageId: string): Promise<{ success: boolea
   const res = await fetch(`${API_BASE}/stages/${stageId}`, {
     method: 'DELETE',
     headers: { ...getAuthHeaders() },
+  });
+  return res.json();
+}
+
+export async function setStageAudioRouteApi(
+  stageId: string,
+  deviceId: string,
+  deviceLabel: string,
+  sourceKind?: string
+): Promise<{ success: boolean; stage?: Stage; error?: string }> {
+  const res = await fetch(`${API_BASE}/stages/${stageId}/audio-route`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ deviceId, deviceLabel, sourceKind }),
   });
   return res.json();
 }

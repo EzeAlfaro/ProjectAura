@@ -3,7 +3,10 @@ import {
   Stage, 
   TechTerm,
   SubtitleChunk,
-  AudienceQuestion 
+  AudienceQuestion,
+  StageAudioRouting,
+  StageAudioRoutingMap,
+  AudioSourceKind
 } from '../types.js';
 import { 
   Sliders, 
@@ -57,7 +60,9 @@ import {
   setAdminToken,
   deleteStageApi,
   clearStageQuestionsApi,
-  seedStageQuestionsApi
+  seedStageQuestionsApi,
+  getStageAudioRouting,
+  saveStageAudioRouting
 } from '../services/api.js';
 import { 
   RackUnit, 
@@ -103,6 +108,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [customYoutubeUrl, setCustomYoutubeUrl] = useState<string>('');
   const [activeSyncDemoKey, setActiveSyncDemoKey] = useState<string>('talk-yt-peladonerd');
   const [isDemoSyncRunning, setIsDemoSyncRunning] = useState<boolean>(false);
+
+  // Audio Patchbay & Routing Matrix State (Rack 02)
+  const [stageAudioSource, setStageAudioSource] = useState<Record<string, 'mic' | 'stream' | 'demo' | 'idle'>>({});
+  const [stageMicDevice, setStageMicDevice] = useState<Record<string, string>>({});
+  const [youtubeTargetStageId, setYoutubeTargetStageId] = useState<string>(stages[0]?.id || 'stage-1');
+  const [syncingYoutubeStageId, setSyncingYoutubeStageId] = useState<string | null>(null);
 
   const extractYoutubeId = (urlOrId: string): string | null => {
     const clean = urlOrId.trim();
@@ -195,6 +206,88 @@ export const AdminView: React.FC<AdminViewProps> = ({
   // Audio Devices & Hardware Diagnostics
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
+  
+  // Persistent Per-Stage Audio Routing Matrix (aura_stage_audio_routing)
+  const [stageRouting, setStageRouting] = useState<StageAudioRoutingMap>(() => getStageAudioRouting());
+  const activeStreamingStageRef = useRef<string | null>(null);
+
+  const updateStageAudioAssignment = (stageId: string, deviceId: string, customLabel?: string) => {
+    const matchedDev = audioDevices.find((d) => d.deviceId === deviceId);
+    const label = customLabel || matchedDev?.label || (deviceId ? `Dispositivo (${deviceId.slice(0, 8)}...)` : 'Sin asignar');
+    
+    setStageRouting((prev) => {
+      const current = prev[stageId] || { sourceKind: 'idle' };
+      const updated: StageAudioRoutingMap = {
+        ...prev,
+        [stageId]: {
+          deviceId,
+          deviceLabel: label,
+          sourceKind: current.sourceKind || 'idle',
+        },
+      };
+      saveStageAudioRouting(updated);
+      return updated;
+    });
+  };
+
+  const updateStageSourceKind = (stageId: string, sourceKind: AudioSourceKind) => {
+    setStageRouting((prev) => {
+      const current = prev[stageId] || {
+        deviceId: '',
+        deviceLabel: 'Sin asignar',
+        sourceKind: 'idle',
+      };
+      const updated: StageAudioRoutingMap = {
+        ...prev,
+        [stageId]: {
+          ...current,
+          sourceKind,
+        },
+      };
+      saveStageAudioRouting(updated);
+      return updated;
+    });
+  };
+
+  const handleDeviceChange = (newDeviceId: string) => {
+    setSelectedDeviceId(newDeviceId);
+    updateStageAudioAssignment(selectedStageId, newDeviceId);
+  };
+
+  const handleSelectStage = (stageId: string) => {
+    if (stageId === selectedStageId) return;
+
+    // Clean state transition: if mic streaming is active on previous stage, stop it cleanly
+    if (isRecordingRef.current) {
+      console.log(`[AudioRouting] Clean transition: stopping active mic stream on [${selectedStageId}] before switching to [${stageId}]`);
+      stopMicStreaming(selectedStageId);
+    }
+
+    if (soundCheckStreamRef.current) {
+      stopSoundCheck();
+      setIsSoundChecking(false);
+    }
+
+    setSelectedStageId(stageId);
+    onSelectStage(stageId);
+  };
+
+  // Synchronize selectedDeviceId when switching stages or when audio devices load
+  useEffect(() => {
+    const stageConfig = stageRouting[selectedStageId];
+    if (stageConfig?.deviceId) {
+      setSelectedDeviceId(stageConfig.deviceId);
+    } else if (audioDevices.length > 0) {
+      // Allocate discrete input if multiple are connected, fallback to first
+      const stageIdx = stages.findIndex((s) => s.id === selectedStageId);
+      const chosenDev = audioDevices[stageIdx >= 0 && stageIdx < audioDevices.length ? stageIdx : 0];
+      const devId = chosenDev.deviceId;
+      const label = chosenDev.label || `Entrada de Audio ${stageIdx + 1}`;
+      setSelectedDeviceId(devId);
+      updateStageAudioAssignment(selectedStageId, devId, label);
+    }
+  }, [selectedStageId, audioDevices]);
+
   const [hardwareStats, setHardwareStats] = useState({
     audioContextSupported: true,
     mediaRecorderSupported: true,
@@ -369,7 +462,61 @@ export const AdminView: React.FC<AdminViewProps> = ({
         hasMicrophoneConnected: audioInputs.length > 0,
       }));
 
-      if (audioInputs.length > 0 && !selectedDeviceId) {
+      // Synchronize and seed stage audio routing with enumerated physical devices
+      setStageRouting((prev) => {
+        let hasChanges = false;
+        const updated = { ...prev };
+
+        stages.forEach((stg, index) => {
+          const existing = updated[stg.id];
+          if (!existing || !existing.deviceId) {
+            // Allocate distinct input if multiple are available (e.g. Mic 1 for Stage 1, Mic 2 for Stage 2)
+            const dev = audioInputs[index < audioInputs.length ? index : 0];
+            if (dev) {
+              updated[stg.id] = {
+                deviceId: dev.deviceId,
+                deviceLabel: dev.label || `Entrada de Audio ${index + 1}`,
+                sourceKind: existing?.sourceKind || 'idle',
+              };
+              hasChanges = true;
+            }
+          } else {
+            // Update device label if it was previously empty or changed in system
+            const matched = audioInputs.find((d) => d.deviceId === existing.deviceId);
+            if (matched && matched.label && matched.label !== existing.deviceLabel) {
+              updated[stg.id] = {
+                ...existing,
+                deviceLabel: matched.label,
+              };
+              hasChanges = true;
+            }
+          }
+        });
+
+        if (hasChanges) {
+          saveStageAudioRouting(updated);
+        }
+        return updated;
+      });
+
+      // Synchronize stageMicDevice helper state for backward compatibility
+      setStageMicDevice((prev) => {
+        const next = { ...prev };
+        stages.forEach((stg, i) => {
+          const fromRouting = stageRouting[stg.id]?.deviceId;
+          if (fromRouting) {
+            next[stg.id] = fromRouting;
+          } else if (!next[stg.id] && audioInputs.length > 0) {
+            next[stg.id] = audioInputs[i % audioInputs.length].deviceId;
+          }
+        });
+        return next;
+      });
+
+      const currentRouting = stageRouting[selectedStageId];
+      if (currentRouting?.deviceId) {
+        setSelectedDeviceId(currentRouting.deviceId);
+      } else if (audioInputs.length > 0 && !selectedDeviceId) {
         setSelectedDeviceId(audioInputs[0].deviceId);
       }
     } catch (err: any) {
@@ -385,11 +532,26 @@ export const AdminView: React.FC<AdminViewProps> = ({
       setSoundCheckProgress(0);
       setSoundCheckResult(null);
 
-      const constraints: MediaStreamConstraints = {
-        audio: selectedDeviceId ? { deviceId: { ideal: selectedDeviceId } } : true,
-      };
+      const targetDeviceId = stageRouting[selectedStageId]?.deviceId || selectedDeviceId;
+      let stream: MediaStream;
+      if (targetDeviceId) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: { deviceId: { exact: targetDeviceId } },
+          });
+        } catch (exactErr) {
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              audio: { deviceId: { ideal: targetDeviceId } },
+            });
+          } catch (idealErr) {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          }
+        }
+      } else {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       soundCheckStreamRef.current = stream;
 
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -626,17 +788,49 @@ export const AdminView: React.FC<AdminViewProps> = ({
       setAudioError(null);
       setLiveInterimText('');
       isRecordingRef.current = true;
+      activeStreamingStageRef.current = selectedStageId;
 
-      // 1. Mic capture with ideal constraint and fallback
-      const constraints: MediaStreamConstraints = {
-        audio: selectedDeviceId ? { deviceId: { ideal: selectedDeviceId } } : true,
-      };
+      // Clean state transition: ensure previous audio stream is stopped before opening a new one
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        try {
+          mediaRecorderRef.current.stop();
+          mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
+        } catch (e) {}
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close().catch(() => {});
+        audioContextRef.current = null;
+      }
 
+      // 1. Resolve assigned deviceId for the current stage
+      const assignedRouting = stageRouting[selectedStageId];
+      const targetDeviceId = assignedRouting?.deviceId || stageMicDevice[selectedStageId] || selectedDeviceId;
+
+      // Pro-AV constraint hierarchy: exact deviceId -> ideal deviceId -> default audio
       let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia(constraints);
-      } catch (err) {
-        console.warn('Could not grab exact mic device, fallback to default:', err);
+      if (targetDeviceId) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              deviceId: { exact: targetDeviceId },
+            },
+          });
+          console.log(`[AudioRouting] Streaming started for stage [${selectedStageId}] with EXACT deviceId: ${targetDeviceId}`);
+        } catch (exactErr) {
+          console.warn(`[AudioRouting] Exact device constraint failed for ${targetDeviceId}, attempting IDEAL fallback:`, exactErr);
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              audio: {
+                deviceId: { ideal: targetDeviceId },
+              },
+            });
+            console.log(`[AudioRouting] Streaming started for stage [${selectedStageId}] with IDEAL deviceId fallback: ${targetDeviceId}`);
+          } catch (idealErr) {
+            console.warn('[AudioRouting] Ideal device constraint failed, falling back to default audio input:', idealErr);
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          }
+        }
+      } else {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       }
 
@@ -648,6 +842,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
       audioContextRef.current = audioCtx;
       analyserRef.current = analyser;
+
+      // Update persistent routing state to 'mic'
+      updateStageSourceKind(selectedStageId, 'mic');
+      setStageAudioSource((prev) => ({ ...prev, [selectedStageId]: 'mic' }));
 
       // Metering interval
       const meterInterval = setInterval(() => {
@@ -669,6 +867,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
       }, 80);
 
       // 2. Launch high-fidelity 16kHz PCM AudioWorklet for Gemini 3.5 Live streaming
+      const targetStageId = selectedStageId;
       if (audioCtx.audioWorklet) {
         try {
           await audioCtx.audioWorklet.addModule('/worklets/pcm-processor.js');
@@ -683,13 +882,13 @@ export const AdminView: React.FC<AdminViewProps> = ({
               }
               const base64 = window.btoa(binary);
               if (wsClient) {
-                wsClient.sendPcmChunk(selectedStageId, base64);
+                wsClient.sendPcmChunk(targetStageId, base64);
               }
             }
           };
           source.connect(workletNode);
           workletNodeRef.current = workletNode;
-          console.log('[AdminView] High-fidelity 16kHz PCM AudioWorklet connected to Gemini 3.5 Live pipeline');
+          console.log(`[AdminView] High-fidelity 16kHz PCM AudioWorklet connected for stage ${targetStageId}`);
         } catch (e) {
           console.warn('[AdminView] AudioWorklet init warning (fallback to WebSpeech/MediaRecorder):', e);
         }
@@ -698,7 +897,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
       // 3. Launch resilient speech recognition
       createAndStartAdminRecognition();
 
-      // 3. MediaRecorder chunk backup
+      // 4. MediaRecorder chunk backup
       let mimeType = 'audio/webm;codecs=opus';
       if (!MediaRecorder.isTypeSupported(mimeType)) {
         mimeType = 'audio/webm';
@@ -711,7 +910,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
         const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (event.data && event.data.size > 0 && !SpeechRec) {
           try {
-            await uploadAudioChunk(selectedStageId, event.data);
+            await uploadAudioChunk(targetStageId, event.data);
           } catch (e: any) {
             console.warn('Audio chunk upload failed:', e);
           }
@@ -724,11 +923,14 @@ export const AdminView: React.FC<AdminViewProps> = ({
       setAudioError(`No se pudo acceder al micrófono: ${err.message}`);
       setIsRecording(false);
       isRecordingRef.current = false;
+      activeStreamingStageRef.current = null;
     }
   };
 
-  const stopMicStreaming = () => {
+  const stopMicStreaming = (stageIdToStop?: string) => {
     isRecordingRef.current = false;
+    const stageId = stageIdToStop || activeStreamingStageRef.current || selectedStageId;
+    activeStreamingStageRef.current = null;
     setLiveInterimText('');
 
     if (silenceFlushTimerRef.current) {
@@ -764,6 +966,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
         mediaRecorderRef.current.stop();
         mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
       } catch (e) {}
+      mediaRecorderRef.current = null;
     }
 
     if (audioContextRef.current) {
@@ -775,6 +978,11 @@ export const AdminView: React.FC<AdminViewProps> = ({
     setIsRecording(false);
     setCurrentDbfs(-60);
     setIsClipping(false);
+
+    if (stageId) {
+      updateStageSourceKind(stageId, 'idle');
+      setStageAudioSource((prev) => ({ ...prev, [stageId]: 'idle' }));
+    }
   };
 
   const handleSendManualText = (textToSend?: string) => {
@@ -840,10 +1048,20 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
   const handleTriggerDemo = async (stageId: string, demoKey: string) => {
     try {
-      if (isRecording) {
-        stopMicStreaming();
+      if (isRecording && selectedStageId === stageId) {
+        stopMicStreaming(stageId);
       }
       setIsDemoSyncRunning(true);
+      if (demoKey === activeSyncDemoKey) {
+        setSyncingYoutubeStageId(stageId);
+        updateStageSourceKind(stageId, 'youtube');
+      } else {
+        updateStageSourceKind(stageId, 'demo');
+      }
+      setStageAudioSource((prev) => ({
+        ...prev,
+        [stageId]: demoKey === activeSyncDemoKey ? 'stream' : 'demo'
+      }));
       await triggerDemo(stageId, demoKey);
       if (wsClient) {
         wsClient.setStage(stageId);
@@ -851,15 +1069,22 @@ export const AdminView: React.FC<AdminViewProps> = ({
     } catch (err: any) {
       setAudioError(`Error al activar demo: ${err.message}`);
       setIsDemoSyncRunning(false);
+      setSyncingYoutubeStageId(null);
+      updateStageSourceKind(stageId, 'idle');
     }
   };
 
   const handleStopStage = async (stageId: string) => {
     try {
-      setIsDemoSyncRunning(false);
+      if (syncingYoutubeStageId === stageId || youtubeTargetStageId === stageId) {
+        setIsDemoSyncRunning(false);
+        setSyncingYoutubeStageId(null);
+      }
+      updateStageSourceKind(stageId, 'idle');
+      setStageAudioSource((prev) => ({ ...prev, [stageId]: 'idle' }));
       await stopStage(stageId);
-      if (isRecording && selectedStageId === stageId) {
-        stopMicStreaming();
+      if (isRecording && (selectedStageId === stageId || activeStreamingStageRef.current === stageId)) {
+        stopMicStreaming(stageId);
       }
     } catch (err: any) {
       setAudioError(`Error al detener escenario: ${err.message}`);
@@ -889,6 +1114,74 @@ export const AdminView: React.FC<AdminViewProps> = ({
     : true;
 
   const currentStage = stages.find((s) => s.id === selectedStageId) || stages[0];
+  const youtubeTargetStage = stages.find((s) => s.id === youtubeTargetStageId) || currentStage;
+
+  const getEffectiveSource = (stage: Stage): 'mic' | 'stream' | 'demo' | 'idle' => {
+    if (isRecording && selectedStageId === stage.id) return 'mic';
+    if ((isDemoSyncRunning && youtubeTargetStage.id === stage.id) || syncingYoutubeStageId === stage.id) return 'stream';
+    const routingSource = stageRouting[stage.id]?.sourceKind;
+    if (routingSource === 'youtube') return 'stream';
+    if (routingSource === 'mic' || routingSource === 'demo' || routingSource === 'idle') return routingSource;
+    if (stageAudioSource[stage.id]) return stageAudioSource[stage.id];
+    if (stage.currentAudioSource === 'stream') return 'stream';
+    if (stage.currentAudioSource === 'demo') return 'demo';
+    if (stage.currentAudioSource === 'mic') return 'mic';
+    return 'idle';
+  };
+
+  const handleAssignDeviceToStage = (stageId: string, deviceId: string) => {
+    updateStageAudioAssignment(stageId, deviceId);
+    setStageMicDevice((prev) => ({ ...prev, [stageId]: deviceId }));
+    if (stageId === selectedStageId) {
+      setSelectedDeviceId(deviceId);
+    }
+  };
+
+  const handleActivateMicForStage = (stageId: string) => {
+    handleSelectStage(stageId);
+    const assignedDev = stageRouting[stageId]?.deviceId || stageMicDevice[stageId] || selectedDeviceId;
+    if (assignedDev) {
+      setSelectedDeviceId(assignedDev);
+    }
+    updateStageSourceKind(stageId, 'mic');
+    setStageAudioSource((prev) => ({ ...prev, [stageId]: 'mic' }));
+    startMicStreaming();
+  };
+
+  const handleSelectStageSource = async (stageId: string, source: 'mic' | 'stream' | 'demo' | 'idle') => {
+    const kind: AudioSourceKind = source === 'stream' ? 'youtube' : source;
+    updateStageSourceKind(stageId, kind);
+    setStageAudioSource((prev) => ({ ...prev, [stageId]: source }));
+    if (source === 'mic') {
+      handleSelectStage(stageId);
+      const assignedDev = stageRouting[stageId]?.deviceId || stageMicDevice[stageId] || selectedDeviceId;
+      if (assignedDev) {
+        setSelectedDeviceId(assignedDev);
+      }
+    } else if (source === 'stream') {
+      setYoutubeTargetStageId(stageId);
+      setSyncingYoutubeStageId(stageId);
+      if (isRecording && selectedStageId === stageId) {
+        stopMicStreaming(stageId);
+      }
+      await handleTriggerDemo(stageId, activeSyncDemoKey);
+    } else if (source === 'demo') {
+      if (isRecording && selectedStageId === stageId) {
+        stopMicStreaming(stageId);
+      }
+      const demoKey = stageId === 'stage-1' ? 'talk-en-k8s' : 'talk-es-devops';
+      await handleTriggerDemo(stageId, demoKey);
+    } else if (source === 'idle') {
+      if (isRecording && selectedStageId === stageId) {
+        stopMicStreaming(stageId);
+      }
+      if (syncingYoutubeStageId === stageId) {
+        setSyncingYoutubeStageId(null);
+        setIsDemoSyncRunning(false);
+      }
+      await handleStopStage(stageId);
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 space-y-4">
@@ -933,10 +1226,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
             return (
               <button
                 key={stg.id}
-                onClick={() => {
-                  setSelectedStageId(stg.id);
-                  onSelectStage(stg.id);
-                }}
+                onClick={() => handleSelectStage(stg.id)}
                 className={`px-3 py-1.5 rounded-lg border font-mono text-xs font-bold flex items-center gap-2 transition-all ${
                   isSelected
                     ? 'bg-[#121c2d] border-[#00f5ff] text-white shadow-[0_0_12px_rgba(0,245,255,0.25)]'
@@ -945,6 +1235,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
               >
                 <span className={`w-2.5 h-2.5 rounded-full ${stg.isLive ? 'bg-[#ff1744] animate-pulse shadow-[0_0_6px_#ff1744]' : 'bg-[#2a3449]'}`} />
                 <span>CH 0{index + 1}: {stg.name}</span>
+                {stageRouting[stg.id]?.deviceId && (
+                  <span className="px-1.5 py-0.5 rounded bg-[#101522] border border-[#20293d] text-[9px] text-[#00f5ff] flex items-center gap-1">
+                    <Mic className="w-2.5 h-2.5" />
+                    <span className="max-w-[70px] truncate">{stageRouting[stg.id]?.deviceLabel || 'Mic'}</span>
+                  </span>
+                )}
                 {stg.audienceCount > 0 && (
                   <span className="px-1.5 py-0.2 rounded bg-black/40 text-[9px] text-[#00ff66]">
                     {stg.audienceCount} 👤
@@ -1058,8 +1354,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
           {/* Audio Input Device Dropdown (6 cols) */}
           <div className="md:col-span-6 space-y-1">
             <div className="flex items-center justify-between">
-              <label className="block text-[10px] font-mono text-[#64748b]">
-                DISPOSITIVO_DE_ENTRADA (MIC / USB AUDIO INTERFACE):
+              <label className="flex items-center gap-1.5 text-[10px] font-mono text-[#64748b]">
+                <Pin className="w-3 h-3 text-[#00f5ff]" />
+                <span>DISPOSITIVO_DE_ENTRADA // SALA: <strong className="text-[#00f5ff]">{currentStage?.name?.toUpperCase()}</strong></span>
               </label>
               <button
                 onClick={refreshAudioDevices}
@@ -1070,19 +1367,36 @@ export const AdminView: React.FC<AdminViewProps> = ({
             </div>
             <select
               value={selectedDeviceId}
-              onChange={(e) => setSelectedDeviceId(e.target.value)}
+              onChange={(e) => handleDeviceChange(e.target.value)}
               className="w-full px-2.5 py-1.5 bg-[#0d1017] border border-[#222a3d] rounded text-xs text-white focus:outline-none focus:border-[#00f5ff] font-mono"
             >
               {audioDevices.length === 0 ? (
                 <option value="">(No se detectaron dispositivos de audio físicos)</option>
               ) : (
-                audioDevices.map((d, index) => (
-                  <option key={d.deviceId || index} value={d.deviceId}>
-                    {d.label || `Entrada de Audio Frecuencia ${index + 1}`}
-                  </option>
-                ))
+                audioDevices.map((d, index) => {
+                  const assignedOtherStage = stages.find(
+                    (s) => s.id !== selectedStageId && stageRouting[s.id]?.deviceId === d.deviceId
+                  );
+                  return (
+                    <option key={d.deviceId || index} value={d.deviceId}>
+                      {d.label || `Entrada de Audio Frecuencia ${index + 1}`}
+                      {assignedOtherStage ? ` [En uso por: ${assignedOtherStage.name}]` : ''}
+                    </option>
+                  );
+                })
               )}
             </select>
+            <div className="flex items-center justify-between text-[9px] font-mono text-gray-500">
+              <span className="flex items-center gap-1">
+                <span>ESTADO:</span>
+                <span className="text-[#00ff66] font-bold">
+                  {(stageRouting[selectedStageId]?.sourceKind || 'IDLE').toUpperCase()}
+                </span>
+              </span>
+              <span className="text-[#00f5ff]/70">
+                ASIGNACIÓN PERSISTENTE (LOCALSTORAGE)
+              </span>
+            </div>
           </div>
 
           {/* Sound Check Trigger & Result (6 cols) */}
@@ -1124,16 +1438,33 @@ export const AdminView: React.FC<AdminViewProps> = ({
         </div>
       </RackUnit>
 
-      {/* 19" RACK UNIT 02: MULTI-TRACK CHANNEL STRIPS (TX-6 / ATEM STYLE) */}
+      {/* 19" RACK UNIT 02: AUDIO ROUTING MATRIX // MULTI-STAGE BROADCAST PATCHBAY */}
       <RackUnit
         unitId="RACK_02"
         uHeight="2U"
-        title="CONSOLA DE CANALES MULTI-SALA // 1-TO-N BROADCAST MATRIX"
-        subTitle="Monitoreo individual de escenarios con vúmetros de 14 segmentos y control de emisión"
+        title="MATRIZ DE RUTEO DE AUDIO & PATCHBAY // MULTI-STAGE AUDIO ROUTING MATRIX"
+        subTitle="Asignación directa de fuentes de audio por sala (Micrófono, YouTube Stream, Demo Oficial, Mute), patchbay de interfaces USB y vúmetros independientes con tally lamp"
+        rightBadge={
+          <div className="flex items-center gap-2 font-mono text-xs">
+            <span className="px-2.5 py-1 rounded bg-[#0d111a] border border-[#1e273a] text-gray-300 flex items-center gap-1.5">
+              <span className={`w-2 h-2 rounded-full ${stages.some(s => s.isLive) ? 'bg-[#ff1744] animate-pulse shadow-[0_0_6px_#ff1744]' : 'bg-gray-600'}`} />
+              <span>{stages.filter((s) => s.isLive).length} / {stages.length} SALAS AL AIRE</span>
+            </span>
+            <span className="px-2.5 py-1 rounded bg-[#00f5ff]/10 border border-[#00f5ff]/40 text-[#00f5ff] font-bold hidden sm:inline-flex items-center gap-1">
+              <Sliders className="w-3.5 h-3.5" />
+              PATCHBAY ACTIVO
+            </span>
+          </div>
+        }
       >
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
           {stages.map((stage, idx) => {
             const isSelected = stage.id === selectedStageId;
+            const effectiveSource = getEffectiveSource(stage);
+            const isMicRecordingThisStage = isRecording && selectedStageId === stage.id;
+            const assignedDevice = stageMicDevice[stage.id] || (stage.id === selectedStageId ? selectedDeviceId : '');
+            const isYouTubeLiveOnThisStage = effectiveSource === 'stream' && (isDemoSyncRunning || stage.isLive);
+
             return (
               <div
                 key={stage.id}
@@ -1141,69 +1472,306 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   setSelectedStageId(stage.id);
                   onSelectStage(stage.id);
                 }}
-                className={`bg-[#07090e] rounded border p-3 transition-all cursor-pointer flex flex-col justify-between ${
+                className={`bg-[#07090e] rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between p-3.5 space-y-3 relative overflow-hidden ${
                   isSelected
-                    ? 'border-[#00f5ff] shadow-lg shadow-[#00f5ff]/10 bg-[#0b0e16]'
-                    : 'border-[#171c26] hover:border-[#273247]'
+                    ? 'border-[#00f5ff] shadow-[0_0_15px_rgba(0,245,255,0.18)] bg-[#090d16]'
+                    : 'border-[#171d29] hover:border-[#273349]'
                 }`}
               >
-                {/* Channel Header & Tally */}
-                <div className="flex items-center justify-between border-b border-[#171c26] pb-2 mb-2">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#10141e] text-[#00f5ff] font-bold border border-[#202738]">
+                {/* 1. Header: Channel ID, Track Badge, Stage Name & Tally Lamp */}
+                <div className="flex items-center justify-between border-b border-[#181f2f] pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono font-black px-1.5 py-0.5 rounded bg-[#101522] text-[#00f5ff] border border-[#20293d]">
                       CH 0{idx + 1}
                     </span>
-                    <span className="font-mono font-bold text-xs text-white uppercase">{stage.name}</span>
+                    <div>
+                      <div className="font-mono font-black text-xs text-white uppercase tracking-wide flex items-center gap-1.5">
+                        <span>{stage.name}</span>
+                        {isSelected && (
+                          <span className="text-[8px] font-mono font-bold px-1 py-0.2 rounded bg-[#00f5ff]/20 text-[#00f5ff] border border-[#00f5ff]/40">
+                            SELECCIONADA
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[9px] font-mono text-[#64748b] block truncate">
+                        {stage.track || 'TRACK GENERAL'}
+                      </span>
+                    </div>
                   </div>
 
-                  <span className={`w-2.5 h-2.5 rounded-full ${stage.isLive ? 'bg-[#ff1744] animate-pulse shadow-[0_0_8px_#ff1744]' : 'bg-[#2b3347]'}`} />
+                  {/* BROADCAST TALLY LAMP */}
+                  <div
+                    className={`px-2.5 py-1 rounded text-[10px] font-mono font-black flex items-center gap-1.5 border transition-all ${
+                      stage.isLive
+                        ? 'bg-[#ff1744] text-white border-[#ff4d6d] shadow-[0_0_12px_#ff1744] animate-pulse'
+                        : 'bg-[#0e121a] text-gray-500 border-[#1c2332]'
+                    }`}
+                    title={stage.isLive ? 'Sala emitiendo señal al aire' : 'Sala en espera (Standby)'}
+                  >
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        stage.isLive ? 'bg-white shadow-[0_0_6px_white]' : 'bg-gray-600'
+                      }`}
+                    />
+                    <span>{stage.isLive ? 'ON AIR' : 'STANDBY'}</span>
+                  </div>
                 </div>
 
-                {/* Talk Metadata */}
-                <div className="space-y-0.5 mb-2.5 text-left">
-                  <div className="text-xs font-bold text-gray-200 line-clamp-1">
-                    {stage.talkTitle}
+                {/* 2. Talk info strip */}
+                <div className="bg-[#05070c] p-2 rounded-lg border border-[#141a27] space-y-0.5 text-left">
+                  <div className="text-xs font-bold text-gray-200 truncate" title={stage.talkTitle}>
+                    {stage.talkTitle || 'Sin charla programada'}
                   </div>
-                  <div className="text-[10px] font-mono text-[#64748b] truncate">
-                    {stage.speaker}
+                  <div className="flex items-center justify-between text-[10px] font-mono text-[#64748b]">
+                    <span className="truncate">{stage.speaker || 'Orador'}</span>
+                    {stage.audienceCount > 0 && (
+                      <span className="text-[#00ff66] font-bold shrink-0">
+                        {stage.audienceCount} 👤
+                      </span>
+                    )}
                   </div>
                 </div>
 
-                {/* Discrete 14-Segment LED VU Meter */}
-                <div className="mb-3">
+                {/* 3. Audio Source Selector (Patchbay Matrix Buttons) */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[9px] font-mono">
+                    <span className="text-gray-400 font-bold uppercase flex items-center gap-1">
+                      <Radio className="w-3 h-3 text-[#00f5ff]" />
+                      FUENTE DE AUDIO // PATCH:
+                    </span>
+                    <span
+                      className={`font-bold uppercase px-1 py-0.2 rounded text-[8px] border ${
+                        effectiveSource === 'mic'
+                          ? 'bg-[#00f5ff]/15 text-[#00f5ff] border-[#00f5ff]/40'
+                          : effectiveSource === 'stream'
+                          ? 'bg-[#ff3366]/15 text-[#ff3366] border-[#ff3366]/40'
+                          : effectiveSource === 'demo'
+                          ? 'bg-[#ffb800]/15 text-[#ffb800] border-[#ffb800]/40'
+                          : 'bg-gray-800/60 text-gray-400 border-gray-700'
+                      }`}
+                    >
+                      {effectiveSource}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1.5 font-mono text-[10px]">
+                    {/* [🎤 Micrófono] */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelectStageSource(stage.id, 'mic');
+                      }}
+                      className={`p-1.5 rounded-lg border font-bold flex items-center justify-center gap-1.5 transition-all ${
+                        effectiveSource === 'mic'
+                          ? 'bg-[#00f5ff]/20 border-[#00f5ff] text-[#00f5ff] shadow-[0_0_10px_rgba(0,245,255,0.3)] ring-1 ring-[#00f5ff]'
+                          : 'bg-[#0b0e15] border-[#1c2436] text-gray-400 hover:text-white hover:border-[#2b374e]'
+                      }`}
+                    >
+                      <Mic className="w-3.5 h-3.5 text-[#00f5ff]" />
+                      <span>Micrófono</span>
+                    </button>
+
+                    {/* [📺 YouTube Stream] */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelectStageSource(stage.id, 'stream');
+                      }}
+                      className={`p-1.5 rounded-lg border font-bold flex items-center justify-center gap-1.5 transition-all ${
+                        effectiveSource === 'stream'
+                          ? 'bg-[#ff3366]/20 border-[#ff3366] text-[#ff3366] shadow-[0_0_10px_rgba(255,51,102,0.3)] ring-1 ring-[#ff3366]'
+                          : 'bg-[#0b0e15] border-[#1c2436] text-gray-400 hover:text-white hover:border-[#2b374e]'
+                      }`}
+                    >
+                      <Tv className="w-3.5 h-3.5 text-[#ff3366]" />
+                      <span>YouTube</span>
+                    </button>
+
+                    {/* [✨ Demo Oficial] */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelectStageSource(stage.id, 'demo');
+                      }}
+                      className={`p-1.5 rounded-lg border font-bold flex items-center justify-center gap-1.5 transition-all ${
+                        effectiveSource === 'demo'
+                          ? 'bg-[#ffb800]/20 border-[#ffb800] text-[#ffb800] shadow-[0_0_10px_rgba(255,184,0,0.3)] ring-1 ring-[#ffb800]'
+                          : 'bg-[#0b0e15] border-[#1c2436] text-gray-400 hover:text-white hover:border-[#2b374e]'
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-[#ffb800]" />
+                      <span>Demo Talk</span>
+                    </button>
+
+                    {/* [🔇 Mute / Idle] */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelectStageSource(stage.id, 'idle');
+                      }}
+                      className={`p-1.5 rounded-lg border font-bold flex items-center justify-center gap-1.5 transition-all ${
+                        effectiveSource === 'idle'
+                          ? 'bg-[#1b2230] border-gray-500 text-gray-300 shadow-inner ring-1 ring-gray-600'
+                          : 'bg-[#0b0e15] border-[#1c2436] text-gray-500 hover:text-gray-300 hover:border-gray-600'
+                      }`}
+                    >
+                      <VolumeX className="w-3.5 h-3.5 text-gray-400" />
+                      <span>Mute / Idle</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 4. If Mic is selected: Audio Device Dropdown for this room */}
+                {effectiveSource === 'mic' && (
+                  <div
+                    className="p-2.5 bg-[#05070c] border border-[#1e273a] rounded-lg space-y-1.5 text-left"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between text-[9px] font-mono">
+                      <span className="font-bold text-[#00f5ff] flex items-center gap-1">
+                        <Mic className="w-3 h-3" />
+                        DISPOSITIVO MIC ASIGNADO:
+                      </span>
+                      <button
+                        onClick={refreshAudioDevices}
+                        className="text-[8px] text-gray-400 hover:text-[#00f5ff] flex items-center gap-0.5"
+                        title="Volver a escanear entradas de audio"
+                      >
+                        <RefreshCw className="w-2.5 h-2.5" /> ESCANEAR
+                      </button>
+                    </div>
+
+                    <select
+                      value={assignedDevice}
+                      onChange={(e) => handleAssignDeviceToStage(stage.id, e.target.value)}
+                      className="w-full px-2 py-1 bg-[#090c13] border border-[#222c40] rounded text-[11px] font-mono text-white focus:outline-none focus:border-[#00f5ff]"
+                    >
+                      {audioDevices.length === 0 ? (
+                        <option value="">(No hay entradas físicas detectadas)</option>
+                      ) : (
+                        audioDevices.map((d, dIdx) => (
+                          <option key={d.deviceId || dIdx} value={d.deviceId}>
+                            {d.label ? `[INT 0${dIdx + 1}] ${d.label}` : `Micrófono / Entrada ${dIdx + 1}`}
+                          </option>
+                        ))
+                      )}
+                    </select>
+
+                    <div className="flex items-center justify-between pt-1 text-[9px] font-mono">
+                      <span className="text-gray-400 flex items-center gap-1">
+                        <span>PREAMP:</span>
+                        {isMicRecordingThisStage ? (
+                          <span className="text-[#00ff66] font-bold flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#00ff66] animate-ping" />
+                            AL AIRE
+                          </span>
+                        ) : (
+                          <span className="text-gray-500">ARMADO</span>
+                        )}
+                      </span>
+
+                      {isMicRecordingThisStage ? (
+                        <button
+                          onClick={() => stopMicStreaming()}
+                          className="px-2 py-0.5 rounded bg-[#ff1744]/20 border border-[#ff1744]/50 text-[#ff1744] font-bold hover:bg-[#ff1744]/30 transition-colors"
+                        >
+                          DETENER MIC
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleActivateMicForStage(stage.id)}
+                          className="px-2 py-0.5 rounded bg-[#00f5ff]/20 border border-[#00f5ff]/50 text-[#00f5ff] font-bold hover:bg-[#00f5ff]/30 transition-colors"
+                        >
+                          TRANSMITIR MIC
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 5. If YouTube Stream is selected: YouTube Live Feed pill */}
+                {effectiveSource === 'stream' && (
+                  <div
+                    className="p-2 bg-[#ff3366]/10 border border-[#ff3366]/30 rounded-lg text-[9px] font-mono space-y-1 text-left"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between text-[#ff3366] font-bold">
+                      <span className="flex items-center gap-1">
+                        <Tv className="w-3 h-3" />
+                        STREAMING YOUTUBE
+                      </span>
+                      {isYouTubeLiveOnThisStage && (
+                        <span className="px-1.5 py-0.2 rounded bg-[#00ff66]/20 text-[#00ff66] border border-[#00ff66]/40 font-bold flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#00ff66] animate-pulse" />
+                          EMITIENDO
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-white font-bold truncate">
+                      {YOUTUBE_NERDEARLA_TALKS.find((t) => t.demoKey === activeSyncDemoKey)?.title ||
+                        'Video YouTube Sincronizado'}
+                    </div>
+                  </div>
+                )}
+
+                {/* 6. Independent VU Meter per Room */}
+                <div className="space-y-1">
                   <HardwareVuMeter
-                    levelPercent={stage.audioLevel}
-                    label={`POST_FADER // ${stage.currentAudioSource.toUpperCase()}`}
-                    peakDb={-36 + (stage.audioLevel / 100) * 36}
-                    isClipping={stage.audioLevel >= 92}
+                    levelPercent={
+                      isMicRecordingThisStage
+                        ? Math.min(100, Math.max(0, ((currentDbfs + 60) / 60) * 100))
+                        : stage.audioLevel
+                    }
+                    label={`POST_FADER // ${effectiveSource.toUpperCase()}`}
+                    peakDb={
+                      isMicRecordingThisStage
+                        ? currentDbfs
+                        : -36 + (stage.audioLevel / 100) * 36
+                    }
+                    isClipping={
+                      isMicRecordingThisStage
+                        ? isClipping
+                        : stage.audioLevel >= 92
+                    }
                   />
-                  <div className="flex items-center justify-between text-[8px] font-mono text-[#475569] pt-1">
+                  <div className="flex items-center justify-between text-[8px] font-mono text-[#475569] px-0.5">
                     <span>AUD: {stage.audienceCount}</span>
                     <span>LAT: {stage.latencyMs}ms</span>
-                    <span>SRC: {stage.currentAudioSource.toUpperCase()}</span>
+                    <span>LANG: {(stage.detectedLang || 'es').toUpperCase()}</span>
                   </div>
                 </div>
 
-                {/* Channel Strip Hardware Buttons */}
-                <div className="grid grid-cols-2 gap-1.5 pt-2 border-t border-[#171c26]">
+                {/* 7. Bottom Hardware Quick Action Buttons */}
+                <div className="grid grid-cols-2 gap-1.5 pt-2 border-t border-[#171d29] font-mono text-[10px]">
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleTriggerDemo(stage.id, stage.id === 'stage-1' ? 'talk-en-k8s' : 'talk-es-devops');
+                      setSelectedStageId(stage.id);
+                      onSelectStage(stage.id);
                     }}
-                    className="hardware-btn py-1 px-2 rounded text-[10px] font-mono text-center font-bold text-gray-300 hover:text-[#00f5ff]"
+                    className={`hardware-btn py-1 px-2 rounded text-center font-bold transition-all ${
+                      isSelected
+                        ? 'bg-[#00f5ff]/15 border-[#00f5ff] text-[#00f5ff]'
+                        : 'text-gray-300 hover:text-white'
+                    }`}
                   >
-                    TEST_DEMO
+                    {isSelected ? 'SALA_ACTIVA' : 'INSPECCIONAR'}
                   </button>
 
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      guardAction(() => handleStopStage(stage.id), 'DETENER CANAL');
+                      guardAction(() => handleSelectStageSource(stage.id, 'idle'), 'DETENER CANAL');
                     }}
-                    className="hardware-btn py-1 px-2 rounded text-[10px] font-mono text-center font-bold text-[#ff1744] hover:bg-[#ff1744]/10"
+                    className="hardware-btn py-1 px-2 rounded text-center font-bold text-[#ff1744] hover:bg-[#ff1744]/15 border-[#ff1744]/30"
                   >
-                    STOP_CH
+                    STOP_SALA
                   </button>
                 </div>
               </div>
@@ -1211,9 +1779,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
           })}
 
           {/* DYNAMIC PROVISIONING CARD FOR ANY EVENT IN THE WORLD */}
-          <div 
+          <div
             onClick={() => setShowAddStageModal(true)}
-            className="bg-[#07090e]/60 hover:bg-[#0b0f17] rounded border-2 border-dashed border-[#202738] hover:border-[#00f5ff]/60 p-4 transition-all cursor-pointer flex flex-col items-center justify-center text-center space-y-2 group min-h-[140px]"
+            className="bg-[#07090e]/60 hover:bg-[#0b0f17] rounded-xl border-2 border-dashed border-[#202738] hover:border-[#00f5ff]/60 p-4 transition-all cursor-pointer flex flex-col items-center justify-center text-center space-y-2 group min-h-[160px]"
             title="Conectar Mini PC o crear un nuevo escenario para cualquier evento"
           >
             <div className="w-10 h-10 rounded-full bg-[#111624] border border-[#232d42] group-hover:border-[#00f5ff] flex items-center justify-center text-[#00f5ff] transition-all">
@@ -1300,7 +1868,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
                   {isRecording ? (
                     <button
-                      onClick={stopMicStreaming}
+                      onClick={() => stopMicStreaming()}
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-[#ff1744] hover:bg-[#ff1744]/90 text-white text-xs font-mono font-bold rounded transition-all animate-pulse shadow-[0_0_10px_#ff1744]"
                     >
                       <Square className="w-3.5 h-3.5" />
@@ -1400,40 +1968,158 @@ export const AdminView: React.FC<AdminViewProps> = ({
             </div>
 
             {/* REPRODUCTOR YOUTUBE & DEMOS DE CHARLAS NERDEARLA */}
-            <div className="p-3.5 bg-[#07090e] border-2 border-[#1c2436] rounded-xl space-y-3 shadow-xl">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#171b26] pb-2">
-                <span className="text-xs font-mono font-bold text-[#00f5ff] flex items-center gap-1.5 uppercase">
-                  <Video className="w-3.5 h-3.5 text-[#ff1744]" />
-                  REPRODUCTOR DE VIDEO YOUTUBE // DEMOS NERDEARLA
-                </span>
-                <span className="text-[10px] font-mono text-gray-400">
-                  Transmisión y Sincronización en Sala {currentStage.name}
-                </span>
+            <div className="p-3.5 bg-[#07090e] border-2 border-[#1c2436] rounded-xl space-y-3.5 shadow-xl">
+              {/* Header with Live Tally & Output Target Pill */}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#171b26] pb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="p-1 rounded bg-[#ff1744]/20 border border-[#ff1744]/40">
+                    <Video className="w-4 h-4 text-[#ff1744]" />
+                  </span>
+                  <div>
+                    <span className="text-xs font-mono font-bold text-[#00f5ff] uppercase tracking-wider block">
+                      REPRODUCTOR DE VIDEO YOUTUBE // DEMOS NERDEARLA
+                    </span>
+                    <span className="text-[10px] font-mono text-gray-400">
+                      Transmisión de charlas de referencia con subtitulado y traducción multimodal en tiempo real
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 font-mono text-xs">
+                  <span className="text-[10px] text-gray-400">DESTINO ACTUAL:</span>
+                  <span className="px-2 py-0.5 rounded bg-[#00f5ff]/15 border border-[#00f5ff]/40 text-[#00f5ff] font-bold">
+                    {youtubeTargetStage.name.toUpperCase()}
+                  </span>
+                </div>
               </div>
 
+              {/* 1. EXPLICIT SALA DE DESTINO SELECTOR (BROADCAST MATRIX TARGET) */}
+              <div className="p-3 bg-[#0a0d15] border-2 border-[#1c2538] rounded-xl space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Radio className="w-4 h-4 text-[#ffb800]" />
+                    <span className="text-xs font-mono font-bold text-[#ffb800] uppercase tracking-wider">
+                      SALA DE DESTINO DE TRANSMISIÓN // STREAM TARGET MATRIX:
+                    </span>
+                  </div>
+                  <div className="text-[10px] font-mono text-gray-400">
+                    SALA CONECTADA:{' '}
+                    <span className="text-white font-bold">{youtubeTargetStage.name.toUpperCase()}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 font-mono">
+                  {stages.map((stg, i) => {
+                    const isTarget = stg.id === youtubeTargetStage.id;
+                    const isStageLive = stg.isLive;
+                    const isStageReceivingStream =
+                      (isDemoSyncRunning && youtubeTargetStage.id === stg.id) ||
+                      syncingYoutubeStageId === stg.id;
+
+                    return (
+                      <button
+                        key={stg.id}
+                        type="button"
+                        onClick={() => {
+                          setYoutubeTargetStageId(stg.id);
+                          if (isDemoSyncRunning) {
+                            handleTriggerDemo(stg.id, activeSyncDemoKey);
+                          }
+                        }}
+                        className={`p-2.5 rounded-lg border text-left transition-all flex flex-col justify-between ${
+                          isTarget
+                            ? 'bg-[#121c2d] border-[#00f5ff] text-white shadow-[0_0_12px_rgba(0,245,255,0.3)] ring-1 ring-[#00f5ff]'
+                            : 'bg-[#07090e] border-[#182030] text-gray-400 hover:text-white hover:border-[#2b3850]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[9px] font-bold text-[#00f5ff]">CH 0{i + 1}</span>
+                          <span
+                            className={`w-2 h-2 rounded-full ${
+                              isStageReceivingStream
+                                ? 'bg-[#00ff66] shadow-[0_0_6px_#00ff66] animate-ping'
+                                : isStageLive
+                                ? 'bg-[#ff1744] shadow-[0_0_6px_#ff1744] animate-pulse'
+                                : 'bg-[#293348]'
+                            }`}
+                          />
+                        </div>
+                        <div className="text-xs font-bold truncate text-white">{stg.name}</div>
+                        <div className="text-[9px] text-[#64748b] truncate mt-0.5">
+                          {isStageReceivingStream ? '● STREAM ACTIVO' : stg.track || 'Track'}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 2. UNMISTAKABLE LIVE BANNER WHEN ACTIVE */}
+              {(isDemoSyncRunning ||
+                (youtubeTargetStage.isLive && youtubeTargetStage.currentAudioSource === 'stream') ||
+                syncingYoutubeStageId === youtubeTargetStage.id) && (
+                <div className="p-3.5 bg-gradient-to-r from-emerald-950/80 via-[#06140d] to-[#070a10] border-2 border-[#00ff66] rounded-xl text-white font-mono shadow-[0_0_20px_rgba(0,255,102,0.3)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-pulse">
+                  <div className="flex items-center gap-3">
+                    <span className="relative flex h-4 w-4 shrink-0">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00ff66] opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-4 w-4 bg-[#00ff66] shadow-[0_0_10px_#00ff66]"></span>
+                    </span>
+                    <div>
+                      <div className="font-mono font-black text-xs sm:text-sm text-[#00ff66] tracking-wide">
+                        🟢 EMITIENDO VIDEO Y SUBTÍTULOS EN: {youtubeTargetStage.name.toUpperCase()} (ES / EN / PT)
+                      </div>
+                      <div className="text-[11px] text-gray-300 font-sans mt-0.5">
+                        Transmisión activa hacia {youtubeTargetStage.name}. Mirá los subtítulos proyectándose en vivo en el Teleprompter y en vMix / OBS.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                    <span className="px-2 py-0.5 rounded bg-black/60 border border-[#00f5ff]/50 text-[#00f5ff] text-[10px] font-bold">
+                      ES
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-black/60 border border-[#38bdf8]/50 text-[#38bdf8] text-[10px] font-bold">
+                      EN
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-black/60 border border-[#00ff66]/50 text-[#00ff66] text-[10px] font-bold">
+                      PT
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Preloaded Real Nerdearla Talks Selector */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {YOUTUBE_NERDEARLA_TALKS.map((t) => {
-                  const isSelected = youtubeVideoId === t.id;
-                  return (
-                    <button
-                      key={t.id}
-                      onClick={() => {
-                        setYoutubeVideoId(t.id);
-                        setActiveSyncDemoKey(t.demoKey);
-                      }}
-                      className={`p-2.5 rounded-lg text-left transition-all border font-mono ${
-                        isSelected
-                          ? 'bg-[#121c2d] border-[#00f5ff] text-white shadow-[0_0_8px_rgba(0,245,255,0.3)]'
-                          : 'bg-[#0a0d14] border-[#1b2230] text-gray-400 hover:text-white hover:border-gray-500'
-                      }`}
-                    >
-                      <div className="text-[9px] font-bold" style={{ color: t.color }}>{t.tag}</div>
-                      <div className="text-xs font-bold truncate mt-0.5">{t.title}</div>
-                      <div className="text-[9px] text-[#64748b]">{t.speaker}</div>
-                    </button>
-                  );
-                })}
+              <div className="space-y-1">
+                <span className="text-[10px] font-mono text-gray-400 block">
+                  CHARLAS OFICIALES NERDEARLA (PREAJUSTES):
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {YOUTUBE_NERDEARLA_TALKS.map((t) => {
+                    const isSelected = youtubeVideoId === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => {
+                          setYoutubeVideoId(t.id);
+                          setActiveSyncDemoKey(t.demoKey);
+                          if (isDemoSyncRunning) {
+                            handleTriggerDemo(youtubeTargetStage.id, t.demoKey);
+                          }
+                        }}
+                        className={`p-2.5 rounded-lg text-left transition-all border font-mono ${
+                          isSelected
+                            ? 'bg-[#121c2d] border-[#00f5ff] text-white shadow-[0_0_8px_rgba(0,245,255,0.3)]'
+                            : 'bg-[#0a0d14] border-[#1b2230] text-gray-400 hover:text-white hover:border-gray-500'
+                        }`}
+                      >
+                        <div className="text-[9px] font-bold" style={{ color: t.color }}>{t.tag}</div>
+                        <div className="text-xs font-bold truncate mt-0.5">{t.title}</div>
+                        <div className="text-[9px] text-[#64748b]">{t.speaker}</div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Custom YouTube URL Form */}
@@ -1469,22 +2155,36 @@ export const AdminView: React.FC<AdminViewProps> = ({
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => handleTriggerDemo(currentStage.id, activeSyncDemoKey)}
-                    className={`px-3 py-1.5 text-xs font-mono font-bold rounded-lg flex items-center gap-1.5 transition-all ${
+                    type="button"
+                    onClick={async () => {
+                      if (isDemoSyncRunning) {
+                        await handleStopStage(youtubeTargetStage.id);
+                        setIsDemoSyncRunning(false);
+                        setSyncingYoutubeStageId(null);
+                      } else {
+                        await handleTriggerDemo(youtubeTargetStage.id, activeSyncDemoKey);
+                      }
+                    }}
+                    className={`px-3.5 py-2 text-xs font-mono font-bold rounded-lg flex items-center gap-2 transition-all ${
                       isDemoSyncRunning
-                        ? 'bg-[#00ff66]/20 border border-[#00ff66] text-[#00ff66] shadow-[0_0_12px_rgba(0,255,102,0.4)] animate-pulse'
-                        : 'hardware-btn-active bg-[#141b29] text-[#00f5ff] hover:shadow-[0_0_10px_rgba(0,245,255,0.4)]'
+                        ? 'bg-[#ff1744] hover:bg-[#ff1744]/90 text-white shadow-[0_0_15px_rgba(255,23,68,0.5)] animate-pulse'
+                        : 'hardware-btn-active bg-[#141b29] text-[#00f5ff] hover:shadow-[0_0_15px_rgba(0,245,255,0.4)] border border-[#00f5ff]/60'
                     }`}
-                    title="Inicia el flujo de subtítulos y traducción simultánea para esta charla en la sala seleccionada"
+                    title={`Inicia el flujo de subtítulos y traducción simultánea para esta charla en ${youtubeTargetStage.name}`}
                   >
                     <Sparkles className="w-3.5 h-3.5" />
-                    <span>{isDemoSyncRunning ? 'SINCRONIZANDO SUBTÍTULOS EN VIVO...' : 'SINCRONIZAR_SUBTÍTULOS_SALA'}</span>
+                    <span>
+                      {isDemoSyncRunning
+                        ? `🛑 DETENER EN ${youtubeTargetStage.name.toUpperCase()}`
+                        : `🚀 SINCRONIZAR EN ${youtubeTargetStage.name.toUpperCase()}`}
+                    </span>
                   </button>
 
                   <button
-                    onClick={() => handleStopStage(currentStage.id)}
-                    className="hardware-btn px-2.5 py-1.5 text-xs font-mono font-bold text-gray-400 hover:text-red-400 rounded-lg flex items-center gap-1 transition-all"
-                    title="Detener subtítulos y audio de demo"
+                    type="button"
+                    onClick={() => handleStopStage(youtubeTargetStage.id)}
+                    className="hardware-btn px-2.5 py-2 text-xs font-mono font-bold text-gray-400 hover:text-red-400 rounded-lg flex items-center gap-1 transition-all"
+                    title={`Detener subtítulos y audio de demo en ${youtubeTargetStage.name}`}
                   >
                     <Square className="w-3 h-3" />
                     <span>DETENER</span>
@@ -1501,15 +2201,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   <span>Abrir en YouTube ↗</span>
                 </a>
               </div>
-
-              {isDemoSyncRunning && (
-                <div className="flex items-center gap-2 bg-[#00ff66]/10 border border-[#00ff66]/30 px-3 py-2 rounded-lg text-xs font-mono text-[#00ff66] animate-pulse">
-                  <span className="w-2 h-2 rounded-full bg-[#00ff66] animate-ping shrink-0" />
-                  <span>
-                    Subtítulos emitiéndose en vivo en <strong>{currentStage.name}</strong> (Español, Inglés y Portugués). Mirá los subtítulos actualizándose en tiempo real abajo en el <strong>Rack 04</strong> y en <strong>TRANSMISIÓN & TV / OBS</strong>.
-                  </span>
-                </div>
-              )}
 
               <div className="text-[10px] font-mono text-[#64748b] bg-[#05070a] p-2.5 rounded-lg border border-[#141724] leading-relaxed">
                 💡 <span className="text-gray-300">Modo de Demostración & Jurado:</span> Podés reproducir el video directamente aquí con audio, o abrirlo en otra pestaña y usar <strong className="text-cyan-400">"Capturar Pestaña (PiP)"</strong> en la Pantalla de Sala para transcribir el audio en tiempo real con Gemini Live.

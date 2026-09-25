@@ -315,6 +315,28 @@ app.post('/api/stages/:id/stop', requireAdminAuth, (req: Request, res: Response)
   res.json({ success: true, message: `Stage ${req.params.id} stopped` });
 });
 
+// Pin / Persist Audio Input Route to Specific Stage
+app.post('/api/stages/:id/audio-route', requireAdminAuth, (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { deviceId, deviceLabel, sourceKind } = req.body;
+  if (typeof deviceId !== 'string') {
+    return res.status(400).json({ error: 'deviceId is required and must be a string' });
+  }
+
+  const validSourceKinds = ['mic', 'file', 'demo', 'stream', 'idle'];
+  const validatedSourceKind = sourceKind && validSourceKinds.includes(sourceKind)
+    ? (sourceKind as any)
+    : undefined;
+
+  const stage = stageManager.setStageAudioRoute(
+    id,
+    deviceId,
+    deviceLabel || 'Dispositivo de Audio',
+    validatedSourceKind
+  );
+  res.json({ success: true, stage });
+});
+
 // Trigger Gemini 2.5 Pro Deep Intel & Executive Summary
 app.post('/api/stages/:id/deep-intel', requireAdminAuth, async (req: Request, res: Response) => {
   try {
@@ -637,6 +659,23 @@ wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
         case 'audio_level': {
           if (message.stageId && typeof message.level === 'number') {
             stageManager.setAudioLevel(message.stageId, message.level);
+          }
+          break;
+        }
+
+        case 'set_audio_route': {
+          if (!requireAuth()) return;
+          if (message.stageId && typeof message.deviceId === 'string') {
+            const validSourceKinds = ['mic', 'file', 'demo', 'stream', 'idle'];
+            const validatedSourceKind = message.sourceKind && validSourceKinds.includes(message.sourceKind)
+              ? message.sourceKind
+              : undefined;
+            stageManager.setStageAudioRoute(
+              message.stageId,
+              message.deviceId,
+              message.deviceLabel || 'Dispositivo de Audio',
+              validatedSourceKind
+            );
           }
           break;
         }

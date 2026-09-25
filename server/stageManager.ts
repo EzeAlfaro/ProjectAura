@@ -200,7 +200,9 @@ export class StageManager {
       audienceCount: 0,
       latencyMs: 0,
       detectedLang: 'es',
-      startedAt: Date.now()
+      startedAt: Date.now(),
+      assignedDeviceId: stageData.assignedDeviceId,
+      assignedDeviceLabel: stageData.assignedDeviceLabel
     };
 
     this.stages.set(id, newStage);
@@ -215,6 +217,32 @@ export class StageManager {
     return newStage;
   }
 
+  public setStageAudioRoute(
+    stageId: string,
+    deviceId: string,
+    deviceLabel: string,
+    sourceKind?: Stage['currentAudioSource']
+  ): Stage {
+    let stage = this.stages.get(stageId);
+    if (!stage) {
+      stage = this.createStage({
+        id: stageId,
+        name: `Sala ${stageId.replace('stage-', '').toUpperCase()}`,
+        track: 'Track General',
+        speaker: 'Orador de Sala',
+        talkTitle: 'Transmisión en Vivo'
+      });
+    }
+    stage.assignedDeviceId = deviceId;
+    stage.assignedDeviceLabel = deviceLabel;
+    if (sourceKind) {
+      stage.currentAudioSource = sourceKind;
+    }
+    logger.info('stage', `Audio route pinned for stage [${stageId}]: deviceId="${deviceId}", label="${deviceLabel}", sourceKind="${stage.currentAudioSource}"`);
+    this.broadcastSystemUpdate();
+    return stage;
+  }
+
   public deleteStage(id: string): boolean {
     if (this.stages.size <= 1) {
       return false;
@@ -222,11 +250,14 @@ export class StageManager {
     const cleanId = id.trim().toLowerCase();
     if (!this.stages.has(cleanId)) return false;
 
-    const timer = this.activeDemoTimers.get(cleanId);
-    if (timer) {
-      clearInterval(timer);
-      this.activeDemoTimers.delete(cleanId);
+    this.stopDemo(cleanId);
+    const session = this.liveSessions.get(cleanId);
+    if (session) {
+      session.disconnect().catch(() => {});
+      this.liveSessions.delete(cleanId);
     }
+    this.pcmBuffers.delete(cleanId);
+    this.pcmBufferLengths.delete(cleanId);
 
     this.stages.delete(cleanId);
     this.stageChunks.delete(cleanId);
@@ -346,9 +377,14 @@ export class StageManager {
       });
     }
 
+    const wasLive = stage.isLive;
+    const prevSource = stage.currentAudioSource;
     this.stopDemo(stageId);
     stage.isLive = true;
     stage.currentAudioSource = 'mic';
+    if (!wasLive || prevSource !== 'mic') {
+      this.broadcastSystemUpdate();
+    }
     const startTime = Date.now();
 
     const chunk = await geminiService.processLiveText(text, sourceLang, stageId);
@@ -377,15 +413,20 @@ export class StageManager {
 
     // Only add and broadcast if chunk has valid transcribed speech
     if (chunk && chunk.originalText && chunk.originalText.trim().length > 0 && !chunk.originalText.startsWith('[')) {
+      const wasLive = stage.isLive;
+      const prevSource = stage.currentAudioSource;
       this.stopDemo(stageId);
       stage.isLive = true;
       stage.currentAudioSource = 'mic';
       stage.detectedLang = chunk.sourceLang as 'es' | 'en' | 'pt';
+      if (!wasLive || prevSource !== 'mic') {
+        this.broadcastSystemUpdate();
+      }
       this.addChunkToStage(stageId, chunk);
     } else {
       const lastErr = geminiService.getLastError();
       if (lastErr && Date.now() - lastErr.timestamp < 10000) {
-        this.broadcast({
+        this.broadcastToStage(stageId, {
           type: 'system_alert',
           stageId,
           level: 'error',
@@ -702,7 +743,13 @@ export class StageManager {
     let currentIndex = 0;
 
     const playNext = () => {
-      if (!stage.isLive) return;
+      // 100% Stage Isolation: Abort timer loop if stage is not live or audio source changed
+      if (!stage.isLive || stage.currentAudioSource !== 'demo') {
+        this.activeDemoTimers.delete(stageId);
+        return;
+      }
+
+      if (!talk.chunks || talk.chunks.length === 0) return;
 
       const item = talk.chunks[currentIndex];
       const chunkId = `chunk-${Date.now()}-${currentIndex}`;
@@ -723,6 +770,11 @@ export class StageManager {
       };
 
       stage.audioLevel = Math.floor(Math.random() * 25) + 60;
+      this.broadcastToStage(stageId, {
+        type: 'audio_level',
+        stageId,
+        level: stage.audioLevel
+      });
       this.addChunkToStage(stageId, chunk);
 
       currentIndex = (currentIndex + 1) % talk.chunks.length;
@@ -751,6 +803,14 @@ export class StageManager {
 
   public stopStage(stageId: string) {
     this.stopDemo(stageId);
+    const session = this.liveSessions.get(stageId);
+    if (session) {
+      session.disconnect().catch(() => {});
+      this.liveSessions.delete(stageId);
+    }
+    this.pcmBuffers.delete(stageId);
+    this.pcmBufferLengths.delete(stageId);
+
     const stage = this.stages.get(stageId);
     if (stage) {
       stage.isLive = false;

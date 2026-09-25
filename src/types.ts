@@ -35,6 +35,8 @@ export interface Stage {
   latencyMs: number;
   detectedLang: 'es' | 'en' | 'pt';
   startedAt?: number;
+  assignedDeviceId?: string;
+  assignedDeviceLabel?: string;
 }
 
 export interface StageTakeaway {
@@ -119,3 +121,13 @@ export interface AudienceQuestion {
   votes: number;
   status: 'pending' | 'approved' | 'on_stage' | 'dismissed';
 }
+
+export type AudioSourceKind = 'mic' | 'tab' | 'youtube' | 'demo' | 'idle';
+
+export interface StageAudioRouting {
+  deviceId: string;
+  deviceLabel: string;
+  sourceKind: AudioSourceKind;
+}
+
+export type StageAudioRoutingMap = Record<string, StageAudioRouting>;
