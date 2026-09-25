@@ -1,7 +1,13 @@
 import { GoogleGenAI, Type, Schema } from '@google/genai';
-import { SubtitleChunk, TechTerm } from './types.js';
+import { SubtitleChunk, TechTerm, EngineMode, KeyPoolItem } from './types.js';
 import { extractTechTerms, TECH_GLOSSARY, normalizePhoneticTechTerms } from './glossary.js';
 import { translateConferenceText, translateConferenceTextLocally } from './localTranslator.js';
+
+function maskKey(key: string): string {
+  if (!key) return '';
+  if (key.length <= 10) return 'AIza...***';
+  return `${key.slice(0, 8)}...${key.slice(-4)}`;
+}
 
 const SYSTEM_INSTRUCTION = `
 You are the official real-time transcription, simultaneous translation, and technical glossary engine for the Nerdearla Tech Conference in Buenos Aires.
@@ -87,25 +93,244 @@ export class GeminiService {
   private apiKey: string | null = null;
   private isKeyBlocked: boolean = false;
   private recentContext: Map<string, string[]> = new Map();
+  private gemmaAvailable: boolean = false;
+  private gemmaLastCheck: number = 0;
+  private forcedEngine: EngineMode = 'auto';
+  private keyPool: Array<{
+    id: string;
+    key: string;
+    maskedKey: string;
+    addedAt: number;
+    status: 'active' | 'standby' | 'rate_limited' | 'blocked' | 'invalid';
+    requestsSuccess: number;
+    requestsFailed: number;
+    lastUsedAt?: number;
+    lastError?: string;
+    cooldownUntil?: number;
+  }> = [];
 
   constructor() {
     this.reloadKey();
   }
 
-  public reloadKey() {
-    this.apiKey = process.env.GEMINI_API_KEY || null;
+  public reloadKey(initialKey?: string) {
+    const rawKey = initialKey || process.env.GEMINI_API_KEY || null;
     this.isKeyBlocked = false;
-    if (this.apiKey && this.apiKey.trim().length > 0) {
+
+    if (rawKey && rawKey.trim().length > 0) {
+      const cleanKey = rawKey.trim();
+      let existing = this.keyPool.find(k => k.key === cleanKey);
+      if (!existing) {
+        existing = {
+          id: `key-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          key: cleanKey,
+          maskedKey: maskKey(cleanKey),
+          addedAt: Date.now(),
+          status: 'active',
+          requestsSuccess: 0,
+          requestsFailed: 0
+        };
+        for (const k of this.keyPool) {
+          if (k.status === 'active') k.status = 'standby';
+        }
+        this.keyPool.unshift(existing);
+      } else {
+        existing.status = 'active';
+        existing.cooldownUntil = undefined;
+        for (const k of this.keyPool) {
+          if (k.id !== existing.id && k.status === 'active') k.status = 'standby';
+        }
+      }
+
+      this.apiKey = cleanKey;
+      process.env.GEMINI_API_KEY = cleanKey;
       try {
         this.client = new GoogleGenAI({ apiKey: this.apiKey });
-        console.log('[GeminiService] Initialized with Google GenAI SDK');
+        console.log(`[GeminiService] Initialized with Google GenAI SDK (${maskKey(cleanKey)})`);
       } catch (err) {
         console.error('[GeminiService] Error initializing GoogleGenAI:', err);
         this.client = null;
       }
+    } else if (this.keyPool.length > 0) {
+      this.rotateKey();
     } else {
       this.client = null;
+      this.apiKey = null;
       console.log('[GeminiService] Running in standalone demo/simulation fallback mode (GEMINI_API_KEY not set)');
+    }
+  }
+
+  public addKey(newKey: string): KeyPoolItem {
+    const cleanKey = newKey.trim();
+    let existing = this.keyPool.find(k => k.key === cleanKey);
+    if (existing) {
+      existing.status = 'active';
+      existing.cooldownUntil = undefined;
+      for (const k of this.keyPool) {
+        if (k.id !== existing.id && k.status === 'active') k.status = 'standby';
+      }
+      this.apiKey = cleanKey;
+      process.env.GEMINI_API_KEY = cleanKey;
+      this.client = new GoogleGenAI({ apiKey: this.apiKey });
+      this.isKeyBlocked = false;
+      return this.toSafeKeyItem(existing);
+    }
+
+    const item = {
+      id: `key-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      key: cleanKey,
+      maskedKey: maskKey(cleanKey),
+      addedAt: Date.now(),
+      status: (this.keyPool.length === 0 ? 'active' : 'standby') as 'active' | 'standby',
+      requestsSuccess: 0,
+      requestsFailed: 0
+    };
+    this.keyPool.push(item);
+
+    if (item.status === 'active') {
+      this.apiKey = cleanKey;
+      process.env.GEMINI_API_KEY = cleanKey;
+      this.client = new GoogleGenAI({ apiKey: this.apiKey });
+      this.isKeyBlocked = false;
+    }
+    return this.toSafeKeyItem(item);
+  }
+
+  public rotateKey(): KeyPoolItem | null {
+    if (this.keyPool.length === 0) return null;
+    const now = Date.now();
+    for (const k of this.keyPool) {
+      if (k.cooldownUntil && k.cooldownUntil <= now) {
+        k.cooldownUntil = undefined;
+        if (k.status === 'rate_limited') k.status = 'standby';
+      }
+    }
+
+    const currentIdx = this.keyPool.findIndex(k => k.status === 'active');
+    const startIdx = currentIdx >= 0 ? (currentIdx + 1) % this.keyPool.length : 0;
+
+    let targetIdx = -1;
+    for (let i = 0; i < this.keyPool.length; i++) {
+      const idx = (startIdx + i) % this.keyPool.length;
+      const cand = this.keyPool[idx];
+      if (cand.status !== 'blocked' && (!cand.cooldownUntil || cand.cooldownUntil <= now)) {
+        targetIdx = idx;
+        break;
+      }
+    }
+
+    if (targetIdx !== -1) {
+      for (let i = 0; i < this.keyPool.length; i++) {
+        if (i === targetIdx) {
+          this.keyPool[i].status = 'active';
+          this.apiKey = this.keyPool[i].key;
+          process.env.GEMINI_API_KEY = this.apiKey;
+          this.client = new GoogleGenAI({ apiKey: this.apiKey });
+          this.isKeyBlocked = false;
+        } else if (this.keyPool[i].status === 'active') {
+          this.keyPool[i].status = 'standby';
+        }
+      }
+      console.log(`[GeminiService] Rotated active key to: ${this.keyPool[targetIdx].maskedKey}`);
+      return this.toSafeKeyItem(this.keyPool[targetIdx]);
+    } else {
+      console.warn('[GeminiService] All keys in pool are blocked or exhausted.');
+      this.isKeyBlocked = true;
+      return null;
+    }
+  }
+
+  public removeKey(id: string): boolean {
+    const idx = this.keyPool.findIndex(k => k.id === id);
+    if (idx === -1) return false;
+    const wasActive = this.keyPool[idx].status === 'active';
+    this.keyPool.splice(idx, 1);
+    if (wasActive) {
+      if (this.keyPool.length > 0) {
+        this.rotateKey();
+      } else {
+        this.disconnectAll();
+      }
+    }
+    return true;
+  }
+
+  public disconnectAll() {
+    this.keyPool = [];
+    this.apiKey = null;
+    this.client = null;
+    this.isKeyBlocked = false;
+    process.env.GEMINI_API_KEY = '';
+    console.log('[GeminiService] Disconnected all API keys. Engine set to Local/Standalone.');
+  }
+
+  public setForcedEngine(mode: EngineMode) {
+    this.forcedEngine = mode;
+    console.log(`[GeminiService] Forced engine set to: ${mode}`);
+  }
+
+  public getForcedEngine(): EngineMode {
+    return this.forcedEngine;
+  }
+
+  public getKeyPoolInfo(): KeyPoolItem[] {
+    const now = Date.now();
+    return this.keyPool.map(k => {
+      if (k.cooldownUntil && k.cooldownUntil <= now) {
+        k.cooldownUntil = undefined;
+        if (k.status === 'rate_limited') k.status = 'standby';
+      }
+      return this.toSafeKeyItem(k);
+    });
+  }
+
+  public getActiveKeyMasked(): string | undefined {
+    return this.keyPool.find(k => k.status === 'active')?.maskedKey;
+  }
+
+  private toSafeKeyItem(k: any): KeyPoolItem {
+    return {
+      id: k.id,
+      maskedKey: k.maskedKey,
+      addedAt: k.addedAt,
+      status: k.status,
+      requestsSuccess: k.requestsSuccess,
+      requestsFailed: k.requestsFailed,
+      lastUsedAt: k.lastUsedAt,
+      lastError: k.lastError,
+      cooldownUntil: k.cooldownUntil
+    };
+  }
+
+  public recordKeySuccess() {
+    const activeKey = this.keyPool.find(k => k.status === 'active');
+    if (activeKey) {
+      activeKey.requestsSuccess++;
+      activeKey.lastUsedAt = Date.now();
+    }
+  }
+
+  public handleKeyError(err: any) {
+    const activeKey = this.keyPool.find(k => k.status === 'active');
+    const msg = err?.message || String(err);
+    const isRateLimit = err?.status === 429 || msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED');
+    const isBlocked = err?.status === 403 || msg.includes('API_KEY_SERVICE_BLOCKED') || msg.includes('PERMISSION_DENIED');
+
+    if (activeKey) {
+      activeKey.requestsFailed++;
+      activeKey.lastError = isRateLimit ? '429 Quota Exceeded' : (isBlocked ? '403 Blocked' : 'Error');
+      if (isRateLimit) {
+        activeKey.status = 'rate_limited';
+        activeKey.cooldownUntil = Date.now() + 60000;
+        console.warn(`[GeminiService] Key ${activeKey.maskedKey} hit rate limit (429). Rotating to next key in pool...`);
+        this.rotateKey();
+      } else if (isBlocked) {
+        activeKey.status = 'blocked';
+        console.warn(`[GeminiService] Key ${activeKey.maskedKey} is blocked (403). Rotating to next key in pool...`);
+        this.rotateKey();
+      }
+    } else {
+      if (isBlocked) this.isKeyBlocked = true;
     }
   }
 
@@ -116,9 +341,6 @@ export class GeminiService {
   public getApiKey(): string | null {
     return this.apiKey;
   }
-
-  private gemmaAvailable: boolean = false;
-  private gemmaLastCheck: number = 0;
 
   public async checkGemmaAvailability(): Promise<boolean> {
     const now = Date.now();
@@ -173,6 +395,11 @@ export class GeminiService {
   }
 
   public getActiveEngineName(): 'gemini-cloud' | 'gemma-local' | 'native-offline' {
+    if (this.forcedEngine === 'native-offline') return 'native-offline';
+    if (this.forcedEngine === 'gemma-local') return 'gemma-local';
+    if (this.forcedEngine === 'gemini-cloud') {
+      return this.isConfigured() ? 'gemini-cloud' : 'native-offline';
+    }
     if (this.isConfigured()) return 'gemini-cloud';
     if (this.gemmaAvailable) return 'gemma-local';
     return 'native-offline';
@@ -197,13 +424,33 @@ export class GeminiService {
     // 1. Detect technical terms locally first on the normalized text
     const detectedLocalTerms = extractTechTerms(cleanText);
 
-    if (this.client && this.apiKey && !this.isKeyBlocked) {
+    // If forced to native-offline, completely bypass cloud and edge
+    if (this.forcedEngine === 'native-offline') {
+      const trans = await translateConferenceText(cleanText, sourceLang);
+      return {
+        id: chunkId,
+        stageId,
+        timestamp,
+        originalText: cleanText,
+        sourceLang: (sourceLang as any) || 'es',
+        esText: trans.esText || cleanText,
+        enText: trans.enText || cleanText,
+        ptText: trans.ptText || cleanText,
+        techTerms: detectedLocalTerms,
+        confidence: 0.99,
+        isFinal: true
+      };
+    }
+
+    const allowCloud = (this.forcedEngine === 'auto' || this.forcedEngine === 'gemini-cloud') && this.client && this.apiKey && !this.isKeyBlocked;
+
+    if (allowCloud) {
       try {
         const prevContext = (this.recentContext.get(stageId) || []).slice(-2).join(' ');
         const contextLine = prevContext ? `Previous context: "${prevContext}". ` : '';
         const prompt = `${contextLine}Translate and analyze this real-time spoken sentence from a conference talk: "${cleanText}" (Source language: ${sourceLang}).`;
 
-        const response = await this.client.models.generateContent({
+        const response = await this.client!.models.generateContent({
           model: modelName,
           contents: [{ parts: [{ text: prompt }] }],
           config: {
@@ -214,6 +461,8 @@ export class GeminiService {
             thinkingConfig: { thinkingBudget: 0 } as any
           }
         });
+
+        this.recordKeySuccess();
 
         // Store context history
         const stageHistory = this.recentContext.get(stageId) || [];
@@ -243,17 +492,13 @@ export class GeminiService {
           isFinal: true
         };
       } catch (err: any) {
-        if (err?.message?.includes('API_KEY_SERVICE_BLOCKED') || err?.status === 403) {
-          console.warn('[GeminiService] API key blocked by Google Cloud (403: API_KEY_SERVICE_BLOCKED). Disabling cloud calls to prevent lag; using fast local engine.');
-          this.isKeyBlocked = true;
-        } else {
-          console.warn('[GeminiService] Live text translation API call failed, using local translation:', err);
-        }
+        this.handleKeyError(err);
+        console.warn('[GeminiService] Live text translation API call failed, falling back to local engine:', err?.message || err);
       }
     }
 
     // 2. Google Gemma Edge Ingestion (Local On-Premise Engine via Ollama)
-    if (await this.checkGemmaAvailability()) {
+    if ((this.forcedEngine === 'gemma-local' || this.forcedEngine === 'auto') && (await this.checkGemmaAvailability())) {
       try {
         const gemmaPrompt = `Translate this technical conference subtitle chunk into Spanish (esText), English (enText), and Brazilian Portuguese (ptText). Keep IT terms verbatim. Output strictly JSON: {"esText":"...","enText":"...","ptText":"..."}.\nOriginal text: "${cleanText}"`;
         const gemmaResp = await this.queryGemma(gemmaPrompt, 'You are an IT conference translator. Output JSON only.');
@@ -363,6 +608,7 @@ export class GeminiService {
         }
       });
 
+      this.recordKeySuccess();
       const responseText = response.text?.trim() || '{}';
       const parsed = JSON.parse(responseText);
 
@@ -390,7 +636,8 @@ export class GeminiService {
         isFinal: true
       };
 
-    } catch (error) {
+    } catch (error: any) {
+      this.handleKeyError(error);
       console.error('[GeminiService] Error processing audio with Gemini API:', error);
       return {
         id: chunkId,
@@ -445,9 +692,10 @@ export class GeminiService {
     modelUsed: string;
   }> {
     const proModel = process.env.GEMINI_PRO_MODEL || 'gemini-3.5-pro';
+    const allowCloud = (this.forcedEngine === 'auto' || this.forcedEngine === 'gemini-cloud') && this.client && this.apiKey && !this.isKeyBlocked && !!transcriptText.trim();
 
-    if (!this.client || !this.apiKey || this.isKeyBlocked || !transcriptText.trim()) {
-      if (await this.checkGemmaAvailability()) {
+    if (!allowCloud) {
+      if ((this.forcedEngine === 'gemma-local' || this.forcedEngine === 'auto') && (await this.checkGemmaAvailability())) {
         try {
           const gemmaPrompt = `Analyze this technical conference talk transcript:\nTitle: "${stageTitle}"\nSpeaker: "${speaker}"\nTranscript: """${transcriptText}"""\n\nGenerate in JSON: {"takeaways":[{"bullet":"...","category":"architecture"}],"questions":[{"question":"...","context":"...","target":"speaker"}],"executiveSummary":"..."}`;
           const gemmaResp = await this.queryGemma(gemmaPrompt, 'You are a principal cloud architect. Return JSON only.');
@@ -479,7 +727,7 @@ export class GeminiService {
           }
         ],
         executiveSummary: `Resumen ejecutivo de la charla "${stageTitle}" presentada por ${speaker} en Nerdearla 2026. Se analizaron patrones de observabilidad, arquitecturas cloud-native y optimizaciones de rendimiento para cargas críticas de trabajo.`,
-        modelUsed: 'Motor Nativo Edge (0ms)'
+        modelUsed: 'Motor Nativo Standalone (0ms)'
       };
     }
 

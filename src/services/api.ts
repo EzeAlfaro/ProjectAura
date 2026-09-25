@@ -9,6 +9,9 @@ export async function fetchStatus(): Promise<{
   geminiConfigured: boolean;
   gemmaAvailable?: boolean;
   activeEngine?: 'gemini-cloud' | 'gemma-local' | 'native-offline';
+  forcedEngine?: 'auto' | 'gemini-cloud' | 'gemma-local' | 'native-offline';
+  keyPool?: any[];
+  activeKeyMasked?: string;
   stagesCount: number;
 }> {
   const res = await fetch(`${API_BASE}/status`);
@@ -35,11 +38,50 @@ export async function createStageApi(stageData: Partial<Stage>): Promise<{ stage
   return res.json();
 }
 
-export async function updateApiKey(apiKey: string, modelName?: string): Promise<{ success: boolean; geminiConfigured: boolean; model?: string }> {
+export async function updateApiKey(apiKey: string, modelName?: string): Promise<{ success: boolean; geminiConfigured: boolean; model?: string; activeEngine?: string; keyPool?: any[] }> {
   const res = await fetch(`${API_BASE}/config/key`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ apiKey, modelName }),
+  });
+  return res.json();
+}
+
+export async function setEngineModeApi(mode: 'auto' | 'gemini-cloud' | 'gemma-local' | 'native-offline'): Promise<{ success: boolean; forcedEngine: string; activeEngine: string }> {
+  const res = await fetch(`${API_BASE}/config/engine-mode`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode }),
+  });
+  return res.json();
+}
+
+export async function disconnectApi(): Promise<{ success: boolean; geminiConfigured: boolean; activeEngine: string; message: string }> {
+  const res = await fetch(`${API_BASE}/config/disconnect`, {
+    method: 'POST',
+  });
+  return res.json();
+}
+
+export async function addKeyToPoolApi(apiKey: string): Promise<{ success: boolean; addedKey: any; keyPool: any[]; geminiConfigured: boolean }> {
+  const res = await fetch(`${API_BASE}/config/key-pool/add`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ apiKey }),
+  });
+  return res.json();
+}
+
+export async function rotateApiKeyApi(): Promise<{ success: boolean; activeKey?: any; keyPool: any[]; geminiConfigured: boolean }> {
+  const res = await fetch(`${API_BASE}/config/key-pool/rotate`, {
+    method: 'POST',
+  });
+  return res.json();
+}
+
+export async function removeKeyFromPoolApi(id: string): Promise<{ success: boolean; keyPool: any[]; geminiConfigured: boolean }> {
+  const res = await fetch(`${API_BASE}/config/key-pool/${id}`, {
+    method: 'DELETE',
   });
   return res.json();
 }

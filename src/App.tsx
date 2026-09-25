@@ -28,6 +28,8 @@ export function App() {
   const [geminiConfigured, setGeminiConfigured] = useState<boolean>(false);
   const [gemmaAvailable, setGemmaAvailable] = useState<boolean>(false);
   const [activeEngine, setActiveEngine] = useState<'gemini-cloud' | 'gemma-local' | 'native-offline'>('native-offline');
+  const [forcedEngine, setForcedEngine] = useState<'auto' | 'gemini-cloud' | 'gemma-local' | 'native-offline'>('auto');
+  const [keyPool, setKeyPool] = useState<any[]>([]);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState<boolean>(false);
   const [isVMixModalOpen, setIsVMixModalOpen] = useState<boolean>(false);
@@ -59,6 +61,8 @@ export function App() {
         setGeminiConfigured(status.geminiConfigured);
         if (status.gemmaAvailable !== undefined) setGemmaAvailable(status.gemmaAvailable);
         if (status.activeEngine) setActiveEngine(status.activeEngine);
+        if (status.forcedEngine) setForcedEngine(status.forcedEngine as any);
+        if (status.keyPool) setKeyPool(status.keyPool);
       })
       .catch((e) => console.warn('Status check warning:', e));
 
@@ -210,6 +214,7 @@ export function App() {
         geminiConfigured={geminiConfigured}
         gemmaAvailable={gemmaAvailable}
         activeEngine={activeEngine}
+        forcedEngine={forcedEngine}
         onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
         onOpenQrModal={() => setIsQrModalOpen(true)}
         onOpenVMixModal={() => setIsVMixModalOpen(true)}
@@ -276,12 +281,24 @@ export function App() {
         </div>
       </footer>
 
-      {/* API Key Modal */}
+      {/* API Key & Engine Manager Modal */}
       <ApiKeyModal
         isOpen={isApiKeyModalOpen}
         onClose={() => setIsApiKeyModalOpen(false)}
         geminiConfigured={geminiConfigured}
-        onKeyUpdated={(configured) => setGeminiConfigured(configured)}
+        gemmaAvailable={gemmaAvailable}
+        activeEngine={activeEngine}
+        forcedEngine={forcedEngine}
+        keyPool={keyPool}
+        onKeyUpdated={(configured, newActiveEngine, updatedPool) => {
+          setGeminiConfigured(configured);
+          if (newActiveEngine) setActiveEngine(newActiveEngine as any);
+          if (updatedPool) setKeyPool(updatedPool);
+        }}
+        onEngineChanged={(newForced, newActive) => {
+          setForcedEngine(newForced as any);
+          setActiveEngine(newActive as any);
+        }}
       />
 
       {/* QR Code Attendee & Projector Modal */}

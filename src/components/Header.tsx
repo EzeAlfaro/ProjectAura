@@ -7,6 +7,7 @@ interface HeaderProps {
   geminiConfigured: boolean;
   gemmaAvailable?: boolean;
   activeEngine?: 'gemini-cloud' | 'gemma-local' | 'native-offline';
+  forcedEngine?: 'auto' | 'gemini-cloud' | 'gemma-local' | 'native-offline';
   onOpenApiKeyModal: () => void;
   onOpenQrModal: () => void;
   onOpenVMixModal?: () => void;
@@ -19,7 +20,8 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectView,
   geminiConfigured,
   gemmaAvailable,
-  activeEngine,
+  activeEngine = 'native-offline',
+  forcedEngine = 'auto',
   onOpenApiKeyModal,
   onOpenQrModal,
   onOpenVMixModal,
@@ -168,31 +170,32 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="hidden sm:inline">QR_SALA</span>
           </button>
 
-          {/* Hybrid AI Engine Status Switch (Gemini Cloud + Gemma Edge) */}
+          {/* Hybrid AI Engine Status Switch (Gemini Cloud + Gemma Edge + Standalone) */}
           <button
             onClick={onOpenApiKeyModal}
             className={`hardware-btn flex items-center gap-2 px-3 py-1.5 rounded text-xs font-mono font-bold transition-all ${
-              geminiConfigured
+              activeEngine === 'gemini-cloud'
                 ? 'border-[#00f5ff]/60 text-[#00f5ff] bg-[#00f5ff]/10'
-                : gemmaAvailable
+                : activeEngine === 'gemma-local'
                 ? 'border-[#00ff66]/60 text-[#00ff66] bg-[#00ff66]/10'
                 : 'border-[#ffb800]/60 text-[#ffb800] bg-[#ffb800]/10'
             }`}
-            title="Arquitectura Híbrida: Google Gemini 3.5 Cloud + Google Gemma 2B Edge + Standalone Native"
+            title="Consola de Motores: Conmutar entre Gemini 3.5 Cloud, Gemma 2B Edge o Motor Nativo Standalone"
           >
             <span className={`w-2 h-2 rounded-full ${
-              geminiConfigured
+              activeEngine === 'gemini-cloud'
                 ? 'bg-[#00f5ff] shadow-[0_0_8px_#00f5ff]'
-                : gemmaAvailable
+                : activeEngine === 'gemma-local'
                 ? 'bg-[#00ff66] shadow-[0_0_8px_#00ff66]'
                 : 'bg-[#ffb800]'
             }`} />
             <span className="hidden lg:inline">
-              {geminiConfigured
+              {activeEngine === 'gemini-cloud'
                 ? 'GEMINI 3.5 CLOUD'
-                : gemmaAvailable
+                : activeEngine === 'gemma-local'
                 ? 'GEMMA 2B (EDGE LOCAL)'
                 : 'MOTOR NATIVO (0 MS)'}
+              {forcedEngine && forcedEngine !== 'auto' ? ' [FORZADO]' : ''}
             </span>
             <KeyRound className="w-3 h-3 opacity-70" />
           </button>

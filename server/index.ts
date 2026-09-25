@@ -45,6 +45,9 @@ app.get('/api/status', async (req: Request, res: Response) => {
     geminiConfigured: geminiService.isConfigured(),
     gemmaAvailable,
     activeEngine: geminiService.getActiveEngineName(),
+    forcedEngine: geminiService.getForcedEngine(),
+    keyPool: geminiService.getKeyPoolInfo(),
+    activeKeyMasked: geminiService.getActiveKeyMasked(),
     stagesCount: stageManager.getStages().length,
     timestamp: Date.now()
   });
@@ -52,23 +55,99 @@ app.get('/api/status', async (req: Request, res: Response) => {
 
 // Update or set GEMINI_API_KEY dynamically from Admin UI
 app.post('/api/config/key', (req: Request, res: Response) => {
-  const { apiKey, modelName } = req.body;
+  const { apiKey, modelName, disconnect } = req.body;
+
+  if (disconnect || (typeof apiKey === 'string' && apiKey.trim() === '')) {
+    geminiService.disconnectAll();
+    return res.json({
+      success: true,
+      geminiConfigured: false,
+      activeEngine: geminiService.getActiveEngineName(),
+      message: 'Desconectado de Google Gemini Cloud con éxito'
+    });
+  }
+
   if (!apiKey || typeof apiKey !== 'string') {
     return res.status(400).json({ error: 'API key is required' });
   }
 
-  process.env.GEMINI_API_KEY = apiKey.trim();
+  const cleanKey = apiKey.trim();
   if (modelName && typeof modelName === 'string') {
     process.env.GEMINI_MODEL = modelName.trim();
     console.log(`[Config] Active Gemini speech model set to: ${modelName.trim()}`);
   }
-  geminiService.reloadKey();
+  geminiService.reloadKey(cleanKey);
 
   res.json({
     success: true,
     geminiConfigured: geminiService.isConfigured(),
     model: process.env.GEMINI_MODEL || 'gemini-3.5-transcribe-live',
+    activeEngine: geminiService.getActiveEngineName(),
+    keyPool: geminiService.getKeyPoolInfo(),
     message: 'API Key and model updated successfully'
+  });
+});
+
+// Select / Force Engine Mode ('auto' | 'gemini-cloud' | 'gemma-local' | 'native-offline')
+app.post('/api/config/engine-mode', (req: Request, res: Response) => {
+  const { mode } = req.body;
+  if (!mode || !['auto', 'gemini-cloud', 'gemma-local', 'native-offline'].includes(mode)) {
+    return res.status(400).json({ error: 'Invalid engine mode' });
+  }
+
+  geminiService.setForcedEngine(mode);
+  res.json({
+    success: true,
+    forcedEngine: geminiService.getForcedEngine(),
+    activeEngine: geminiService.getActiveEngineName()
+  });
+});
+
+// Disconnect all API keys / Revert to Local Standalone
+app.post('/api/config/disconnect', (req: Request, res: Response) => {
+  geminiService.disconnectAll();
+  res.json({
+    success: true,
+    geminiConfigured: false,
+    activeEngine: geminiService.getActiveEngineName(),
+    message: 'Desconectado de Google Cloud. Operando en modo local.'
+  });
+});
+
+// Add Key to Pool (Multi-key Queue)
+app.post('/api/config/key-pool/add', (req: Request, res: Response) => {
+  const { apiKey } = req.body;
+  if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
+    return res.status(400).json({ error: 'Valid API key is required' });
+  }
+
+  const item = geminiService.addKey(apiKey.trim());
+  res.json({
+    success: true,
+    addedKey: item,
+    keyPool: geminiService.getKeyPoolInfo(),
+    geminiConfigured: geminiService.isConfigured()
+  });
+});
+
+// Rotate to Next Available Key in Pool
+app.post('/api/config/key-pool/rotate', (req: Request, res: Response) => {
+  const nextKey = geminiService.rotateKey();
+  res.json({
+    success: !!nextKey,
+    activeKey: nextKey,
+    keyPool: geminiService.getKeyPoolInfo(),
+    geminiConfigured: geminiService.isConfigured()
+  });
+});
+
+// Remove Key from Pool
+app.delete('/api/config/key-pool/:id', (req: Request, res: Response) => {
+  const removed = geminiService.removeKey(req.params.id);
+  res.json({
+    success: removed,
+    keyPool: geminiService.getKeyPoolInfo(),
+    geminiConfigured: geminiService.isConfigured()
   });
 });
 

@@ -59,3 +59,31 @@ export interface StageData {
   executiveSummary?: string;
   intelModelUsed?: string;
 }
+
+export type EngineMode = 'auto' | 'gemini-cloud' | 'gemma-local' | 'native-offline';
+
+export interface KeyPoolItem {
+  id: string;
+  maskedKey: string;
+  addedAt: number;
+  status: 'active' | 'standby' | 'rate_limited' | 'blocked' | 'invalid';
+  requestsSuccess: number;
+  requestsFailed: number;
+  lastUsedAt?: number;
+  lastError?: string;
+  cooldownUntil?: number;
+}
+
+export interface EngineStatus {
+  status: string;
+  appName: string;
+  version: string;
+  geminiConfigured: boolean;
+  gemmaAvailable: boolean;
+  activeEngine: 'gemini-cloud' | 'gemma-local' | 'native-offline';
+  forcedEngine: EngineMode;
+  keyPool: KeyPoolItem[];
+  activeKeyMasked?: string;
+  stagesCount: number;
+  timestamp: number;
+}
