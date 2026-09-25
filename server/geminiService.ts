@@ -762,7 +762,7 @@ export class GeminiService {
     executiveSummary: string;
     modelUsed: string;
   }> {
-    const proModel = process.env.GEMINI_PRO_MODEL || 'gemini-3.5-pro';
+    const proModel = process.env.GEMINI_PRO_MODEL || config.ai.proModel || 'gemini-2.5-pro';
     const allowCloud = (this.forcedEngine === 'auto' || this.forcedEngine === 'gemini-cloud') && this.client && this.apiKey && !this.isKeyBlocked && !!transcriptText.trim();
 
     if (!allowCloud) {
@@ -831,7 +831,7 @@ export class GeminiService {
       console.warn(`[GeminiService] Gemini Pro deep insights failed with ${proModel}, trying flash fallback:`, err);
       try {
         const fallbackResponse = await this.client!.models.generateContent({
-          model: 'gemini-3.5-flash',
+          model: 'gemini-2.5-flash',
           contents: [{ parts: [{ text: `Summarize technical talk: ${stageTitle}. Speaker: ${speaker}. Transcript: ${transcriptText}` }] }],
           config: {
             systemInstruction: { parts: [{ text: DEEP_PRO_SYSTEM_INSTRUCTION }] },

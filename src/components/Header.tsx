@@ -336,7 +336,7 @@ export const Header: React.FC<HeaderProps> = ({
                     ? 'bg-[#00ff66] shadow-[0_0_8px_#00ff66]'
                     : 'bg-[#ffb800]'
                 }`} />
-                <span>{activeEngine === 'gemini-cloud' ? 'GEMINI 3.5' : activeEngine === 'gemma-local' ? 'GEMMA' : 'LOCAL'}</span>
+                <span>{activeEngine === 'gemini-cloud' ? 'GEMINI LIVE' : activeEngine === 'gemma-local' ? 'GEMMA' : 'LOCAL'}</span>
               </button>
             </div>
           </div>

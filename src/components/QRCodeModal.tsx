@@ -281,7 +281,7 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({
 
                 <div className="pt-2">
                   <span className="text-[11px] font-mono text-gray-500">
-                    Sala: <strong className="text-white">{stage.name}</strong> • Powered by Google Gemini 3.5 Transcribe Live
+                    Sala: <strong className="text-white">{stage.name}</strong> • Powered by Google Gemini Live (2.0/2.5 Flash)
                   </span>
                 </div>
               </div>

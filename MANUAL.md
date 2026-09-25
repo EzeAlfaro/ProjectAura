@@ -58,9 +58,9 @@ Anyone who has ever run the sound booth at a tech conference with 30+ concurrent
          ▼ (CAT6 / 1 Gbps)          ▼
 ┌────────────────────────────────────────────────────────┐
 │               CENTRAL AURA CORE SERVER                 │
-│  - Port 3001: Express API + Multi-Stage WS Engine      │
-│  - Port 3000: Vite Production HTTP Subtitle Server     │
-│  - Gemini 3.5 Transcribe Live (WebSocket Bi-Di Stream) │
+│  - Port 3001: Express API + WS Engine (Unified Prod)   │
+│  - Port 3000: Vite Dev Server (Proxy to 3001)          │
+│  - Gemini Live Transcribe (WebSocket Bi-Di Stream)     │
 │  - On-Premise Gemma 2 / Local Neural Macro Engine      │
 │  - In-Memory Ring Buffer Telemetry Logger (300 events) │
 └────────┬──────────────────────────┬────────────────────┘
@@ -113,10 +113,10 @@ Project Aura cuenta con una arquitectura de **3 motores redundantes** con conmut
 
 | Nivel / Tier | Motor / Engine | Protocolo / Protocol | Latencia / Latency | Rol Operativo / Operational Role |
 | :--- | :--- | :--- | :--- | :--- |
-| **Tier 1 (Nube)** | **Gemini 3.5 Transcribe Live** | WebSocket Bidireccional | < 150 ms | Reconocimiento de voz continuo, interim preview especulativo palabra por palabra y puntuación natural. |
+| **Tier 1 (Nube)** | **Gemini Live Transcribe (2.0/2.5 Flash)** | WebSocket Bidireccional | < 150 ms | Reconocimiento de voz continuo, interim preview especulativo palabra por palabra y puntuación natural (compatible con Gemini 3.5 Transcribe). |
 | **Tier 1B (Pro)** | **Gemini 2.5 Pro** | REST con Structured Schema | Post-charla | Síntesis ejecutiva de arquitectura, extracción de 5 puntos clave y generación de preguntas de alto nivel para Q&A. |
 | **Tier 2 (Edge)** | **Google Gemma 2 (Local)** | Ollama HTTP (`127.0.0.1:11434`) | ~250 ms | Inferencia local en servidor on-premise si el auditorio pierde salida a Internet internacional. |
-| **Tier 3 (Local)** | **Motor Standalone Neuronal** | Regex Macro + MyMemory Neural Cache | < 5 ms | Contingencia total de emergencia sin Internet: protege 150+ términos Spanglish y traduce ES ⇄ EN / PT. |
+| **Tier 3 (Local)** | **Motor Standalone Neuronal** | Regex Macro + MyMemory Neural Cache | < 5 ms | Contingencia total de emergencia sin Internet: protege 136 términos categorizados + 39 reglas fonéticas Spanglish y traduce ES ⇄ EN / PT. |
 
 ### Cola de Rotación de API Keys (Multi-Key Pool)
 - Si una clave alcanza el límite de cuota (HTTP 429 Rate Limit) durante una jornada de 8 horas, el servidor la pone automáticamente en cooldown de 60 segundos y **conmuta a la siguiente clave del pool en memoria sin cortar la transmisión**.
@@ -153,7 +153,7 @@ Project Aura cuenta con una arquitectura de **3 motores redundantes** con conmut
   1. 💬 **Subtítulos**: Teleprompter maximizado con auto-scroll y resaltado interactivo de términos.
   2. ❓ **Q&A**: Formulario para enviar preguntas al orador y votación en vivo de las preguntas de otros asistentes. Las más votadas suben automáticamente a la pantalla del orador.
   3. 📖 **Glosario**: Diccionario técnico Spanglish en vivo con definiciones didácticas.
-  4. 💡 **Claves**: Resúmenes ejecutivos y puntos clave generados por Gemini 3.5 Pro.
+  4. 💡 **Claves**: Resúmenes ejecutivos y puntos clave generados por Gemini 2.5 Pro.
 
 ### 🔊 Voz Accesible en Vivo (TTS para Personas No Videntes)
 - Integrado mediante la Web Speech API en [AudienceView.tsx](file:///c:/nerdearla/src/components/AudienceView.tsx).
@@ -216,16 +216,20 @@ npm install
 cp .env.example .env
 # (Opcional: Agregar GEMINI_API_KEY en .env)
 
-# 4. Iniciar servidores de producción en red local
+# 4. Iniciar servidores en red local (Modo Desarrollo)
 npm run dev
-# -> Frontend: http://localhost:3000 (o http://<TU-IP-LOCAL>:3000)
-# -> Backend:  http://localhost:3001
+# -> Frontend (Vite HMR): http://localhost:3000 (o http://<TU-IP-LOCAL>:3000)
+# -> Backend (API + WS):  http://localhost:3001
 ```
 
-### Despliegue con Docker Compose
+### Despliegue con Docker Compose (Modo Producción Unificado en Puerto 3001)
+En producción o contenedores Docker, Express sirve **unificadamente tanto el frontend como los WebSockets en el puerto 3001**:
 ```bash
 # Iniciar contenedor autónomo con reinicio automático
 docker compose up -d --build
+
+# Acceso inmediato a la interfaz completa:
+# -> http://localhost:3001 (Audiencia, Mesa Técnica, Kiosk, Overlay)
 
 # Ver logs de telemetría en vivo
 docker compose logs -f

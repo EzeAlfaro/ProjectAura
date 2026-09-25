@@ -38,10 +38,10 @@ export class LiveStageTranscriptionSession {
 
   public async connect(): Promise<void> {
     const candidateModels = [
-      process.env.GEMINI_LIVE_MODEL || 'gemini-3.5-transcribe-live',
-      'gemini-2.0-flash-exp',
-      'gemini-2.5-flash-native-audio-latest',
-      'gemini-2.0-flash'
+      process.env.GEMINI_LIVE_MODEL || 'gemini-2.0-flash-exp',
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash'
     ];
 
     const vocab = this.options.customVocabulary && this.options.customVocabulary.length > 0

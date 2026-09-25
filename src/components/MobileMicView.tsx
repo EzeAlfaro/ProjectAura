@@ -406,7 +406,7 @@ export const MobileMicView: React.FC<MobileMicViewProps> = ({
         <div className="bg-[#0b0e15] border border-[#1b2230] rounded-2xl p-3 space-y-2 flex-1 min-h-[120px] flex flex-col justify-end">
           <div className="flex items-center justify-between text-[10px] font-mono text-gray-500 border-b border-[#181f2e] pb-1">
             <span className="text-cyan-400 font-bold uppercase">MONITOR DE SUBTÍTULOS SALIENTES:</span>
-            <span>GEMINI 3.5 LIVE</span>
+            <span>GEMINI LIVE</span>
           </div>
 
           <div className="flex-1 flex flex-col justify-end overflow-hidden">

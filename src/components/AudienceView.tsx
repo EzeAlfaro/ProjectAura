@@ -792,12 +792,12 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
               })
             )}
 
-            {/* Real-time Speculative Interim Preview from Gemini 3.5 Live */}
+            {/* Real-time Speculative Interim Preview from Gemini Live */}
             {interimText && (
               <div className="border-l-2 border-amber-400 bg-amber-400/5 rounded-r pl-3 py-2 animate-pulse transition-all">
                 <div className="flex items-center gap-2 mb-1 text-[10px] font-mono text-amber-400">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
-                  <span className="font-bold uppercase tracking-wider">GEMINI 3.5 LIVE // PREVIEW EN TIEMPO REAL:</span>
+                  <span className="font-bold uppercase tracking-wider">GEMINI LIVE // PREVIEW EN TIEMPO REAL:</span>
                 </div>
                 <div className="text-amber-200 font-mono italic text-sm sm:text-base leading-relaxed">
                   {interimText}
@@ -809,7 +809,7 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
           {/* Bottom Teleprompter Telemetry Ticker */}
           <div className="bg-[#0b0e14] border-t border-[#181d2a] px-3 sm:px-4 py-1.5 flex items-center justify-between text-[10px] font-mono text-[#64748b]">
             <div className="flex items-center gap-2">
-              <span className="text-[#00ff66] font-bold">● ENGINE: GEMINI 3.5 TRANSCRIBE LIVE</span>
+              <span className="text-[#00ff66] font-bold">● ENGINE: GEMINI LIVE (2.0/2.5 FLASH)</span>
               <span>//</span>
               <span className="text-gray-300">MODALIDAD: AUDIO PCM LITTLE-ENDIAN</span>
             </div>

@@ -184,7 +184,7 @@ export const OperatorManualModal: React.FC<OperatorManualModalProps> = ({ isOpen
          ▼                           ▼
 ┌────────────────────────────────────────────────────────┐
 │             CENTRAL AURA CORE SERVER (3001)            │
-│  - Gemini 3.5 Transcribe Live (WebSocket Bi-Di Stream) │
+│  - Gemini Live Transcribe (WebSocket Bi-Di Stream)     │
 │  - On-Premise Gemma 2 / Local Neural Macro Engine      │
 │  - Broadcast WebSocket Pub/Sub (1 Ingest -> N Viewers) │
 └────────┬──────────────────────────┬────────────────────┘
@@ -292,7 +292,7 @@ export const OperatorManualModal: React.FC<OperatorManualModalProps> = ({ isOpen
                     <tbody className="divide-y divide-[#1b2230] text-gray-300">
                       <tr className="bg-[#0a0e16]">
                         <td className="p-2.5 text-[#00f5ff] font-bold">Tier 1</td>
-                        <td className="p-2.5 text-white font-bold">Gemini 3.5 Transcribe Live</td>
+                        <td className="p-2.5 text-white font-bold">Gemini Live Transcribe (2.0/2.5 Flash)</td>
                         <td className="p-2.5 text-[#00ff66]">&lt; 150 ms</td>
                         <td className="p-2.5 font-sans">Streaming bidireccional palabra por palabra con preview especulativo.</td>
                       </tr>

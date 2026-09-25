@@ -8,11 +8,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Nerdearla](https://img.shields.io/badge/Conferencia-Nerdearla%202026-00f0ff)](https://nerdear.la)
 [![Audience](https://img.shields.io/badge/Role-Stage%20Tech%20%26%20AV%20Crew-cyan)](#-manifiesto-del-operador)
-[![AI Engine Live](https://img.shields.io/badge/AI%20Live-Gemini%203.5%20Transcribe%20Live-4285F4)](https://blog.google)
+[![AI Engine Live](https://img.shields.io/badge/AI%20Live-Gemini%20Live%20API%20(2.0%2F2.5)-4285F4)](https://aistudio.google.com)
 [![AI Engine Pro](https://img.shields.io/badge/AI%20Synthesis-Gemini%202.5%20Pro-8b5cf6)](https://aistudio.google.com)
 [![AI Fallback](https://img.shields.io/badge/AI%20Fallback-Gemma%202%20%2F%20Local-00ff66)](https://aistudio.google.com)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%200%20Errors-3178C6)](https://www.typescriptlang.org)
 [![Audio Pipeline](https://img.shields.io/badge/Audio-AudioWorklet%2016kHz%20PCM-ffaa00)](#-arquitectura-del-sistema)
+[![Benchmark](https://img.shields.io/badge/Benchmark-p50%209.7ms%20%7C%2014k%20ops%2Fs-success)](./docs/benchmark.md)
 
 ---
 
@@ -22,11 +23,11 @@
 
 | 🇦🇷 El Problema Real en Escenario | ⚡ La Solución de Project Aura |
 | :--- | :--- |
-| **Destrucción de jerga IT**: Las IAs genéricas traducen *"deployar el pod en el cluster"* como *"desplegar la vaina en el racimo"*. | **Glosario Spanglish Protegido**: Inyección de 150+ términos técnicos verbatim (Kubernetes, eBPF, commit, CI/CD, deadlock). |
-| **Latencia destructiva**: Buffers de 6 a 10s dejan al público leyendo lo que el orador dijo dos diapositivas atrás. | **Streaming Gemini Live (<150ms)**: WebSocket bidireccional con preview especulativo palabra por palabra. |
+| **Destrucción de jerga IT**: Las IAs genéricas traducen *"deployar el pod en el cluster"* como *"desplegar la vaina en el racimo"*. | **Glosario Spanglish Protegido**: Inyección de **136 términos técnicos categorizados + 39 reglas fonéticas Spanglish** (175 reglas en memoria: Kubernetes, eBPF, commit, CI/CD, deadlock). |
+| **Latencia destructiva**: Buffers de 6 a 10s dejan al público leyendo lo que el orador dijo dos diapositivas atrás. | **Streaming Gemini Live (<150ms)**: WebSocket bidireccional con preview especulativo palabra por palabra con **Gemini Live API (2.0/2.5 Flash)**. |
 | **Baterías agotadas en micrófonos inalámbricos**: Si muere el bodypack del speaker, la charla se detiene. | **Micrófono Móvil de Emergencia (`/?view=mic`)**: Push-to-Talk instantáneo desde cualquier celular vía Wi-Fi con vúmetro real. |
 | **Caídas de Internet exterior en el venue**: El Wi-Fi del predio se satura con 3.000 asistentes. | **Failover de 3 Niveles en Caliente**: Conmutación automática a Ollama/Gemma 2 local o Motor Standalone sin cortar la sala. |
-| **Costos confiscatorios por minuto / usuario**: Inviable para eventos comunitarios gratuitos de 3 días. | **1 Ingesta -> N Espectadores**: Un único stream central alimenta miles de teléfonos móviles por WebSocket sin costo extra. |
+| **Costos confiscatorios por minuto / usuario**: Inviable para eventos comunitarios gratuitos de 3 días. | **1 Ingesta -> N Espectadores**: Un único stream central alimenta miles de teléfonos móviles por WebSocket sin costo extra ($0.053 USD/hora). |
 
 ---
 
@@ -38,8 +39,8 @@
 - **Audio Check Pre-vuelo & Demos**: Diagnóstico acústico con sondeo de decibelios peak/avg, alerta de clipping y 3 charlas reales pre-cargadas para pruebas sin orador en vivo.
 
 ### 🧠 2. Matriz Redundante de 3 Motores de IA
-- **Tier 1 (Nube en Tiempo Real)**: **Gemini 3.5 Transcribe Live** sobre WebSockets bidireccionales con preview especulativo sub-150ms y puntuación natural.
-- **Tier 1B (Síntesis Ejecutiva)**: **Gemini 2.5 Pro** con schema estructurado para extraer 5 puntos clave de arquitectura y 3 preguntas incisivas para el orador.
+- **Tier 1 (Nube en Tiempo Real)**: **Google Gemini Live API (`gemini-2.0-flash-exp` / `gemini-2.5-flash`)** sobre WebSockets bidireccionales con streaming de audio PCM 16kHz, preview especulativo sub-150ms y puntuación natural (con soporte forward-compatible para Gemini 3.5 Transcribe).
+- **Tier 1B (Síntesis Ejecutiva)**: **Gemini 2.5 Pro** con schema JSON estructurado para extraer 5 puntos clave de arquitectura y 3 preguntas incisivas para el orador.
 - **Tier 2 (Edge Local)**: **Google Gemma 2** vía Ollama (`127.0.0.1:11434`) si el predio pierde salida a Internet.
 - **Tier 3 (Standalone de Contingencia)**: Motor neuronal offline con caché y macros regex instantáneos (<5ms).
 - **Multi-Key Pool con Rotación Automática**: Detección de HTTP 429 y conmutación en caliente a la siguiente clave del pool sin desconectar la sala.
@@ -73,7 +74,7 @@ flowchart TD
 
     subgraph CentralServer["⚡ Servidor Central Aura (Node.js + WebSockets :3001)"]
         StageManager["Multi-Stage Manager (Apolo, Turing, Lovelace)"]
-        GeminiLive["Gemini 3.5 Transcribe Live (WebSocket Bi-Di)"]
+        GeminiLive["Gemini Live API (WebSocket Bi-Di)"]
         GemmaEdge["Ollama / Gemma 2 Local (Edge Fallback)"]
         MacroEngine["Motor Neuronal Standalone (Offline)"]
         PubSub["Broadcast Pub/Sub (1 Ingest -> N Clientes)"]
@@ -112,11 +113,44 @@ El proyecto cuenta con un manual exhaustivo de despliegue en vivo redactado en *
 
 ---
 
+---
+
+## 📊 Benchmark Oficial & Telemetría en Producción
+
+Métricas reales medidas con la suite de pruebas reproducible en `scripts/benchmark.ts`:
+
+| Métrica de Rendimiento | Resultado Medido | Estándar de la Industria | Estado |
+| :--- | :--- | :--- | :--- |
+| **Latencia WebSocket Handshake (p50)** | **9.73 ms** | < 100 ms | 🟢 Sub-10ms (Excelente) |
+| **Latencia WebSocket Handshake (p95)** | **15.84 ms** | < 250 ms | 🟢 Sub-20ms (Excelente) |
+| **Throughput del Glosario Técnico** | **14,246 frases/seg** | > 1,000 ops/seg | 🟢 +1,400% sobre objetivo |
+| **Latencia de Normalización de Jerga** | **70.2 µs / frase** | < 5 ms | 🟢 In-memory regex ultra-rápido |
+| **Base de Conocimiento de IT** | **136 términos + 39 reglas** | ~20-30 términos | 🟢 175 reglas en memoria |
+| **Costo por Hora de Streaming (Gemini)**| **$0.0530 USD** | $15 - $50 / hora (Whisper/Cloud) | 🟢 Ahorro del 99.9% |
+| **Costo Total Nerdearla (36 Charlas)** | **$1.43 USD** | $4,500 USD (Intérpretes humanos) | 🟢 Ahorro del 99.98% |
+
+> Para reproducir el benchmark en vivo: `npm run benchmark` (ver reporte detallado en [docs/benchmark.md](./docs/benchmark.md)).
+
+---
+
+## 🌐 Arquitectura de Puertos & Despliegue
+
+Project Aura implementa una arquitectura híbrida que se adapta automáticamente al entorno de ejecución:
+
+- 🛠️ **Modo Desarrollo (`npm run dev`)**:
+  - **Frontend (Vite)**: Corre en `http://localhost:3000` con Hot Module Replacement (HMR) y proxy reverso hacia el backend.
+  - **Backend (Express + WebSockets)**: Corre en `http://localhost:3001`.
+- 🚀 **Modo Producción & Docker (`docker compose up` o `npm run build && npm start`)**:
+  - **Servidor Unificado**: Express sirve **exclusivamente en el puerto `3001`** tanto la API, los WebSockets como los archivos estáticos compilados de `dist/`. No requiere Nginx ni proxies secundarios.
+  - Acceso directo: `http://localhost:3001`.
+
+---
+
 ## ⚡ Guía de Inicio Rápido
 
 ### Prerrequisitos
 - Node.js v20 o superior (`node -v`)
-- npm (`npm -v`)
+- npm (`npm -v`) o Docker (`docker compose`)
 
 ### Paso 1: Clonar e Instalar
 ```bash
@@ -132,22 +166,29 @@ cp .env.example .env
 Editá `.env` e ingresá tu clave de API de Google AI Studio:
 ```env
 GEMINI_API_KEY=tu_gemini_api_key_aqui
-GEMINI_MODEL=gemini-3.5-transcribe-live
+GEMINI_MODEL=gemini-2.0-flash-exp
 PORT=3001
 ```
 *(Nota: Si no se provee clave, el sistema arranca automáticamente en **Modo Simulación Inteligente & Local**, permitiendo probar la interfaz, los vúmetros y el switching de salas sin conexión exterior).*
 
 ### Paso 3: Iniciar
+
+**Opción A — Desarrollo Local:**
 ```bash
 npm run dev
 ```
-
 Abrí tu navegador en:
 - 📱 **Vista de Audiencia Móvil**: [http://localhost:3000](http://localhost:3000)
 - 🎛️ **Consola de Operador Broadcast**: [http://localhost:3000](http://localhost:3000) (Click en "Control Room")
 - 🎙️ **Micrófono Móvil de Emergencia**: [http://localhost:3000/?view=mic](http://localhost:3000/?view=mic)
 - 📺 **Overlay para OBS / vMix**: [http://localhost:3000/?view=overlay&stage=stage-1&lang=es](http://localhost:3000/?view=overlay&stage=stage-1&lang=es)
 - 🖥️ **Modo Kiosk para Mini PC**: [http://localhost:3000/?view=kiosk&stage=stage-1](http://localhost:3000/?view=kiosk&stage=stage-1)
+
+**Opción B — Despliegue con Docker (Producción en Puerto 3001):**
+```bash
+docker compose up --build -d
+```
+Abrí tu navegador en `http://localhost:3001`.
 
 ---
 

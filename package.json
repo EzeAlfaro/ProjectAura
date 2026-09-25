@@ -8,6 +8,7 @@
     "dev:client": "vite",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "build": "vite build",
+    "benchmark": "tsx scripts/benchmark.ts",
     "start": "tsx server/index.ts"
   },
   "license": "MIT",

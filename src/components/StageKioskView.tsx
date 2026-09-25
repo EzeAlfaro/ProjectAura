@@ -560,7 +560,7 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
               const completeBlob = new Blob(sliceBlobs, { type: mimeType });
               if (completeBlob.size > 2000) {
                 try {
-                  setLiveInterimText('Procesando audio digital con Gemini 3.5...');
+                  setLiveInterimText('Procesando audio digital con Gemini Live...');
                   await uploadAudioChunk(stage?.id || 'stage-1', completeBlob);
                   setLiveInterimText('');
                   setAudioError(null);
@@ -1020,7 +1020,7 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
               <Key className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">
                 {activeEngine === 'gemini-cloud'
-                  ? 'GEMINI 3.5'
+                  ? 'GEMINI LIVE'
                   : activeEngine === 'gemma-local'
                   ? 'GEMMA 2B'
                   : 'NATIVO 0MS'}
@@ -1113,7 +1113,7 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
         <div className="bg-[#ffba00]/15 border-b border-[#ffba00]/40 px-4 py-2 text-center text-xs font-mono text-[#ffba00] flex items-center justify-center gap-3 z-20">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>
-            El <strong>Modo Pestaña</strong> captura audio digital del navegador y requiere una Gemini API Key configurada para transcribir con Gemini 3.5.
+            El <strong>Modo Pestaña</strong> captura audio digital del navegador y requiere una Gemini API Key configurada para transcribir con Gemini Live (2.0/2.5 Flash).
           </span>
           {onOpenApiKeyModal && (
             <button
