@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import cors from 'cors';
@@ -92,6 +92,50 @@ function getLocalNetworkIp(): string {
   return 'localhost';
 }
 
+// Middleware: Operator Security (ADMIN_TOKEN)
+// When ADMIN_TOKEN is set in environment, protected mutating endpoints require authorization.
+// When left empty/unset, system runs in open demo mode.
+const requireAdminAuth = (req: Request, res: Response, next: NextFunction) => {
+  const configuredToken = config.server.adminToken;
+  if (!configuredToken) {
+    return next(); // Open demo mode when ADMIN_TOKEN is empty
+  }
+
+  const providedToken =
+    req.headers['x-admin-token'] ||
+    req.query.key ||
+    req.query.token ||
+    req.body?.adminToken ||
+    req.body?.token;
+
+  if (providedToken === configuredToken) {
+    return next();
+  }
+
+  return res.status(403).json({
+    error: 'Acceso no autorizado. Se requiere token de operador técnico de cabina (ADMIN_TOKEN).',
+    code: 'UNAUTHORIZED_OPERATOR'
+  });
+};
+
+// Operator Token Verification
+app.post('/api/auth/verify', (req: Request, res: Response) => {
+  const configuredToken = config.server.adminToken;
+  if (!configuredToken) {
+    return res.json({ required: false, valid: true });
+  }
+  const providedToken =
+    req.headers['x-admin-token'] ||
+    req.query.key ||
+    req.query.token ||
+    req.body?.adminToken ||
+    req.body?.token;
+  res.json({
+    required: true,
+    valid: providedToken === configuredToken
+  });
+});
+
 // Health & System Status (Supports both /api/status and /api/health)
 app.get(['/api/status', '/api/health'], async (req: Request, res: Response) => {
   const gemmaAvailable = await geminiService.checkGemmaAvailability();
@@ -107,12 +151,13 @@ app.get(['/api/status', '/api/health'], async (req: Request, res: Response) => {
     keyPool: geminiService.getKeyPoolInfo(),
     activeKeyMasked: geminiService.getActiveKeyMasked(),
     stagesCount: stageManager.getStages().length,
+    adminTokenRequired: !!config.server.adminToken,
     timestamp: Date.now()
   });
 });
 
 // Update or set GEMINI_API_KEY dynamically from Admin UI
-app.post('/api/config/key', (req: Request, res: Response) => {
+app.post('/api/config/key', requireAdminAuth, (req: Request, res: Response) => {
   const { apiKey, modelName, disconnect } = req.body;
 
   if (disconnect || (typeof apiKey === 'string' && apiKey.trim() === '')) {
@@ -141,7 +186,7 @@ app.post('/api/config/key', (req: Request, res: Response) => {
   res.json({
     success: true,
     geminiConfigured: geminiService.isConfigured(),
-    model: process.env.GEMINI_MODEL || 'gemini-3.5-transcribe-live',
+    model: process.env.GEMINI_MODEL || config.ai.liveModel || 'gemini-2.0-flash-exp',
     activeEngine: geminiService.getActiveEngineName(),
     keyPool: geminiService.getKeyPoolInfo(),
     message: 'API Key and model updated successfully'
@@ -149,7 +194,7 @@ app.post('/api/config/key', (req: Request, res: Response) => {
 });
 
 // Select / Force Engine Mode ('auto' | 'gemini-cloud' | 'gemma-local' | 'native-offline')
-app.post('/api/config/engine-mode', (req: Request, res: Response) => {
+app.post('/api/config/engine-mode', requireAdminAuth, (req: Request, res: Response) => {
   const { mode } = req.body;
   if (!mode || !['auto', 'gemini-cloud', 'gemma-local', 'native-offline'].includes(mode)) {
     return res.status(400).json({ error: 'Invalid engine mode' });
@@ -164,7 +209,7 @@ app.post('/api/config/engine-mode', (req: Request, res: Response) => {
 });
 
 // Disconnect all API keys / Revert to Local Standalone
-app.post('/api/config/disconnect', (req: Request, res: Response) => {
+app.post('/api/config/disconnect', requireAdminAuth, (req: Request, res: Response) => {
   geminiService.disconnectAll();
   res.json({
     success: true,
@@ -175,7 +220,7 @@ app.post('/api/config/disconnect', (req: Request, res: Response) => {
 });
 
 // Add Key to Pool (Multi-key Queue)
-app.post('/api/config/key-pool/add', (req: Request, res: Response) => {
+app.post('/api/config/key-pool/add', requireAdminAuth, (req: Request, res: Response) => {
   const { apiKey } = req.body;
   if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
     return res.status(400).json({ error: 'Valid API key is required' });
@@ -191,7 +236,7 @@ app.post('/api/config/key-pool/add', (req: Request, res: Response) => {
 });
 
 // Rotate to Next Available Key in Pool
-app.post('/api/config/key-pool/rotate', (req: Request, res: Response) => {
+app.post('/api/config/key-pool/rotate', requireAdminAuth, (req: Request, res: Response) => {
   const nextKey = geminiService.rotateKey();
   res.json({
     success: !!nextKey,
@@ -202,7 +247,7 @@ app.post('/api/config/key-pool/rotate', (req: Request, res: Response) => {
 });
 
 // Remove Key from Pool
-app.delete('/api/config/key-pool/:id', (req: Request, res: Response) => {
+app.delete('/api/config/key-pool/:id', requireAdminAuth, (req: Request, res: Response) => {
   const removed = geminiService.removeKey(req.params.id);
   res.json({
     success: removed,
@@ -226,26 +271,26 @@ app.get('/api/stages/:id', (req: Request, res: Response) => {
 });
 
 // Create New Stage
-app.post('/api/stages', (req: Request, res: Response) => {
+app.post('/api/stages', requireAdminAuth, (req: Request, res: Response) => {
   const newStage = stageManager.createStage(req.body);
   res.status(201).json({ stage: newStage });
 });
 
 // Start Demo on Stage
-app.post('/api/stages/:id/demo/:talkId', (req: Request, res: Response) => {
+app.post('/api/stages/:id/demo/:talkId', requireAdminAuth, (req: Request, res: Response) => {
   const { id, talkId } = req.params;
   stageManager.startDemo(id, talkId, true);
   res.json({ success: true, message: `Demo ${talkId} started on stage ${id}` });
 });
 
 // Stop Stage
-app.post('/api/stages/:id/stop', (req: Request, res: Response) => {
+app.post('/api/stages/:id/stop', requireAdminAuth, (req: Request, res: Response) => {
   stageManager.stopStage(req.params.id);
   res.json({ success: true, message: `Stage ${req.params.id} stopped` });
 });
 
 // Trigger Gemini 2.5 Pro Deep Intel & Executive Summary
-app.post('/api/stages/:id/deep-intel', async (req: Request, res: Response) => {
+app.post('/api/stages/:id/deep-intel', requireAdminAuth, async (req: Request, res: Response) => {
   try {
     const result = await stageManager.triggerDeepIntel(req.params.id);
     res.json(result);
@@ -255,7 +300,7 @@ app.post('/api/stages/:id/deep-intel', async (req: Request, res: Response) => {
 });
 
 // Upload and Process Audio File Chunk
-app.post('/api/stages/:id/audio', upload.single('audio'), async (req: Request, res: Response) => {
+app.post('/api/stages/:id/audio', requireAdminAuth, upload.single('audio'), async (req: Request, res: Response) => {
   const { id } = req.params;
   if (!req.file) {
     return res.status(400).json({ error: 'Audio file is required' });
@@ -287,13 +332,13 @@ app.get('/api/logs', (req: Request, res: Response) => {
   res.json({ logs });
 });
 
-app.delete('/api/logs', (_req: Request, res: Response) => {
+app.delete('/api/logs', requireAdminAuth, (_req: Request, res: Response) => {
   logger.clear();
   res.json({ success: true });
 });
 
 // Direct Live Text Transcript (from Browser Speech Recognition or real-time mic)
-app.post('/api/stages/:id/live-text', async (req: Request, res: Response) => {
+app.post('/api/stages/:id/live-text', requireAdminAuth, async (req: Request, res: Response) => {
   const { id } = req.params;
   const { text, sourceLang } = req.body;
   if (!text || typeof text !== 'string') {
@@ -310,19 +355,19 @@ app.post('/api/stages/:id/live-text', async (req: Request, res: Response) => {
 });
 
 // Delete Last Chunk (Panic / Redaction Button)
-app.delete('/api/stages/:id/chunks/last', (req: Request, res: Response) => {
+app.delete('/api/stages/:id/chunks/last', requireAdminAuth, (req: Request, res: Response) => {
   const success = stageManager.deleteLastChunk(req.params.id);
   res.json({ success });
 });
 
 // Emergency Blackout / Clear All Subtitles (EDM - Erase Displayed Memory)
-app.post('/api/stages/:id/emergency-clear', (req: Request, res: Response) => {
+app.post('/api/stages/:id/emergency-clear', requireAdminAuth, (req: Request, res: Response) => {
   stageManager.emergencyClear(req.params.id);
   res.json({ success: true, message: `Emergency clear executed for ${req.params.id}` });
 });
 
 // Remote Stage Reload (Zero-RustDesk F5 trigger from Mesa Técnica)
-app.post('/api/stages/:id/remote-reload', (req: Request, res: Response) => {
+app.post('/api/stages/:id/remote-reload', requireAdminAuth, (req: Request, res: Response) => {
   stageManager.remoteReloadStage(req.params.id);
   res.json({ success: true, message: `Remote reload triggered for ${req.params.id}` });
 });
@@ -383,7 +428,7 @@ app.get('/api/glossary', (req: Request, res: Response) => {
   res.json({ terms: Object.values(TECH_GLOSSARY) });
 });
 
-app.post('/api/glossary', (req: Request, res: Response) => {
+app.post('/api/glossary', requireAdminAuth, (req: Request, res: Response) => {
   const { term, definition, category } = req.body;
   if (!term || !definition) {
     return res.status(400).json({ error: 'Term and definition are required' });
@@ -409,7 +454,7 @@ app.get('/api/schedule/:stageId/current', (req: Request, res: Response) => {
   res.json(current);
 });
 
-app.post('/api/schedule/:stageId/sync/:talkId', (req: Request, res: Response) => {
+app.post('/api/schedule/:stageId/sync/:talkId', requireAdminAuth, (req: Request, res: Response) => {
   const { stageId, talkId } = req.params;
   const talk = scheduleManager.getById(talkId);
   if (!talk) {
@@ -471,7 +516,7 @@ app.post('/api/stages/:id/questions/:questionId/vote', (req: Request, res: Respo
   res.json({ question: q });
 });
 
-app.post('/api/stages/:id/questions/:questionId/status', (req: Request, res: Response) => {
+app.post('/api/stages/:id/questions/:questionId/status', requireAdminAuth, (req: Request, res: Response) => {
   const { id, questionId } = req.params;
   const { status } = req.body;
   if (!['pending', 'approved', 'on_stage', 'dismissed'].includes(status)) {
@@ -495,13 +540,39 @@ app.post('/api/stages/:id/questions/:questionId/status', (req: Request, res: Res
    WebSocket Real-Time Broadcast Server
 ======================================================== */
 
-wss.on('connection', (ws: WebSocket) => {
+function isAuthorizedAdmin(providedToken?: string | null): boolean {
+  const configuredToken = config.server.adminToken;
+  if (!configuredToken) return true;
+  return !!providedToken && providedToken === configuredToken;
+}
+
+wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
   let currentStageId: string | null = null;
   let currentLang: SupportedLanguage = 'original';
+
+  // Parse connection URL query for token/key
+  let connectionToken = '';
+  try {
+    const urlObj = new URL(req.url || '', 'http://localhost');
+    connectionToken = urlObj.searchParams.get('token') || urlObj.searchParams.get('key') || (req.headers['x-admin-token'] as string) || '';
+  } catch (e) {}
 
   ws.on('message', async (data: string | Buffer) => {
     try {
       const message = JSON.parse(data.toString());
+      const messageToken = message.adminToken || message.token || connectionToken;
+
+      const requireAuth = (): boolean => {
+        if (!isAuthorizedAdmin(messageToken)) {
+          ws.send(JSON.stringify({
+            type: 'system_alert',
+            alertType: 'error',
+            message: 'Acceso denegado: Token de operador requerido para acciones técnicas (ADMIN_TOKEN).'
+          }));
+          return false;
+        }
+        return true;
+      };
 
       switch (message.type) {
         case 'subscribe': {
@@ -527,6 +598,7 @@ wss.on('connection', (ws: WebSocket) => {
         }
 
         case 'audio_chunk': {
+          if (!requireAuth()) return;
           // Real-time audio chunk sent from Operator microphone
           if (message.stageId && message.base64Audio) {
             const buffer = Buffer.from(message.base64Audio, 'base64');
@@ -536,6 +608,7 @@ wss.on('connection', (ws: WebSocket) => {
         }
 
         case 'pcm_audio_chunk': {
+          if (!requireAuth()) return;
           // High-precision raw 16kHz Int16 Linear PCM from AudioWorklet
           if (message.stageId && message.pcmBase64) {
             const buffer = Buffer.from(message.pcmBase64, 'base64');
@@ -545,6 +618,7 @@ wss.on('connection', (ws: WebSocket) => {
         }
 
         case 'live_transcript': {
+          if (!requireAuth()) return;
           // Direct real-time speech recognition transcript from operator microphone
           if (message.stageId && message.text) {
             await stageManager.pushLiveTranscript(message.stageId, message.text, message.sourceLang || 'es');
@@ -553,6 +627,7 @@ wss.on('connection', (ws: WebSocket) => {
         }
 
         case 'delete_last_chunk': {
+          if (!requireAuth()) return;
           if (message.stageId) {
             stageManager.deleteLastChunk(message.stageId);
           }
@@ -560,6 +635,7 @@ wss.on('connection', (ws: WebSocket) => {
         }
 
         case 'emergency_clear': {
+          if (!requireAuth()) return;
           if (message.stageId) {
             stageManager.emergencyClear(message.stageId);
           }
@@ -567,6 +643,7 @@ wss.on('connection', (ws: WebSocket) => {
         }
 
         case 'remote_reload': {
+          if (!requireAuth()) return;
           if (message.stageId) {
             stageManager.remoteReloadStage(message.stageId);
           }
@@ -602,6 +679,7 @@ wss.on('connection', (ws: WebSocket) => {
         }
 
         case 'qa_status': {
+          if (!requireAuth()) return;
           if (message.stageId && message.questionId && message.status) {
             const q = qaManager.updateStatus(message.questionId, message.status);
             if (q) {

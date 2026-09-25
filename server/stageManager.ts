@@ -5,6 +5,7 @@ import { SAMPLE_TALKS, SampleTalk } from './sampleAudios.js';
 import { extractTechTerms } from './glossary.js';
 import { LiveStageTranscriptionSession } from './geminiLiveTranscriber.js';
 import { logger } from './logger.js';
+import { config } from './config.js';
 
 export function pcmToWav(pcm: Buffer, sampleRate: number = 16000): Buffer {
   const channels = 1;
@@ -162,7 +163,7 @@ export class StageManager {
       this.stageTakeaways.set(stage.id, []);
       this.stageQuestions.set(stage.id, []);
       this.stageSummaries.set(stage.id, '');
-      this.stageIntelModel.set(stage.id, 'gemini-3.5-pro');
+      this.stageIntelModel.set(stage.id, config.ai.proModel || 'gemini-2.5-pro');
       this.subscribers.set(stage.id, new Set());
     }
   }
@@ -207,7 +208,7 @@ export class StageManager {
     this.stageTakeaways.set(id, []);
     this.stageQuestions.set(id, []);
     this.stageSummaries.set(id, '');
-    this.stageIntelModel.set(id, 'gemini-3.5-pro');
+    this.stageIntelModel.set(id, config.ai.proModel || 'gemini-2.5-pro');
     this.subscribers.set(id, new Set());
 
     this.broadcastSystemUpdate();
@@ -232,7 +233,7 @@ export class StageManager {
       takeaways: this.stageTakeaways.get(stageId) || [],
       suggestedQuestions: this.stageQuestions.get(stageId) || [],
       executiveSummary: this.stageSummaries.get(stageId) || '',
-      intelModelUsed: this.stageIntelModel.get(stageId) || 'gemini-3.5-pro'
+      intelModelUsed: this.stageIntelModel.get(stageId) || config.ai.proModel || 'gemini-2.5-pro'
     };
   }
 

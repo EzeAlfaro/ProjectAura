@@ -140,9 +140,11 @@ Project Aura cuenta con una arquitectura de **3 motores redundantes** con conmut
 - **Ubicación**: Consola de Operador (`/admin`) -> Botón `[🔄 RECARGAR SALA]`.
 - **Efecto**: Envía una orden `remote_reload` al nodo del escenario para que la Mini PC refresque su instancia de navegador automáticamente sin necesidad de conectar teclado o usar software de control remoto.
 
-### 🔒 Cerrojo de Seguridad de Mesa Técnica
-- **Ubicación**: Switch `[LOCK]` en el panel frontal del rack.
-- **Efecto**: Deshabilita los botones destructivos de la consola para evitar pulsaciones accidentales mientras el operador monitorea los vúmetros.
+### 🔒 Cerrojo de Seguridad de Mesa Técnica & Soft-Auth (`ADMIN_TOKEN`)
+- **Ubicación**: Switch `[CERROJO: LIBRE / BLOQUEADA]` y botón `[OPERADOR: AUTH / OPEN]` en el panel superior de la consola de operador.
+- **Protección Dual**:
+  1. **Cerrojo UI**: Bloquea botones destructivos para evitar toques accidentales mientras se monitorean los vúmetros.
+  2. **Soft-Auth (`ADMIN_TOKEN`)**: Si se especifica en `.env`, el backend exige el token en los headers (`x-admin-token`), parámetro URL (`?key=...`) o payload WebSocket para comandos críticos (apagar sala, recarga remota, pánico EDM, borrar chunks, inyección de audio y gestión de claves). Protege el sistema contra asistentes maliciosos en la red Wi-Fi del evento sin fricción para el público espectador.
 
 ---
 

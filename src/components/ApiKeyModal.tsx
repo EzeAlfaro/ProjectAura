@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { KeyRound, CheckCircle, AlertCircle, X, ExternalLink, Sparkles, RefreshCw, Trash2, PowerOff, Cpu, Zap, Cloud, Bot } from 'lucide-react';
+import { KeyRound, CheckCircle, AlertCircle, X, ExternalLink, Sparkles, RefreshCw, Trash2, PowerOff, Cpu, Zap, Cloud, Bot, Eye, EyeOff } from 'lucide-react';
 import { updateApiKey, setEngineModeApi, disconnectApi, addKeyToPoolApi, rotateApiKeyApi, removeKeyFromPoolApi } from '../services/api.js';
 
 interface ApiKeyModalProps {
@@ -27,6 +27,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
 }) => {
   const [selectedModel, setSelectedModel] = useState<string>('gemini-2.5-flash');
   const [newApiKey, setNewApiKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -383,13 +384,23 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                   </a>
                 </label>
                 <div className="flex gap-2">
-                  <input
-                    type="password"
-                    value={newApiKey}
-                    onChange={(e) => setNewApiKey(e.target.value)}
-                    placeholder="Pegá otra API Key (AIzaSy...)"
-                    className="flex-1 px-3 py-2 bg-[#06080d] border border-[#202738] rounded-xl text-xs text-white focus:outline-none focus:border-[#00f0ff] font-mono placeholder:text-gray-600"
-                  />
+                  <div className="relative flex-1">
+                    <input
+                      type={showKey ? 'text' : 'password'}
+                      value={newApiKey}
+                      onChange={(e) => setNewApiKey(e.target.value)}
+                      placeholder="Pegá otra API Key (AIzaSy...)"
+                      className="w-full px-3 py-2 pr-9 bg-[#06080d] border border-[#202738] rounded-xl text-xs text-white focus:outline-none focus:border-[#00f0ff] font-mono placeholder:text-gray-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowKey(!showKey)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#00f0ff] transition-colors"
+                      title={showKey ? 'Ocultar clave' : 'Mostrar clave'}
+                    >
+                      {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
                   <button
                     type="submit"
                     disabled={loading || !newApiKey.trim()}

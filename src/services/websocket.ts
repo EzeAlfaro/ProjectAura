@@ -41,7 +41,19 @@ export class WSClient {
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/ws`;
+    const adminToken =
+      localStorage.getItem('nerdsub_admin_token') ||
+      localStorage.getItem('aura_admin_token') ||
+      new URLSearchParams(window.location.search).get('key') ||
+      new URLSearchParams(window.location.search).get('token') ||
+      '';
+
+    const params = new URLSearchParams();
+    if (this.currentStageId) params.set('stage', this.currentStageId);
+    if (this.currentLang) params.set('lang', this.currentLang);
+    if (adminToken) params.set('token', adminToken);
+    const queryString = params.toString();
+    const wsUrl = `${protocol}//${host}/ws${queryString ? `?${queryString}` : ''}`;
 
     try {
       this.ws = new WebSocket(wsUrl);
@@ -234,6 +246,13 @@ export class WSClient {
 
   private send(data: any) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      const adminToken =
+        localStorage.getItem('nerdsub_admin_token') ||
+        localStorage.getItem('aura_admin_token') ||
+        '';
+      if (adminToken && typeof data === 'object' && !data.adminToken) {
+        data.adminToken = adminToken;
+      }
       this.ws.send(JSON.stringify(data));
     }
   }

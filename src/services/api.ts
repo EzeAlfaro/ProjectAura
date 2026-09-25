@@ -1,6 +1,34 @@
-import { Stage, StageData, TechTerm, SupportedLanguage } from '../types.js';
+import { Stage, StageData, TechTerm, SupportedLanguage, AudienceQuestion } from '../types.js';
 
 const API_BASE = '/api';
+
+export function getAdminToken(): string {
+  if (typeof window === 'undefined') return '';
+  const searchParams = new URLSearchParams(window.location.search);
+  const tokenFromUrl = searchParams.get('key') || searchParams.get('token');
+  if (tokenFromUrl) {
+    localStorage.setItem('nerdsub_admin_token', tokenFromUrl);
+    localStorage.setItem('aura_admin_token', tokenFromUrl);
+    return tokenFromUrl;
+  }
+  return localStorage.getItem('nerdsub_admin_token') || localStorage.getItem('aura_admin_token') || '';
+}
+
+export function setAdminToken(token: string) {
+  if (typeof window === 'undefined') return;
+  if (!token) {
+    localStorage.removeItem('nerdsub_admin_token');
+    localStorage.removeItem('aura_admin_token');
+  } else {
+    localStorage.setItem('nerdsub_admin_token', token);
+    localStorage.setItem('aura_admin_token', token);
+  }
+}
+
+function getAuthHeaders(): Record<string, string> {
+  const token = getAdminToken();
+  return token ? { 'x-admin-token': token } : {};
+}
 
 export async function fetchStatus(): Promise<{
   status: string;
@@ -13,6 +41,7 @@ export async function fetchStatus(): Promise<{
   keyPool?: any[];
   activeKeyMasked?: string;
   stagesCount: number;
+  adminTokenRequired?: boolean;
 }> {
   const res = await fetch(`${API_BASE}/status`);
   return res.json();
@@ -32,7 +61,7 @@ export async function fetchStageData(stageId: string): Promise<StageData> {
 export async function createStageApi(stageData: Partial<Stage>): Promise<{ stage: Stage }> {
   const res = await fetch(`${API_BASE}/stages`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify(stageData),
   });
   return res.json();
@@ -41,7 +70,7 @@ export async function createStageApi(stageData: Partial<Stage>): Promise<{ stage
 export async function updateApiKey(apiKey: string, modelName?: string): Promise<{ success: boolean; geminiConfigured: boolean; model?: string; activeEngine?: string; keyPool?: any[] }> {
   const res = await fetch(`${API_BASE}/config/key`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ apiKey, modelName }),
   });
   return res.json();
@@ -50,7 +79,7 @@ export async function updateApiKey(apiKey: string, modelName?: string): Promise<
 export async function setEngineModeApi(mode: 'auto' | 'gemini-cloud' | 'gemma-local' | 'native-offline'): Promise<{ success: boolean; forcedEngine: string; activeEngine: string }> {
   const res = await fetch(`${API_BASE}/config/engine-mode`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ mode }),
   });
   return res.json();
@@ -59,6 +88,7 @@ export async function setEngineModeApi(mode: 'auto' | 'gemini-cloud' | 'gemma-lo
 export async function disconnectApi(): Promise<{ success: boolean; geminiConfigured: boolean; activeEngine: string; message: string }> {
   const res = await fetch(`${API_BASE}/config/disconnect`, {
     method: 'POST',
+    headers: { ...getAuthHeaders() }
   });
   return res.json();
 }
@@ -66,7 +96,7 @@ export async function disconnectApi(): Promise<{ success: boolean; geminiConfigu
 export async function addKeyToPoolApi(apiKey: string): Promise<{ success: boolean; addedKey: any; keyPool: any[]; geminiConfigured: boolean }> {
   const res = await fetch(`${API_BASE}/config/key-pool/add`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ apiKey }),
   });
   return res.json();
@@ -75,6 +105,7 @@ export async function addKeyToPoolApi(apiKey: string): Promise<{ success: boolea
 export async function rotateApiKeyApi(): Promise<{ success: boolean; activeKey?: any; keyPool: any[]; geminiConfigured: boolean }> {
   const res = await fetch(`${API_BASE}/config/key-pool/rotate`, {
     method: 'POST',
+    headers: { ...getAuthHeaders() }
   });
   return res.json();
 }
@@ -82,6 +113,7 @@ export async function rotateApiKeyApi(): Promise<{ success: boolean; activeKey?:
 export async function removeKeyFromPoolApi(id: string): Promise<{ success: boolean; keyPool: any[]; geminiConfigured: boolean }> {
   const res = await fetch(`${API_BASE}/config/key-pool/${id}`, {
     method: 'DELETE',
+    headers: { ...getAuthHeaders() }
   });
   return res.json();
 }
@@ -89,6 +121,7 @@ export async function removeKeyFromPoolApi(id: string): Promise<{ success: boole
 export async function triggerDemo(stageId: string, talkId: string): Promise<any> {
   const res = await fetch(`${API_BASE}/stages/${stageId}/demo/${talkId}`, {
     method: 'POST',
+    headers: { ...getAuthHeaders() }
   });
   return res.json();
 }
@@ -96,6 +129,7 @@ export async function triggerDemo(stageId: string, talkId: string): Promise<any>
 export async function stopStage(stageId: string): Promise<any> {
   const res = await fetch(`${API_BASE}/stages/${stageId}/stop`, {
     method: 'POST',
+    headers: { ...getAuthHeaders() }
   });
   return res.json();
 }
@@ -105,12 +139,55 @@ export async function uploadAudioChunk(stageId: string, audioBlob: Blob): Promis
   formData.append('audio', audioBlob, 'mic-chunk.webm');
   const res = await fetch(`${API_BASE}/stages/${stageId}/audio`, {
     method: 'POST',
+    headers: { ...getAuthHeaders() },
     body: formData,
   });
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
     throw new Error(errorData.error || `HTTP ${res.status}: Error al procesar audio en servidor`);
   }
+  return res.json();
+}
+
+export async function sendLiveTranscriptApi(stageId: string, text: string, sourceLang: string = 'es'): Promise<any> {
+  const res = await fetch(`${API_BASE}/stages/${stageId}/live-text`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ text, sourceLang })
+  });
+  return res.json();
+}
+
+export async function deleteLastChunkApi(stageId: string): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE}/stages/${stageId}/chunks/last`, {
+    method: 'DELETE',
+    headers: { ...getAuthHeaders() }
+  });
+  return res.json();
+}
+
+export async function emergencyClearApi(stageId: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/stages/${stageId}/emergency-clear`, {
+    method: 'POST',
+    headers: { ...getAuthHeaders() }
+  });
+  return res.json();
+}
+
+export async function remoteReloadStageApi(stageId: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/stages/${stageId}/remote-reload`, {
+    method: 'POST',
+    headers: { ...getAuthHeaders() }
+  });
+  return res.json();
+}
+
+export async function updateQuestionStatusApi(stageId: string, questionId: string, status: AudienceQuestion['status']): Promise<any> {
+  const res = await fetch(`${API_BASE}/stages/${stageId}/questions/${questionId}/status`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ status })
+  });
   return res.json();
 }
 
@@ -123,7 +200,10 @@ export async function fetchLogsApi(level?: string, limit?: number): Promise<{ lo
 }
 
 export async function clearLogsApi(): Promise<{ success: boolean }> {
-  const res = await fetch(`${API_BASE}/logs`, { method: 'DELETE' });
+  const res = await fetch(`${API_BASE}/logs`, {
+    method: 'DELETE',
+    headers: { ...getAuthHeaders() }
+  });
   return res.json();
 }
 
@@ -154,7 +234,7 @@ export async function addGlossaryTerm(
 
   const res = await fetch(`${API_BASE}/glossary`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ term, definition, category }),
   });
   return res.json();
@@ -167,6 +247,7 @@ export function getExportUrl(stageId: string, format: 'srt' | 'vtt' | 'txt' | 'm
 export async function triggerDeepIntel(stageId: string): Promise<any> {
   const res = await fetch(`${API_BASE}/stages/${stageId}/deep-intel`, {
     method: 'POST',
+    headers: { ...getAuthHeaders() }
   });
   return res.json();
 }

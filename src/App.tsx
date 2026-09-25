@@ -33,7 +33,7 @@ export function App() {
   const [takeaways, setTakeaways] = useState<StageTakeaway[]>([]);
   const [suggestedQuestions, setSuggestedQuestions] = useState<StageQA[]>([]);
   const [executiveSummary, setExecutiveSummary] = useState<string>('');
-  const [intelModelUsed, setIntelModelUsed] = useState<string>('gemini-3.5-pro');
+  const [intelModelUsed, setIntelModelUsed] = useState<string>('gemini-2.5-pro');
   const [isGeneratingIntel, setIsGeneratingIntel] = useState<boolean>(false);
   const [interimText, setInterimText] = useState<string>('');
   

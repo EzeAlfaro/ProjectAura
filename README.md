@@ -163,13 +163,18 @@ npm install
 ```bash
 cp .env.example .env
 ```
-Editá `.env` e ingresá tu clave de API de Google AI Studio:
+Editá `.env` e ingresá tu clave de API de Google AI Studio y variables de entorno:
 ```env
 GEMINI_API_KEY=tu_gemini_api_key_aqui
 GEMINI_MODEL=gemini-2.0-flash-exp
+GEMINI_PRO_MODEL=gemini-2.5-pro
+ADMIN_TOKEN=nerdearla2026-demo
 PORT=3001
 ```
 *(Nota: Si no se provee clave, el sistema arranca automáticamente en **Modo Simulación Inteligente & Local**, permitiendo probar la interfaz, los vúmetros y el switching de salas sin conexión exterior).*
+
+> [!NOTE]
+> **Seguridad de Operador (`ADMIN_TOKEN`)**: Si se define en `.env`, protege las acciones técnicas (apagar sala, recargar remotamente, borrar subtítulos, inyectar audio y gestionar claves) requiriendo `x-admin-token` o parámetro `?key=tu_token` en la URL del operador. Si se deja vacío, funciona en modo demo abierto. La audiencia (lectura de subtítulos, preguntas Q&A, votos) siempre es 100% libre sin credenciales.
 
 ### Paso 3: Iniciar
 

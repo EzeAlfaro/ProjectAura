@@ -42,14 +42,17 @@ import {
   ShieldCheck,
   Languages,
   Pin,
-  ThumbsUp
+  ThumbsUp,
+  Key
 } from 'lucide-react';
 import { 
   triggerDemo, 
   stopStage, 
   uploadAudioChunk, 
   addGlossaryTerm, 
-  fetchGlossary 
+  fetchGlossary,
+  getAdminToken,
+  setAdminToken
 } from '../services/api.js';
 import { 
   RackUnit, 
@@ -180,9 +183,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const committedCharsRef = useRef(0);
   const silenceFlushTimerRef = useRef<any>(null);
 
-  // Broadcast Operator Security Lock (Prevents accidental live blunders)
+  // Broadcast Operator Security Lock & Auth Token
   const [isConsoleLocked, setIsConsoleLocked] = useState(false);
   const [lockNotice, setLockNotice] = useState<string | null>(null);
+  const [adminToken, setAdminTokenState] = useState<string>(() => getAdminToken());
 
   // Audio Pipeline Watchdog & Session Rotation (Sysarmy 8-Minute Auto-Heal Watchdog)
   const [sessionUptimeSeconds, setSessionUptimeSeconds] = useState(0);
@@ -925,6 +929,35 @@ export const AdminView: React.FC<AdminViewProps> = ({
               <span>INPUTS: {audioDevices.length} MICS</span>
             </div>
             <button
+              onClick={() => {
+                const current = getAdminToken();
+                const entered = window.prompt(
+                  'Token de Operador Técnico (ADMIN_TOKEN):\nIngresá el token definido en el servidor para autorizar comandos técnicos.',
+                  current
+                );
+                if (entered !== null) {
+                  const clean = entered.trim();
+                  setAdminToken(clean);
+                  setAdminTokenState(clean);
+                  if (clean) {
+                    setLockNotice('Token de operador actualizado y activo.');
+                  } else {
+                    setLockNotice('Token de operador eliminado (Modo Abierto).');
+                  }
+                  setTimeout(() => setLockNotice(null), 3000);
+                }
+              }}
+              className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition-all text-xs font-mono font-bold ${
+                adminToken
+                  ? 'bg-[#00f5ff]/15 border-[#00f5ff]/50 text-[#00f5ff] shadow-[0_0_8px_rgba(0,245,255,0.2)]'
+                  : 'bg-[#10141e] border-[#202738] text-gray-400 hover:text-white hover:border-[#00f5ff]'
+              }`}
+              title={adminToken ? 'Token de operador ACTIVO (click para editar/remover)' : 'Sin token de operador (click para configurar ADMIN_TOKEN)'}
+            >
+              <Key className={`w-3.5 h-3.5 ${adminToken ? 'text-[#00f5ff]' : 'text-gray-400'}`} />
+              <span>{adminToken ? 'OPERADOR: AUTH' : 'OPERADOR: OPEN'}</span>
+            </button>
+            <button
               onClick={() => setIsConsoleLocked(!isConsoleLocked)}
               className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition-all text-xs font-mono font-bold ${
                 isConsoleLocked
@@ -941,7 +974,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               ) : (
                 <>
                   <Unlock className="w-3.5 h-3.5 text-[#00ff66]" />
-                  <span>OPERADOR: LIBRE</span>
+                  <span>CERROJO: LIBRE</span>
                 </>
               )}
             </button>
