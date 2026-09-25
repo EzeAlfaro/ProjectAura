@@ -99,6 +99,18 @@ export async function createStageApi(stageData: Partial<Stage>): Promise<{ stage
   return res.json();
 }
 
+export async function updateStageApi(
+  stageId: string,
+  stageData: Partial<Stage>
+): Promise<{ success: boolean; stage: Stage; error?: string }> {
+  const res = await fetch(`${API_BASE}/stages/${stageId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify(stageData),
+  });
+  return res.json();
+}
+
 export async function deleteStageApi(stageId: string): Promise<{ success: boolean; message?: string; error?: string }> {
   const res = await fetch(`${API_BASE}/stages/${stageId}`, {
     method: 'DELETE',

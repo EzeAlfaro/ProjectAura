@@ -63,7 +63,9 @@ import {
   clearStageQuestionsApi,
   seedStageQuestionsApi,
   getStageAudioRouting,
-  saveStageAudioRouting
+  saveStageAudioRouting,
+  updateStageApi,
+  emergencyClearApi
 } from '../services/api.js';
 import { 
   RackUnit, 
@@ -110,8 +112,20 @@ export const AdminView: React.FC<AdminViewProps> = ({
   // YouTube Video Demo State & Presets
   const [youtubeVideoId, setYoutubeVideoId] = useState<string>('IdOO3R_1F08'); // Default: Pelado Nerd K8s
   const [customYoutubeUrl, setCustomYoutubeUrl] = useState<string>('');
-  const [activeSyncDemoKey, setActiveSyncDemoKey] = useState<string>('talk-yt-peladonerd');
+  const [customVideoTitle, setCustomVideoTitle] = useState<string>('');
+  const [customVideoSpeaker, setCustomVideoSpeaker] = useState<string>('');
+  const [isCustomVideo, setIsCustomVideo] = useState<boolean>(false);
+  const [customVideoFeedback, setCustomVideoFeedback] = useState<string | null>(null);
+  const [activeSyncDemoKey, setActiveSyncDemoKey] = useState<string | null>('talk-yt-peladonerd');
   const [isDemoSyncRunning, setIsDemoSyncRunning] = useState<boolean>(false);
+
+  // Tab Audio Streaming State (Direct Browser Audio Capture for YouTube/Video)
+  const [isTabAudioCapturing, setIsTabAudioCapturing] = useState<boolean>(false);
+  const tabAudioStreamRef = useRef<MediaStream | null>(null);
+  const tabAudioContextRef = useRef<AudioContext | null>(null);
+  const tabWorkletNodeRef = useRef<AudioWorkletNode | null>(null);
+  const tabMediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const tabTargetStageIdRef = useRef<string | null>(null);
 
   // Audio Patchbay & Routing Matrix State (Rack 02)
   const [stageAudioSource, setStageAudioSource] = useState<Record<string, 'mic' | 'stream' | 'demo' | 'idle'>>({});
@@ -127,14 +141,42 @@ export const AdminView: React.FC<AdminViewProps> = ({
     return match ? match[1] : null;
   };
 
-  const handleLoadCustomYoutube = (e?: React.FormEvent) => {
+  const handleLoadCustomYoutube = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const id = extractYoutubeId(customYoutubeUrl);
-    if (id) {
-      setYoutubeVideoId(id);
-      setCustomYoutubeUrl('');
-    } else {
+    if (!id) {
       window.alert('Enlace de YouTube no reconocido. Ingresá una URL válida como https://www.youtube.com/watch?v=... o https://youtu.be/...');
+      return;
+    }
+
+    const titleToUse = customVideoTitle.trim() || 'Video YouTube en Vivo';
+    const speakerToUse = customVideoSpeaker.trim() || 'Orador Invitado';
+    const targetStageId = youtubeTargetStageId || selectedStageId;
+
+    setYoutubeVideoId(id);
+    setIsCustomVideo(true);
+    setActiveSyncDemoKey(null); // CRITICAL: Clear Pelado Nerd demo key for custom videos!
+
+    try {
+      // 1. Stop any currently running demo on the target stage
+      await handleStopStage(targetStageId);
+
+      // 2. Clear old demo subtitle chunks on the target stage so no previous text lingers
+      await emergencyClearApi(targetStageId);
+
+      // 3. Update the stage title and speaker immediately in backend & across all clients
+      await updateStageApi(targetStageId, {
+        talkTitle: titleToUse,
+        speaker: speakerToUse,
+        track: 'Video en Vivo'
+      });
+
+      setCustomVideoFeedback(`¡Video cargado! Sala "${targetStageId}" configurada con "${titleToUse}" (${speakerToUse}).`);
+      setTimeout(() => setCustomVideoFeedback(null), 5000);
+    } catch (err: any) {
+      console.warn('Error updating stage for custom video:', err);
+      setCustomVideoFeedback(`Video cargado. (Aviso: ${err.message})`);
+      setTimeout(() => setCustomVideoFeedback(null), 5000);
     }
   };
 
@@ -164,6 +206,26 @@ export const AdminView: React.FC<AdminViewProps> = ({
       color: '#ffb800'
     }
   ];
+
+  const handleSelectPresetTalk = async (t: typeof YOUTUBE_NERDEARLA_TALKS[0]) => {
+    setIsCustomVideo(false);
+    setYoutubeVideoId(t.id);
+    setActiveSyncDemoKey(t.demoKey);
+
+    const targetStageId = youtubeTargetStageId || selectedStageId;
+    try {
+      await updateStageApi(targetStageId, {
+        talkTitle: t.title,
+        speaker: t.speaker,
+        track: t.tag
+      });
+      if (isDemoSyncRunning) {
+        await handleTriggerDemo(targetStageId, t.demoKey);
+      }
+    } catch (err: any) {
+      console.warn('Error selecting preset talk:', err);
+    }
+  };
 
   // Audience Q&A Moderation State
   const [adminQuestions, setAdminQuestions] = useState<AudienceQuestion[]>([]);
@@ -418,6 +480,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     return () => {
       stopMicStreaming();
       stopSoundCheck();
+      stopTabAudioCapture();
     };
   }, []);
 
@@ -620,15 +683,16 @@ export const AdminView: React.FC<AdminViewProps> = ({
     }
   };
 
-  const commitAdminPhrase = (phrase: string, lang: 'es' | 'en') => {
+  const commitAdminPhrase = (phrase: string, lang: 'es' | 'en', overrideStageId?: string) => {
     const raw = phrase.trim();
     if (!raw) return;
     const clean = normalizePhoneticTechTerms(raw);
+    const targetStage = overrideStageId || activeStreamingStageRef.current || selectedStageId;
 
-    if (onPushLiveTranscript) {
+    if (onPushLiveTranscript && targetStage === selectedStageId) {
       onPushLiveTranscript(clean, lang);
     } else {
-      fetch(`/api/stages/${selectedStageId}/live-text`, {
+      fetch(`/api/stages/${targetStage}/live-text`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: clean, sourceLang: lang })
@@ -989,6 +1053,150 @@ export const AdminView: React.FC<AdminViewProps> = ({
     }
   };
 
+  const handleQuickUpdateStageTalk = async (targetStageId: string, talkTitle: string, speaker: string) => {
+    try {
+      await updateStageApi(targetStageId, {
+        talkTitle: talkTitle.trim() || 'Charla Técnica en Vivo',
+        speaker: speaker.trim() || 'Orador Invitado'
+      });
+      setCustomVideoFeedback(`¡Título y orador actualizados en ${targetStageId}!`);
+      setTimeout(() => setCustomVideoFeedback(null), 3500);
+    } catch (err: any) {
+      setAudioError(`Error al actualizar charla: ${err.message}`);
+    }
+  };
+
+  const startTabAudioCapture = async (targetStageId: string) => {
+    try {
+      setAudioError(null);
+      stopTabAudioCapture();
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        throw new Error('Tu navegador no soporta captura de audio de pantalla/pestaña (getDisplayMedia).');
+      }
+
+      // Request screen/tab sharing with audio
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true
+      });
+
+      const audioTracks = stream.getAudioTracks();
+      if (audioTracks.length === 0) {
+        stream.getTracks().forEach((t) => t.stop());
+        throw new Error(
+          'No se detectó pista de audio. Al compartir la pestaña de YouTube en Chrome, asegurate de activar la casilla "Compartir audio de la pestaña" en el cuadro de diálogo.'
+        );
+      }
+
+      tabAudioStreamRef.current = stream;
+      tabTargetStageIdRef.current = targetStageId;
+      setIsTabAudioCapturing(true);
+
+      audioTracks[0].onended = () => {
+        stopTabAudioCapture();
+      };
+      if (stream.getVideoTracks().length > 0) {
+        stream.getVideoTracks()[0].onended = () => {
+          stopTabAudioCapture();
+        };
+      }
+
+      // Mark stage as live with stream source
+      updateStageSourceKind(targetStageId, 'youtube');
+      setStageAudioSource((prev) => ({ ...prev, [targetStageId]: 'stream' }));
+      updateStageApi(targetStageId, { isLive: true, currentAudioSource: 'stream' }).catch(() => {});
+
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      tabAudioContextRef.current = audioCtx;
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+
+      // AudioWorklet resampler for 16kHz linear PCM streaming to Gemini Live
+      if (audioCtx.audioWorklet) {
+        try {
+          await audioCtx.audioWorklet.addModule('/worklets/pcm-processor.js');
+          const workletNode = new AudioWorkletNode(audioCtx, 'streaming-pcm-resampler');
+          workletNode.port.onmessage = (event) => {
+            if (event.data?.type === 'pcm_chunk' && event.data.buffer) {
+              const bytes = new Uint8Array(event.data.buffer);
+              let binary = '';
+              const len = bytes.byteLength;
+              for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(bytes[i]);
+              }
+              const base64 = window.btoa(binary);
+              if (wsClient) {
+                wsClient.sendPcmChunk(targetStageId, base64);
+              }
+            }
+          };
+          source.connect(workletNode);
+          tabWorkletNodeRef.current = workletNode;
+        } catch (e) {
+          console.warn('[AdminView] Tab AudioWorklet init error, using fallback:', e);
+        }
+      }
+
+      // MediaRecorder fallback chunk ingest
+      let mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/webm';
+      }
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      tabMediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.ondataavailable = async (event) => {
+        if (event.data && event.data.size > 0) {
+          try {
+            await uploadAudioChunk(targetStageId, event.data);
+          } catch (e) {
+            console.warn('[AdminView] Tab chunk upload failed:', e);
+          }
+        }
+      };
+      mediaRecorder.start(4000);
+    } catch (err: any) {
+      console.error('startTabAudioCapture error:', err);
+      setAudioError(err.message || 'Error al capturar audio de pestaña');
+      setIsTabAudioCapturing(false);
+      tabTargetStageIdRef.current = null;
+    }
+  };
+
+  const stopTabAudioCapture = () => {
+    const targetStageId = tabTargetStageIdRef.current;
+    if (tabAudioStreamRef.current) {
+      tabAudioStreamRef.current.getTracks().forEach((t) => t.stop());
+      tabAudioStreamRef.current = null;
+    }
+    if (tabWorkletNodeRef.current) {
+      try {
+        tabWorkletNodeRef.current.disconnect();
+      } catch (e) {}
+      tabWorkletNodeRef.current = null;
+    }
+    if (tabMediaRecorderRef.current && tabMediaRecorderRef.current.state !== 'inactive') {
+      try {
+        tabMediaRecorderRef.current.stop();
+      } catch (e) {}
+      tabMediaRecorderRef.current = null;
+    }
+    if (tabAudioContextRef.current) {
+      tabAudioContextRef.current.close().catch(() => {});
+      tabAudioContextRef.current = null;
+    }
+    setIsTabAudioCapturing(false);
+    tabTargetStageIdRef.current = null;
+
+    if (targetStageId) {
+      updateStageSourceKind(targetStageId, 'idle');
+      setStageAudioSource((prev) => ({ ...prev, [targetStageId]: 'idle' }));
+      updateStageApi(targetStageId, { isLive: false, currentAudioSource: 'idle' }).catch(() => {});
+    }
+  };
+
   const handleSendManualText = (textToSend?: string) => {
     const text = (textToSend || manualText).trim();
     if (!text) return;
@@ -1050,10 +1258,17 @@ export const AdminView: React.FC<AdminViewProps> = ({
     }
   };
 
-  const handleTriggerDemo = async (stageId: string, demoKey: string) => {
+  const handleTriggerDemo = async (stageId: string, demoKey?: string | null) => {
     try {
+      if (!demoKey) {
+        // Custom video - don't run canned demo simulation!
+        return;
+      }
       if (isRecording && selectedStageId === stageId) {
         stopMicStreaming(stageId);
+      }
+      if (isTabAudioCapturing) {
+        stopTabAudioCapture();
       }
       setIsDemoSyncRunning(true);
       if (demoKey === activeSyncDemoKey) {
@@ -1083,6 +1298,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
       if (syncingYoutubeStageId === stageId || youtubeTargetStageId === stageId) {
         setIsDemoSyncRunning(false);
         setSyncingYoutubeStageId(null);
+      }
+      if (tabTargetStageIdRef.current === stageId || youtubeTargetStageId === stageId) {
+        stopTabAudioCapture();
       }
       updateStageSourceKind(stageId, 'idle');
       setStageAudioSource((prev) => ({ ...prev, [stageId]: 'idle' }));
@@ -1588,8 +1806,27 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
                 {/* 2. Talk info strip */}
                 <div className="bg-[#05070c] p-2 rounded-lg border border-[#141a27] space-y-0.5 text-left">
-                  <div className="text-xs font-bold text-gray-200 truncate" title={stage.talkTitle}>
-                    {stage.talkTitle || 'Sin charla programada'}
+                  <div className="flex items-center justify-between gap-1">
+                    <div className="text-xs font-bold text-gray-200 truncate" title={stage.talkTitle}>
+                      {stage.talkTitle || 'Sin charla programada'}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const newTitle = window.prompt(`Nuevo título de charla para ${stage.name}:`, stage.talkTitle || '');
+                        if (newTitle !== null) {
+                          const newSpeaker = window.prompt(`Nuevo orador / expositor para ${stage.name}:`, stage.speaker || '');
+                          if (newSpeaker !== null) {
+                            handleQuickUpdateStageTalk(stage.id, newTitle, newSpeaker);
+                          }
+                        }
+                      }}
+                      className="text-[9px] font-mono text-[#00f5ff] hover:text-white hover:underline shrink-0 flex items-center gap-0.5 px-1 py-0.2 rounded bg-[#00f5ff]/10 border border-[#00f5ff]/30"
+                      title="Editar título y orador de esta sala"
+                    >
+                      <span>✏️ EDITAR</span>
+                    </button>
                   </div>
                   <div className="flex items-center justify-between text-[10px] font-mono text-[#64748b]">
                     <span className="truncate">{stage.speaker || 'Orador'}</span>
@@ -2157,25 +2394,19 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 </div>
               )}
 
-              {/* Preloaded Real Nerdearla Talks Selector */}
+              {/* 1. Preloaded Real Nerdearla Talks Selector */}
               <div className="space-y-1">
-                <span className="text-[10px] font-mono text-gray-400 block">
+                <span className="text-[10px] font-mono text-gray-400 block font-bold">
                   CHARLAS OFICIALES NERDEARLA (PREAJUSTES):
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {YOUTUBE_NERDEARLA_TALKS.map((t) => {
-                    const isSelected = youtubeVideoId === t.id;
+                    const isSelected = !isCustomVideo && youtubeVideoId === t.id;
                     return (
                       <button
                         key={t.id}
                         type="button"
-                        onClick={() => {
-                          setYoutubeVideoId(t.id);
-                          setActiveSyncDemoKey(t.demoKey);
-                          if (isDemoSyncRunning) {
-                            handleTriggerDemo(youtubeTargetStage.id, t.demoKey);
-                          }
-                        }}
+                        onClick={() => handleSelectPresetTalk(t)}
                         className={`p-2.5 rounded-lg text-left transition-all border font-mono ${
                           isSelected
                             ? 'bg-[#121c2d] border-[#00f5ff] text-white shadow-[0_0_8px_rgba(0,245,255,0.3)]'
@@ -2191,23 +2422,101 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 </div>
               </div>
 
-              {/* Custom YouTube URL Form */}
-              <form onSubmit={handleLoadCustomYoutube} className="flex gap-2">
-                <input
-                  type="text"
-                  value={customYoutubeUrl}
-                  onChange={(e) => setCustomYoutubeUrl(e.target.value)}
-                  placeholder="Pegar enlace de YouTube (ej: https://www.youtube.com/watch?v=... o https://youtu.be/...)"
-                  className="flex-1 bg-[#0b0e15] border border-[#1e2535] rounded-lg px-3 py-1.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-[#00f5ff]"
-                />
-                <button
-                  type="submit"
-                  className="px-3 py-1.5 bg-[#141b29] hover:bg-[#1e273b] border border-[#00f5ff]/40 text-[#00f5ff] text-xs font-mono font-bold rounded-lg flex items-center gap-1.5 shrink-0 transition-all"
-                >
-                  <Play className="w-3.5 h-3.5" />
-                  <span>CARGAR_VIDEO</span>
-                </button>
+              {/* 2. Custom YouTube URL & Talk Metadata Form */}
+              <form onSubmit={handleLoadCustomYoutube} className="p-3 bg-[#0a0d14] border border-[#1c2438] rounded-xl space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono font-bold text-gray-400 flex items-center gap-1.5">
+                    <Video className="w-3.5 h-3.5 text-[#00f5ff]" />
+                    <span>CARGAR VIDEO O STREAM PROPIO:</span>
+                  </span>
+                  <span className="text-[10px] font-mono text-[#00f5ff] bg-[#00f5ff]/10 px-2 py-0.5 rounded border border-[#00f5ff]/20">
+                    SALA DE DESTINO: {youtubeTargetStage.name.toUpperCase()}
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={customYoutubeUrl}
+                    onChange={(e) => setCustomYoutubeUrl(e.target.value)}
+                    placeholder="URL de YouTube (ej: https://www.youtube.com/watch?v=... o https://youtu.be/...)"
+                    className="flex-1 bg-[#0b0e15] border border-[#1e2535] rounded-lg px-3 py-2 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-[#00f5ff]"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={customVideoTitle}
+                    onChange={(e) => setCustomVideoTitle(e.target.value)}
+                    placeholder="Título del Video / Charla (ej: 'Arquitectura Cloud 2026')"
+                    className="bg-[#0b0e15] border border-[#1e2535] rounded-lg px-3 py-1.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-[#00f5ff]"
+                  />
+                  <input
+                    type="text"
+                    value={customVideoSpeaker}
+                    onChange={(e) => setCustomVideoSpeaker(e.target.value)}
+                    placeholder="Orador / Canal (ej: 'Ingeniería Sysarmy')"
+                    className="bg-[#0b0e15] border border-[#1e2535] rounded-lg px-3 py-1.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-[#00f5ff]"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <div className="text-[10px] font-mono text-gray-400">
+                    {isCustomVideo ? (
+                      <span className="text-emerald-400 font-bold">✓ Modo video personalizado activo (sin textos pregrabados)</span>
+                    ) : (
+                      <span>Cargá tu propio video y transcribilo en tiempo real</span>
+                    )}
+                  </div>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-[#141b29] hover:bg-[#1e273b] border border-[#00f5ff] text-[#00f5ff] text-xs font-mono font-bold rounded-lg flex items-center gap-1.5 shrink-0 transition-all shadow-[0_0_10px_rgba(0,245,255,0.2)] hover:shadow-[0_0_15px_rgba(0,245,255,0.4)]"
+                  >
+                    <Play className="w-3.5 h-3.5" />
+                    <span>CARGAR VIDEO Y ACTUALIZAR SALA</span>
+                  </button>
+                </div>
+
+                {customVideoFeedback && (
+                  <div className="text-[11px] font-mono text-[#00ff66] bg-[#00ff66]/10 border border-[#00ff66]/30 px-3 py-1.5 rounded-lg flex items-center gap-2">
+                    <Sparkles className="w-3.5 h-3.5 shrink-0 text-[#00ff66]" />
+                    <span>{customVideoFeedback}</span>
+                  </div>
+                )}
               </form>
+
+              {/* Active Talk Header Bar */}
+              <div className="flex items-center justify-between text-xs font-mono bg-[#0d121c] p-2.5 rounded-lg border border-[#1b2538]">
+                <div className="flex items-center gap-2 truncate">
+                  <span className="text-[#00f5ff] font-bold">EN SALA ({youtubeTargetStage.name}):</span>
+                  <span className="text-white font-bold truncate">
+                    {isCustomVideo
+                      ? (customVideoTitle || youtubeTargetStage.talkTitle || 'Video YouTube en Vivo')
+                      : (youtubeTargetStage.talkTitle || 'Charla')}
+                  </span>
+                  <span className="text-gray-400 truncate">
+                    • {isCustomVideo
+                      ? (customVideoSpeaker || youtubeTargetStage.speaker || 'Orador')
+                      : (youtubeTargetStage.speaker || 'Orador')}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newTitle = window.prompt(`Nuevo título para ${youtubeTargetStage.name}:`, youtubeTargetStage.talkTitle || '');
+                    if (newTitle !== null) {
+                      const newSpeaker = window.prompt(`Nuevo orador para ${youtubeTargetStage.name}:`, youtubeTargetStage.speaker || '');
+                      if (newSpeaker !== null) {
+                        handleQuickUpdateStageTalk(youtubeTargetStage.id, newTitle, newSpeaker);
+                      }
+                    }
+                  }}
+                  className="text-[10px] text-[#00f5ff] hover:text-white hover:underline shrink-0 px-2 py-0.5 rounded bg-[#00f5ff]/10 border border-[#00f5ff]/30 ml-2"
+                >
+                  ✏️ Renombrar
+                </button>
+              </div>
 
               {/* Embedded 16:9 YouTube Player */}
               <div className="relative aspect-video rounded-xl overflow-hidden border-2 border-[#1c2436] bg-black shadow-inner">
@@ -2222,41 +2531,118 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
               {/* Sync Controls & External Link */}
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (isDemoSyncRunning) {
-                        await handleStopStage(youtubeTargetStage.id);
-                        setIsDemoSyncRunning(false);
-                        setSyncingYoutubeStageId(null);
-                      } else {
-                        await handleTriggerDemo(youtubeTargetStage.id, activeSyncDemoKey);
-                      }
-                    }}
-                    className={`px-3.5 py-2 text-xs font-mono font-bold rounded-lg flex items-center gap-2 transition-all ${
-                      isDemoSyncRunning
-                        ? 'bg-[#ff1744] hover:bg-[#ff1744]/90 text-white shadow-[0_0_15px_rgba(255,23,68,0.5)] animate-pulse'
-                        : 'hardware-btn-active bg-[#141b29] text-[#00f5ff] hover:shadow-[0_0_15px_rgba(0,245,255,0.4)] border border-[#00f5ff]/60'
-                    }`}
-                    title={`Inicia el flujo de subtítulos y traducción simultánea para esta charla en ${youtubeTargetStage.name}`}
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>
-                      {isDemoSyncRunning
-                        ? `🛑 DETENER EN ${youtubeTargetStage.name.toUpperCase()}`
-                        : `🚀 SINCRONIZAR EN ${youtubeTargetStage.name.toUpperCase()}`}
-                    </span>
-                  </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* If custom video: offer real tab audio capture & mic streaming */}
+                  {isCustomVideo || !activeSyncDemoKey ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (isTabAudioCapturing) {
+                            stopTabAudioCapture();
+                          } else {
+                            startTabAudioCapture(youtubeTargetStage.id);
+                          }
+                        }}
+                        className={`px-3.5 py-2 text-xs font-mono font-bold rounded-lg flex items-center gap-2 transition-all ${
+                          isTabAudioCapturing
+                            ? 'bg-[#ff1744] hover:bg-[#ff1744]/90 text-white shadow-[0_0_15px_rgba(255,23,68,0.5)] animate-pulse'
+                            : 'hardware-btn-active bg-[#141b29] text-[#00ff66] hover:shadow-[0_0_15px_rgba(0,255,102,0.4)] border border-[#00ff66]/60'
+                        }`}
+                        title="Captura el audio de la pestaña de Chrome donde suena el video y transcríbelo en tiempo real"
+                      >
+                        <Volume2 className="w-3.5 h-3.5" />
+                        <span>
+                          {isTabAudioCapturing
+                            ? `🛑 DETENER AUDIO EN ${youtubeTargetStage.name.toUpperCase()}`
+                            : `🔊 CAPTURAR AUDIO DEL VIDEO (PESTAÑA)`}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (isRecording && selectedStageId === youtubeTargetStage.id) {
+                            stopMicStreaming(youtubeTargetStage.id);
+                          } else {
+                            handleSelectStage(youtubeTargetStage.id);
+                            startMicStreaming();
+                          }
+                        }}
+                        className={`hardware-btn px-3 py-2 text-xs font-mono font-bold rounded-lg flex items-center gap-1.5 transition-all ${
+                          isRecording && selectedStageId === youtubeTargetStage.id
+                            ? 'bg-[#ff1744] text-white shadow-[0_0_10px_rgba(255,23,68,0.5)]'
+                            : 'text-gray-300 hover:text-white border border-[#232c40]'
+                        }`}
+                        title="Usa el micrófono o entrada de línea para transcribir el audio del video hacia este escenario"
+                      >
+                        <Mic className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>
+                          {isRecording && selectedStageId === youtubeTargetStage.id
+                            ? '🛑 DETENER MIC'
+                            : '🎤 MICRÓFONO / ENTRADA'}
+                        </span>
+                      </button>
+                    </>
+                  ) : (
+                    /* Preset talk: allow demo simulation sync or live capture */
+                    <>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (isDemoSyncRunning) {
+                            await handleStopStage(youtubeTargetStage.id);
+                            setIsDemoSyncRunning(false);
+                            setSyncingYoutubeStageId(null);
+                          } else {
+                            await handleTriggerDemo(youtubeTargetStage.id, activeSyncDemoKey);
+                          }
+                        }}
+                        className={`px-3.5 py-2 text-xs font-mono font-bold rounded-lg flex items-center gap-2 transition-all ${
+                          isDemoSyncRunning
+                            ? 'bg-[#ff1744] hover:bg-[#ff1744]/90 text-white shadow-[0_0_15px_rgba(255,23,68,0.5)] animate-pulse'
+                            : 'hardware-btn-active bg-[#141b29] text-[#00f5ff] hover:shadow-[0_0_15px_rgba(0,245,255,0.4)] border border-[#00f5ff]/60'
+                        }`}
+                        title={`Inicia el flujo de subtítulos y traducción simultánea para esta charla en ${youtubeTargetStage.name}`}
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>
+                          {isDemoSyncRunning
+                            ? `🛑 DETENER EN ${youtubeTargetStage.name.toUpperCase()}`
+                            : `🚀 SINCRONIZAR DEMO EN ${youtubeTargetStage.name.toUpperCase()}`}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (isTabAudioCapturing) {
+                            stopTabAudioCapture();
+                          } else {
+                            startTabAudioCapture(youtubeTargetStage.id);
+                          }
+                        }}
+                        className="hardware-btn px-2.5 py-2 text-xs font-mono font-bold text-emerald-400 hover:text-emerald-300 rounded-lg flex items-center gap-1.5 transition-all border border-emerald-500/30"
+                        title="Capturar el audio real que reproduce el video en la pestaña del navegador"
+                      >
+                        <Volume2 className="w-3 h-3" />
+                        <span>AUDIO REAL (PESTAÑA)</span>
+                      </button>
+                    </>
+                  )}
 
                   <button
                     type="button"
-                    onClick={() => handleStopStage(youtubeTargetStage.id)}
+                    onClick={async () => {
+                      await handleStopStage(youtubeTargetStage.id);
+                      stopTabAudioCapture();
+                      await emergencyClearApi(youtubeTargetStage.id);
+                    }}
                     className="hardware-btn px-2.5 py-2 text-xs font-mono font-bold text-gray-400 hover:text-red-400 rounded-lg flex items-center gap-1 transition-all"
-                    title={`Detener subtítulos y audio de demo en ${youtubeTargetStage.name}`}
+                    title={`Detener y limpiar subtítulos en ${youtubeTargetStage.name}`}
                   >
                     <Square className="w-3 h-3" />
-                    <span>DETENER</span>
+                    <span>DETENER Y LIMPIAR</span>
                   </button>
                 </div>
 
@@ -2271,8 +2657,17 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 </a>
               </div>
 
-              <div className="text-[10px] font-mono text-[#64748b] bg-[#05070a] p-2.5 rounded-lg border border-[#141724] leading-relaxed">
-                💡 <span className="text-gray-300">Modo de Demostración & Jurado:</span> Podés reproducir el video directamente aquí con audio, o abrirlo en otra pestaña y usar <strong className="text-cyan-400">"Capturar Pestaña (PiP)"</strong> en la Pantalla de Sala para transcribir el audio en tiempo real con Gemini Live.
+              <div className="text-[10px] font-mono text-[#64748b] bg-[#05070a] p-3 rounded-lg border border-[#141724] leading-relaxed space-y-1">
+                <div className="text-gray-300 font-bold flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Transcripción en Tiempo Real de Videos con Gemini Live:</span>
+                </div>
+                <div>
+                  • <strong className="text-emerald-400">Captura de Pestaña:</strong> Hacé clic en <strong className="text-white">"Capturar Audio del Video (Pestaña)"</strong>, seleccioná la pestaña donde se reproduce YouTube y marcá <span className="text-cyan-300">"Compartir audio de la pestaña"</span>. El audio original es procesado en vivo a 16kHz PCM y transcripto por Gemini sin ningún texto hardcodeado.
+                </div>
+                <div>
+                  • <strong className="text-cyan-400">Micrófono / Entrada de Sonido:</strong> Si el audio del video sale por parlantes o por una placa virtual (Stereo Mix / VB-Cable), hacé clic en <strong className="text-white">"Micrófono / Entrada"</strong> para enviarlo directo a la sala.
+                </div>
               </div>
             </div>
 

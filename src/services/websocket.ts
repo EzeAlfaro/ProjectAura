@@ -13,6 +13,7 @@ export interface WSCallbacks {
   onDeepIntel?: (data: { stageId: string; takeaways: StageTakeaway[]; suggestedQuestions: StageQA[]; executiveSummary: string; intelModelUsed: string }) => void;
   onInterim?: (data: { stageId: string; text: string }) => void;
   onQAUpdate?: (data: { stageId: string; question: AudienceQuestion; action: 'add' | 'vote' | 'status' }) => void;
+  onEmergencyClear?: (stageId: string) => void;
 }
 
 export class WSClient {
@@ -105,6 +106,9 @@ export class WSClient {
               break;
             case 'qa_update':
               this.callbacks.onQAUpdate?.(msg);
+              break;
+            case 'emergency_clear':
+              this.callbacks.onEmergencyClear?.(msg.stageId);
               break;
           }
 

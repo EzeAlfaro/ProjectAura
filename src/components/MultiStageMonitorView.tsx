@@ -104,6 +104,11 @@ export const MultiStageMonitorView: React.FC<MultiStageMonitorViewProps> = ({
         });
       } else if (msg.type === 'initial_state' && msg.allChunks) {
         setAllStageChunks(msg.allChunks);
+      } else if (msg.type === 'emergency_clear' && msg.stageId) {
+        setAllStageChunks(prev => ({
+          ...prev,
+          [msg.stageId]: []
+        }));
       }
     });
     return unsub;

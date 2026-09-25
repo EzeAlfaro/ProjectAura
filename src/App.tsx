@@ -166,6 +166,12 @@ export function App() {
           prev.map((s) => (s.id === selectedStageId ? { ...s, audioLevel: level } : s))
         );
       },
+      onEmergencyClear: (stageId) => {
+        if (!stageId || stageId === selectedStageId) {
+          setChunks([]);
+          setInterimText('');
+        }
+      },
     });
 
     ws.connect(selectedStageId, selectedLang);

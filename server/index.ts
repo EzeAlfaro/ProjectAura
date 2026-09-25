@@ -284,6 +284,17 @@ app.post('/api/stages', requireAdminAuth, (req: Request, res: Response) => {
   res.status(201).json({ stage: newStage });
 });
 
+// Update Existing Stage Metadata (talkTitle, speaker, track, etc.)
+app.patch('/api/stages/:id', requireAdminAuth, (req: Request, res: Response) => {
+  const updatedStage = stageManager.updateStage(req.params.id, req.body);
+  res.json({ success: true, stage: updatedStage });
+});
+
+app.put('/api/stages/:id', requireAdminAuth, (req: Request, res: Response) => {
+  const updatedStage = stageManager.updateStage(req.params.id, req.body);
+  res.json({ success: true, stage: updatedStage });
+});
+
 // Delete Stage
 app.delete('/api/stages/:id', requireAdminAuth, (req: Request, res: Response) => {
   const success = stageManager.deleteStage(req.params.id);

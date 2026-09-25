@@ -217,6 +217,29 @@ export class StageManager {
     return newStage;
   }
 
+  public updateStage(id: string, updates: Partial<Stage>): Stage {
+    const cleanId = (id || '').trim().toLowerCase();
+    let stage = this.stages.get(cleanId);
+    if (!stage) {
+      stage = this.createStage({ id: cleanId, ...updates });
+      return stage;
+    }
+
+    if (updates.name !== undefined) stage.name = updates.name.trim();
+    if (updates.track !== undefined) stage.track = updates.track.trim();
+    if (updates.speaker !== undefined) stage.speaker = updates.speaker.trim();
+    if (updates.talkTitle !== undefined) stage.talkTitle = updates.talkTitle.trim();
+    if (updates.description !== undefined) stage.description = updates.description.trim();
+    if (updates.isLive !== undefined) stage.isLive = updates.isLive;
+    if (updates.currentAudioSource !== undefined) stage.currentAudioSource = updates.currentAudioSource;
+    if (updates.assignedDeviceId !== undefined) stage.assignedDeviceId = updates.assignedDeviceId;
+    if (updates.assignedDeviceLabel !== undefined) stage.assignedDeviceLabel = updates.assignedDeviceLabel;
+
+    logger.info('stage', `Stage [${cleanId}] updated: title="${stage.talkTitle}", speaker="${stage.speaker}"`);
+    this.broadcastSystemUpdate();
+    return stage;
+  }
+
   public setStageAudioRoute(
     stageId: string,
     deviceId: string,
