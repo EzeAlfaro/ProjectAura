@@ -11,6 +11,7 @@ import { LogViewerModal } from './components/LogViewerModal.js';
 import { ScheduleModal } from './components/ScheduleModal.js';
 import { ThemeSelectorModal } from './components/ThemeSelectorModal.js';
 import { MobileMicView } from './components/MobileMicView.js';
+import { OperatorManualModal } from './components/OperatorManualModal.js';
 import { WSClient } from './services/websocket.js';
 import { fetchStages, fetchStatus, triggerDeepIntel } from './services/api.js';
 import { Stage, SubtitleChunk, StageTakeaway, StageQA, SupportedLanguage } from './types.js';
@@ -40,6 +41,7 @@ export function App() {
   const [isLogModalOpen, setIsLogModalOpen] = useState<boolean>(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState<boolean>(false);
   const [isThemeModalOpen, setIsThemeModalOpen] = useState<boolean>(false);
+  const [isManualModalOpen, setIsManualModalOpen] = useState<boolean>(false);
   const [isConnected, setIsConnected] = useState<boolean>(false);
 
   const wsClientRef = useRef<WSClient | null>(null);
@@ -294,6 +296,7 @@ export function App() {
         onOpenLogModal={() => setIsLogModalOpen(true)}
         onOpenScheduleModal={() => setIsScheduleModalOpen(true)}
         onOpenThemeModal={() => setIsThemeModalOpen(true)}
+        onOpenManualModal={() => setIsManualModalOpen(true)}
         isConnected={isConnected}
         activeStageName={currentStage?.name}
       />
@@ -417,6 +420,12 @@ export function App() {
       <ThemeSelectorModal
         isOpen={isThemeModalOpen}
         onClose={() => setIsThemeModalOpen(false)}
+      />
+
+      {/* Operator Field Manual & Runbook Modal (Bilingual) */}
+      <OperatorManualModal
+        isOpen={isManualModalOpen}
+        onClose={() => setIsManualModalOpen(false)}
       />
     </div>
   );

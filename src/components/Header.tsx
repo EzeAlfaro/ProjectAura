@@ -16,7 +16,8 @@ import {
   Palette,
   Menu,
   X,
-  Mic
+  Mic,
+  BookOpen
 } from 'lucide-react';
 import { useIsMobile } from '../hooks/useIsMobile.js';
 
@@ -33,6 +34,7 @@ interface HeaderProps {
   onOpenLogModal?: () => void;
   onOpenScheduleModal?: () => void;
   onOpenThemeModal?: () => void;
+  onOpenManualModal?: () => void;
   isConnected: boolean;
   activeStageName?: string;
 }
@@ -50,6 +52,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenLogModal,
   onOpenScheduleModal,
   onOpenThemeModal,
+  onOpenManualModal,
   isConnected,
   activeStageName,
 }) => {
@@ -128,6 +131,17 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
+            {/* Quick Manual Button */}
+            {onOpenManualModal && (
+              <button
+                onClick={onOpenManualModal}
+                className="p-2 rounded-lg bg-[#10141e] border border-[#222a3d] text-cyan-300 hover:text-white"
+                title="Manual de Operaciones y Guía de Despliegue (Bilingüe)"
+              >
+                <BookOpen className="w-4 h-4" />
+              </button>
+            )}
+
             {/* Mobile Hamburger Toggle */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -153,6 +167,8 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="text-white font-bold">AURA RACK-1000 PRO</span>
                 <span className="text-[#334155]">/</span>
                 <span className="text-[#64748b]">SER: #2026-TX</span>
+                <span className="text-[#334155]">/</span>
+                <span className="px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800 text-[9px] font-mono font-bold" title="Herramienta creada por técnicos de escenario para técnicos de escenario">AV-CREW BUILT 🛠️</span>
               </div>
               <span className="text-[#334155]">|</span>
               <span className="flex items-center gap-1.5 text-gray-300">
@@ -317,6 +333,17 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   <Terminal className="w-3.5 h-3.5 text-[#00f5ff]" />
                   <span>LOGS</span>
+                </button>
+              )}
+
+              {onOpenManualModal && (
+                <button
+                  onClick={onOpenManualModal}
+                  className="hardware-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-mono font-bold text-cyan-300 hover:text-white border border-[#222a3d] hover:border-cyan-400/60 bg-[#10141e] transition-all"
+                  title="Abrir Manual de Operaciones y Despliegue en Vivo (Bilingüe ES/EN)"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>MANUAL</span>
                 </button>
               )}
 
@@ -501,6 +528,22 @@ export const Header: React.FC<HeaderProps> = ({
                   </button>
                 )}
 
+                {onOpenManualModal && (
+                  <button
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      onOpenManualModal();
+                    }}
+                    className="w-full p-3 rounded-xl bg-[#121622] border border-[#222a3d] hover:border-cyan-500/40 text-left font-mono text-xs font-bold text-gray-200 flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <BookOpen className="w-4 h-4 text-cyan-400" />
+                      <span>Manual de Operaciones & Despliegue (Bilingüe)</span>
+                    </div>
+                    <span className="text-gray-500">→</span>
+                  </button>
+                )}
+
                 <button
                   onClick={() => {
                     setMobileMenuOpen(false);
@@ -517,8 +560,9 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             </div>
 
-            <div className="pt-2 text-center text-[10px] font-mono text-gray-500">
-              Nerdearla Vibeathon 2026 • Modo Móvil Optimizado
+            <div className="pt-2 text-center text-[10px] font-mono text-gray-500 space-y-0.5">
+              <div>Project Aura • Nerdearla Vibeathon 2026</div>
+              <div className="text-cyan-400/80 font-bold">🛠️ Diseñado en el rack por operadores de escenario</div>
             </div>
           </div>
         </div>
