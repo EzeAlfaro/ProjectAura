@@ -218,135 +218,106 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             </div>
 
-            {/* Simplified, Intuitive Role/View Switcher */}
+            {/* 3 Core Roles: AUDIENCIA, MESA TÉCNICA, TRANSMISIÓN */}
             <nav className="flex items-center bg-[#07090e] p-1 rounded-lg border border-[#1e2535] shadow-inner gap-1">
-              {/* 1. AUDIENCIA MÓVIL (Audience / QR) */}
+              {/* 1. AUDIENCIA */}
               <button
                 onClick={() => onSelectView('audience')}
                 className={`hardware-btn flex items-center gap-2 px-3.5 py-1.5 rounded text-xs font-mono font-bold transition-all ${
                   currentView === 'audience' ? 'hardware-btn-active text-[#00f5ff]' : 'text-[#718096]'
                 }`}
-                title="Vista para el celular de los asistentes (Solo lectura en tiempo real)"
+                title="Vista para asistentes en sala y celulares"
               >
                 <Smartphone className="w-3.5 h-3.5 text-[#00f5ff]" />
                 <span>AUDIENCIA</span>
               </button>
 
-              {/* 2. MICRÓFONO DE EMERGENCIA */}
-              <button
-                onClick={() => onSelectView('mic')}
-                className={`hardware-btn flex items-center gap-2 px-3 py-1.5 rounded text-xs font-mono font-bold transition-all ${
-                  currentView === 'mic' ? 'hardware-btn-active text-red-400 border-red-500' : 'text-[#718096]'
-                }`}
-                title="Convertir dispositivo en micrófono inalámbrico de emergencia"
-              >
-                <Mic className="w-3.5 h-3.5 text-red-400" />
-                <span>MIC MÓVIL</span>
-              </button>
-
-              {/* 3. MESA TÉCNICA */}
+              {/* 2. MESA TÉCNICA */}
               <button
                 onClick={() => onSelectView('admin')}
                 className={`hardware-btn flex items-center gap-2 px-3.5 py-1.5 rounded text-xs font-mono font-bold transition-all ${
                   currentView === 'admin' ? 'hardware-btn-active text-[#ffb800]' : 'text-[#718096]'
                 }`}
-                title="Consola de Audio, Vúmetros, Sound Check y Mini PC de Escenario"
+                title="Consola de Sonido AV: Vúmetros, Sound Check y Control de Salas"
               >
                 <Sliders className="w-3.5 h-3.5 text-[#ffb800]" />
                 <span>MESA TÉCNICA</span>
               </button>
 
-              {/* 4. vMIX / OBS LIVE */}
+              {/* 3. TRANSMISIÓN & TV */}
               <button
                 onClick={() => onSelectView('overlay')}
                 className={`hardware-btn flex items-center gap-2 px-3.5 py-1.5 rounded text-xs font-mono font-bold transition-all ${
                   currentView === 'overlay' ? 'hardware-btn-active text-[#ff1744]' : 'text-[#718096]'
                 }`}
-                title="Subtítulos con transparencia alfa para vMix Browser Input y OBS Studio"
+                title="Proyección de Sala (TV con QR) y Señal Limpia para OBS Studio"
               >
                 <Tv className="w-3.5 h-3.5 text-[#ff1744]" />
-                <span>vMIX / OBS</span>
-              </button>
-
-              {/* 5. PANTALLA SALA */}
-              <button
-                onClick={() => onSelectView('kiosk')}
-                className={`hardware-btn flex items-center gap-2 px-3.5 py-1.5 rounded text-xs font-mono font-bold transition-all ${
-                  currentView === 'kiosk' ? 'hardware-btn-active text-[#00ff66]' : 'text-[#718096]'
-                }`}
-                title="Teleprompter de retorno para el orador y pantalla gigante de sala"
-              >
-                <Monitor className="w-3.5 h-3.5 text-[#00ff66]" />
-                <span>PANTALLA SALA</span>
+                <span>TRANSMISIÓN & TV</span>
               </button>
             </nav>
 
-            {/* Right Console Actions: vMix, QR, Agenda, Temas, Logs, Motor AI */}
-            <div className="flex items-center gap-2.5">
-              {onOpenVMixModal && (
-                <button
-                  onClick={onOpenVMixModal}
-                  className="hardware-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-mono font-bold text-[#ff1744] border-[#ff1744]/40 bg-[#ff1744]/10 hover:bg-[#ff1744]/20 hover:border-[#ff1744] transition-all"
-                  title="Abrir panel de URLs y guía rápida para vMix y OBS Studio"
-                >
-                  <Tv className="w-3.5 h-3.5 animate-pulse" />
-                  <span className="font-bold">vMIX</span>
-                </button>
-              )}
-
+            {/* Right Console Actions: Mic, Manual, Agenda, Temas, Motor AI */}
+            <div className="flex items-center gap-2">
+              {/* Micrófono Móvil de Emergencia */}
               <button
-                onClick={onOpenQrModal}
-                className="hardware-btn flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-mono font-bold text-gray-200 hover:text-white"
-                title="Generar QR para proyección en auditorio o celulares de los asistentes"
+                onClick={() => onSelectView('mic')}
+                className={`hardware-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-mono font-bold transition-all ${
+                  currentView === 'mic' ? 'text-red-400 border-red-500 bg-red-950/40' : 'text-gray-400 hover:text-white'
+                }`}
+                title="Micrófono inalámbrico de emergencia"
               >
-                <QrCode className="w-3.5 h-3.5 text-[#00f5ff]" />
-                <span>QR_SALA</span>
+                <Mic className="w-3.5 h-3.5 text-red-400" />
+                <span className="hidden xl:inline">MIC MÓVIL</span>
               </button>
 
-              {onOpenScheduleModal && (
-                <button
-                  onClick={onOpenScheduleModal}
-                  className="hardware-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-mono font-bold text-gray-200 hover:text-white border border-[#222a3d] hover:border-cyan-500/40 bg-[#10141e] transition-all"
-                  title="Ver agenda completa de Nerdearla 2026 y sincronizar salas"
-                >
-                  <Calendar className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>AGENDA</span>
-                </button>
-              )}
-
-              {onOpenThemeModal && (
-                <button
-                  onClick={onOpenThemeModal}
-                  className="hardware-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-mono font-bold text-gray-200 hover:text-white border border-[#222a3d] hover:border-amber-500/40 bg-[#10141e] transition-all"
-                  title="Cambiar tema visual"
-                >
-                  <Palette className="w-3.5 h-3.5 text-amber-400" />
-                  <span>TEMAS</span>
-                </button>
-              )}
-
-              {onOpenLogModal && (
-                <button
-                  onClick={onOpenLogModal}
-                  className="hardware-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-mono font-bold text-gray-300 hover:text-[#00f5ff] border border-[#222a3d] hover:border-[#00f5ff]/40 bg-[#10141e] transition-all"
-                  title="Ver telemetría y registro de errores en vivo (Logs)"
-                >
-                  <Terminal className="w-3.5 h-3.5 text-[#00f5ff]" />
-                  <span>LOGS</span>
-                </button>
-              )}
-
+              {/* Manual de Operaciones */}
               {onOpenManualModal && (
                 <button
                   onClick={onOpenManualModal}
-                  className="hardware-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-mono font-bold text-cyan-300 hover:text-white border border-[#222a3d] hover:border-cyan-400/60 bg-[#10141e] transition-all"
-                  title="Abrir Manual de Operaciones y Despliegue en Vivo (Bilingüe ES/EN)"
+                  className="hardware-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-mono font-bold text-cyan-300 hover:text-white border border-[#222a3d] bg-[#10141e] transition-all"
+                  title="Manual de Operaciones y Runbook Técnico (Bilingüe)"
                 >
                   <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>MANUAL</span>
+                  <span className="hidden xl:inline">MANUAL</span>
                 </button>
               )}
 
+              {/* Agenda */}
+              {onOpenScheduleModal && (
+                <button
+                  onClick={onOpenScheduleModal}
+                  className="hardware-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-mono font-bold text-gray-300 hover:text-white border border-[#222a3d] bg-[#10141e] transition-all"
+                  title="Agenda oficial de Nerdearla 2026"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+                  <span className="hidden xl:inline">AGENDA</span>
+                </button>
+              )}
+
+              {/* Temas Visuales */}
+              {onOpenThemeModal && (
+                <button
+                  onClick={onOpenThemeModal}
+                  className="hardware-btn p-2 rounded text-gray-400 hover:text-amber-400 border border-[#222a3d] bg-[#10141e] transition-all"
+                  title="Cambiar tema visual"
+                >
+                  <Palette className="w-3.5 h-3.5 text-amber-400" />
+                </button>
+              )}
+
+              {/* Logs */}
+              {onOpenLogModal && (
+                <button
+                  onClick={onOpenLogModal}
+                  className="hardware-btn p-2 rounded text-gray-400 hover:text-[#00f5ff] border border-[#222a3d] bg-[#10141e] transition-all"
+                  title="Ver telemetría y logs del sistema"
+                >
+                  <Terminal className="w-3.5 h-3.5 text-[#00f5ff]" />
+                </button>
+              )}
+
+              {/* Engine Status / API Key Modal */}
               <button
                 onClick={onOpenApiKeyModal}
                 className={`hardware-btn flex items-center gap-2 px-3 py-1.5 rounded text-xs font-mono font-bold transition-all ${
@@ -356,7 +327,7 @@ export const Header: React.FC<HeaderProps> = ({
                     ? 'border-[#00ff66]/60 text-[#00ff66] bg-[#00ff66]/10'
                     : 'border-[#ffb800]/60 text-[#ffb800] bg-[#ffb800]/10'
                 }`}
-                title="Consola de Motores de IA"
+                title="Consola de Motores de IA y Llaves"
               >
                 <span className={`w-2 h-2 rounded-full ${
                   activeEngine === 'gemini-cloud'
@@ -365,14 +336,7 @@ export const Header: React.FC<HeaderProps> = ({
                     ? 'bg-[#00ff66] shadow-[0_0_8px_#00ff66]'
                     : 'bg-[#ffb800]'
                 }`} />
-                <span>
-                  {activeEngine === 'gemini-cloud'
-                    ? 'GEMINI 3.5'
-                    : activeEngine === 'gemma-local'
-                    ? 'GEMMA 2B'
-                    : 'NATIVO 0MS'}
-                </span>
-                <KeyRound className="w-3 h-3 opacity-70" />
+                <span>{activeEngine === 'gemini-cloud' ? 'GEMINI 3.5' : activeEngine === 'gemma-local' ? 'GEMMA' : 'LOCAL'}</span>
               </button>
             </div>
           </div>

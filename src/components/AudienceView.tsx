@@ -469,96 +469,67 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
         </div>
       )}
 
-      {/* DESKTOP 19" RACK CHASSIS: STAGE MATRIX & AUDIO BUS ROUTING (>= 1024px) */}
-      {!isMobile && !isFocusMode && (
-        <RackUnit
-          unitId="RACK_01"
-          uHeight="1U"
-          title="CONSOLA DE ESCENARIOS Y MATRIZ DE TRADUCCIÓN"
-          subTitle="Selección de sala en vivo y conmutación instantánea de idioma de salida"
-          rightBadge={
-            <div className="flex items-center gap-2">
-              {onOpenMobileMic && (
-                <button
-                  onClick={onOpenMobileMic}
-                  className="hardware-btn flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono font-bold text-cyan-300 hover:text-white border border-cyan-500/40 bg-cyan-950/40"
-                  title="Usar este celular como micrófono inalámbrico de emergencia"
-                >
-                  <Mic className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-                  <span className="hidden sm:inline">MIC_EMERGENCIA</span>
-                </button>
-              )}
-
-              <button
-                onClick={onOpenQrModal}
-                className="hardware-btn flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono font-bold text-gray-200 hover:text-white"
-                title="Abrir en celular o proyectar en pantalla de sala"
-              >
-                <QrCode className="w-3.5 h-3.5 text-[#00f5ff]" />
-                <span className="hidden sm:inline">QR_SALA</span>
-              </button>
-
-              <button
-                onClick={() => setIsFocusMode(!isFocusMode)}
-                className="hardware-btn flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono font-bold text-gray-200 hover:text-[#00f5ff]"
-                title="Modo cine sin distracciones para proyección"
-              >
-                <Maximize2 className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">CINE_HUD</span>
-              </button>
+      {/* DESKTOP UNIFIED STAGE & TRANSLATION HUD (>= 1024px) */}
+      {!isMobile && currentStage && !isFocusMode && (
+        <div className="bg-[#0b0e17]/90 backdrop-blur-md border border-[#1e2538] rounded-xl p-3 shadow-xl flex items-center justify-between gap-4">
+          {/* Left: Active Talk & Stage Indicator */}
+          <div className="flex items-center gap-3 min-w-0">
+            {/* Live Indicator Lamp */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-red-950/60 border border-red-500/40 text-red-400 font-mono text-[10px] font-bold shrink-0 animate-pulse">
+              <span className="w-2 h-2 rounded-full bg-red-500" />
+              <span>VIVO</span>
             </div>
-          }
-        >
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            {/* Stage Channel Buttons */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none w-full lg:w-auto">
-              <span className="text-[9px] font-mono font-bold text-[#64748b] uppercase tracking-wider pl-1 hidden sm:inline">
-                CHANNELS:
-              </span>
-              {stages.map((stage, idx) => {
-                const isSelected = stage.id === selectedStageId;
+
+            {/* Stage Selector Pills */}
+            <div className="flex items-center gap-1 shrink-0 bg-[#07090e] p-1 rounded-lg border border-[#1a202c]">
+              {stages.map((st, idx) => {
+                const isSelected = st.id === selectedStageId;
                 return (
                   <button
-                    key={stage.id}
-                    onClick={() => onSelectStage(stage.id)}
-                    className={`hardware-btn flex items-center gap-2 px-3 py-1.5 rounded text-xs font-mono font-bold transition-all shrink-0 ${
-                      isSelected ? 'hardware-btn-active text-white border-[#00f5ff]' : 'text-[#718096]'
+                    key={st.id}
+                    onClick={() => onSelectStage(st.id)}
+                    className={`px-2.5 py-1 rounded text-xs font-mono font-bold transition-all ${
+                      isSelected
+                        ? 'bg-[#121c2d] border border-[#00f5ff] text-white shadow-sm'
+                        : 'text-gray-400 hover:text-white'
                     }`}
                   >
-                    <span
-                      className={`w-2 h-2 rounded-full ${
-                        stage.isLive ? 'bg-[#ff1744] shadow-[0_0_6px_#ff1744] animate-pulse' : 'bg-[#2b3347]'
-                      }`}
-                    />
-                    <div className="text-left flex items-center gap-1.5">
-                      <span className="text-[10px] text-[#00f5ff]">0{idx + 1}</span>
-                      <span>{stage.name}</span>
-                    </div>
+                    0{idx + 1} {st.name.replace(/Escenario\s*/i, '').replace(/Sala\s*/i, '')}
                   </button>
                 );
               })}
             </div>
 
-            {/* Quick Language Switcher Bar with Flags & Dual Mode */}
-            <div className="flex items-center gap-1.5 flex-wrap bg-[#07090e] p-1.5 rounded-lg border border-[#1a202c]">
-              <span className="text-[10px] font-mono text-[#64748b] font-bold pl-1 hidden sm:inline">
-                TRADUCCIÓN:
-              </span>
+            {/* Talk Title & Speaker */}
+            <div className="min-w-0 truncate hidden md:block">
+              <div className="text-xs font-mono text-[#00f5ff] font-bold truncate">
+                {currentStage.speaker}
+              </div>
+              <div className="text-sm font-bold text-white truncate max-w-md lg:max-w-xl">
+                {currentStage.talkTitle}
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Language Switcher & Actions */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Translation Pills */}
+            <div className="flex items-center gap-1 bg-[#07090e] p-1 rounded-lg border border-[#1a202c]">
               {[
-                { id: 'es', label: 'Español', flag: '🇦🇷' },
-                { id: 'en', label: 'English', flag: '🇬🇧' },
-                { id: 'pt', label: 'Português', flag: '🇧🇷' },
-                { id: 'original', label: 'Original', flag: '🎙️' },
+                { id: 'es', label: 'ES', flag: '🇦🇷' },
+                { id: 'en', label: 'EN', flag: '🇬🇧' },
+                { id: 'pt', label: 'PT', flag: '🇧🇷' },
+                { id: 'original', label: 'ORIG', flag: '🎙️' },
               ].map((lang) => {
                 const isSelected = selectedLang === lang.id;
                 return (
                   <button
                     key={lang.id}
                     onClick={() => onSelectLang(lang.id as SupportedLanguage)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-mono font-bold transition-all ${
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-mono font-bold transition-all ${
                       isSelected
-                        ? 'bg-[#121c2d] border border-[#00f5ff] text-white shadow-[0_0_8px_rgba(0,245,255,0.3)]'
-                        : 'bg-[#0d1017] border border-[#1e2535] text-gray-400 hover:text-white hover:border-gray-600'
+                        ? 'bg-[#00f5ff]/20 border border-[#00f5ff] text-white'
+                        : 'text-gray-400 hover:text-white'
                     }`}
                   >
                     <span>{lang.flag}</span>
@@ -569,51 +540,33 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
 
               <button
                 onClick={() => setShowOriginal(!showOriginal)}
-                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-mono font-bold transition-all border ${
+                className={`px-2 py-1 rounded text-xs font-mono font-bold transition-all border ${
                   showOriginal
                     ? 'bg-[#00f5ff]/20 border-[#00f5ff] text-[#00f5ff]'
-                    : 'bg-[#0d1017] border-[#1e2535] text-gray-400 hover:text-white'
+                    : 'border-transparent text-gray-400 hover:text-white'
                 }`}
-                title="Ver el idioma original arriba y la traducción abajo"
+                title="Modo Dual: original arriba y traducción abajo"
               >
-                <span>⚡</span>
-                <span>DUAL {showOriginal ? 'ON' : 'OFF'}</span>
+                DUAL
               </button>
             </div>
-          </div>
-        </RackUnit>
-      )}
 
-      {/* Stage Live Status Telemetry Bar (>= 1024px) */}
-      {!isMobile && currentStage && !isFocusMode && (
-        <div className="bg-[#0b0e14] border border-[#1b2230] rounded p-3 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-lg">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="tally-lamp-live px-2 py-0.5 rounded text-[9px] font-mono font-black tracking-widest uppercase">
-                ON AIR // {currentStage.track}
-              </span>
-              <span className="text-xs font-mono text-[#64748b]">
-                SPEAKER: <strong className="text-white">{currentStage.speaker}</strong>
-              </span>
-            </div>
-            <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
-              {currentStage.talkTitle}
-            </h2>
-          </div>
+            {/* Auxiliary Tools */}
+            <button
+              onClick={onOpenQrModal}
+              className="p-2 rounded-lg bg-[#07090e] border border-[#1a202c] text-gray-300 hover:text-[#00f5ff] transition-all"
+              title="QR para celular"
+            >
+              <QrCode className="w-4 h-4" />
+            </button>
 
-          <div className="flex items-center gap-4 text-xs font-mono text-[#64748b] shrink-0 border-t md:border-t-0 md:border-l border-[#1b2230] pt-2 md:pt-0 md:pl-4">
-            <div>
-              <div className="text-[9px] uppercase tracking-wider text-[#475569]">AUDIENCIA</div>
-              <div className="text-white font-bold">{currentStage.audienceCount} CONECTADOS</div>
-            </div>
-            <div>
-              <div className="text-[9px] uppercase tracking-wider text-[#475569]">LATENCIA</div>
-              <div className="text-[#00ff66] font-bold">{currentStage.latencyMs}ms</div>
-            </div>
-            <div>
-              <div className="text-[9px] uppercase tracking-wider text-[#475569]">IDIOMA IN</div>
-              <div className="text-[#00f5ff] font-bold uppercase">{currentStage.detectedLang}</div>
-            </div>
+            <button
+              onClick={() => setIsFocusMode(!isFocusMode)}
+              className="p-2 rounded-lg bg-[#07090e] border border-[#1a202c] text-gray-300 hover:text-[#00f5ff] transition-all"
+              title="Modo Cine Pantalla Completa"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}
