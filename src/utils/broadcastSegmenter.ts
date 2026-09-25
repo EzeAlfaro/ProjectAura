@@ -120,7 +120,11 @@ export function findBroadcastSplitIndex(
   if (punctMatch !== -1) {
     const textBeforePunct = trimmed.substring(0, punctMatch);
     const wordsBeforePunct = textBeforePunct.split(/\s+/).length;
-    if (wordsBeforePunct >= minWordsBeforeCut) {
+    const textAfterPunct = trimmed.substring(punctMatch + 1).trim();
+    const wordsAfterPunct = textAfterPunct ? textAfterPunct.split(/\s+/).length : 0;
+
+    // Only cut at punctuation if the chunk before has enough words AND the tail isn't an orphan (< 4 words) if it's already formed
+    if (wordsBeforePunct >= minWordsBeforeCut && (wordsAfterPunct === 0 || wordsAfterPunct >= 4)) {
       // Cut right after the punctuation mark
       return punctMatch + 1;
     }
@@ -133,6 +137,10 @@ export function findBroadcastSplitIndex(
     const endScan = Math.max(minWordsBeforeCut, maxWords - 3);
 
     for (let i = startScan; i >= endScan; i--) {
+      // Don't cut if it leaves an orphan tail with fewer than 4 words
+      if (words.length > i && words.length - i < 4) {
+        continue;
+      }
       const w = words[i].toLowerCase().replace(/[^a-záéíóúñ]/g, '');
       if (SPANISH_CONNECTORS.has(w) || ENGLISH_CONNECTORS.has(w)) {
         // Break *before* this connector word
@@ -142,7 +150,11 @@ export function findBroadcastSplitIndex(
     }
 
     // No connector found; break after target word count (default 7-8 words)
-    const targetWordIndex = Math.min(words.length - 1, maxWords);
+    let targetWordIndex = Math.min(words.length - 1, maxWords);
+    if (words.length - targetWordIndex > 0 && words.length - targetWordIndex < 4) {
+      // Absorb the rest instead of leaving a 1-3 word orphan
+      targetWordIndex = words.length;
+    }
     const wordsBefore = words.slice(0, targetWordIndex).join(' ');
     return wordsBefore.length;
   }

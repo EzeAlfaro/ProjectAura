@@ -215,7 +215,7 @@ export const MobileMicView: React.FC<MobileMicViewProps> = ({
                 if (remaining.length > 0) {
                   silenceFlushTimerRef.current = setTimeout(() => {
                     const toFlush = transcript.substring(committedCharsRef.current).trim();
-                    if (toFlush && (toFlush.split(/\s+/).length >= 2 || /[.!?]$/.test(toFlush))) {
+                    if (toFlush && (toFlush.split(/\s+/).length >= 4 || /[.!?]$/.test(toFlush))) {
                       commitPhrase(toFlush);
                       committedCharsRef.current = transcript.length;
                       setLiveInterim('');

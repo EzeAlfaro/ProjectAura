@@ -830,8 +830,31 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
     return combined.sort((a, b) => a.timestamp - b.timestamp);
   }, [chunks, localChunks]);
 
-  // In Classic mode, take only the last 2 chunks
-  const classicChunks = effectiveChunks.slice(-2);
+  // In Classic mode, format into 1 or 2 broadcast subtitle lines without orphan fragments
+  const classicDisplay = React.useMemo(() => {
+    if (effectiveChunks.length === 0) return { current: '', previous: '' };
+    const last = effectiveChunks[effectiveChunks.length - 1];
+    let current = getDisplayText(last).trim();
+    let previous = '';
+
+    if (effectiveChunks.length > 1) {
+      const prev = effectiveChunks[effectiveChunks.length - 2];
+      const prevText = getDisplayText(prev).trim();
+      const currentWords = current.split(/\s+/).length;
+
+      // If current is an orphan (< 4 words), merge them into one unified subtitle!
+      if (currentWords < 4 && Math.abs(last.timestamp - prev.timestamp) < 12000) {
+        current = `${prevText} ${current}`;
+        if (effectiveChunks.length > 2) {
+          previous = getDisplayText(effectiveChunks[effectiveChunks.length - 3]).trim();
+        }
+      } else {
+        previous = prevText;
+      }
+    }
+
+    return { current, previous };
+  }, [effectiveChunks, selectedLang]);
 
   // Group chunks into coherent multi-word thoughts for clean teleprompter reading (Never display 1-word cards)
   const prompterGroups = React.useMemo(() => {
@@ -849,11 +872,14 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
         continue;
       }
 
+      const incomingWords = text.split(/\s+/).length;
+      const currentWords = currentText ? currentText.split(/\s+/).length : 0;
+
       if (!currentText) {
         currentText = text;
         currentId = raw[i].id;
-      } else if (currentText.split(/\s+/).length < 9 && !/[.!?]$/.test(currentText)) {
-        // Append short fragment to current thought
+      } else if (incomingWords < 4 || (currentWords < 9 && !/[.!?]$/.test(currentText)) || currentWords < 5) {
+        // Merge short fragments into the current card so cards never have orphan 1-3 words
         currentText = `${currentText} ${text}`;
       } else {
         groups.push({ id: currentId, text: currentText, isLatest: false });
@@ -863,11 +889,18 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
     }
 
     if (currentText) {
-      groups.push({ id: currentId, text: currentText, isLatest: true });
+      if (groups.length > 0 && currentText.split(/\s+/).length < 4) {
+        // Merge orphan trailing fragment (< 4 words) into the last group instead of making an abrupt 2-word card!
+        const lastGroup = groups[groups.length - 1];
+        lastGroup.text = `${lastGroup.text} ${currentText}`;
+        lastGroup.isLatest = true;
+      } else {
+        groups.push({ id: currentId, text: currentText, isLatest: true });
+      }
     }
 
     return groups.slice(-4);
-  }, [chunks, selectedLang]);
+  }, [effectiveChunks, selectedLang]);
 
 
   return (
@@ -1183,7 +1216,7 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
       {displayMode === 'classic' && (
         <div className="flex-1 flex flex-col justify-end items-center p-6 sm:p-12 pb-16 relative max-w-6xl mx-auto w-full">
           
-          {classicChunks.length === 0 && !liveInterimText ? (
+          {!classicDisplay.current && !liveInterimText ? (
             <div className="m-auto text-center space-y-4 max-w-lg">
               <div className="w-16 h-16 rounded-full bg-[#111520] border-2 border-[#00f5ff]/30 flex items-center justify-center mx-auto text-[#00f5ff]">
                 <Tv className="w-8 h-8 animate-pulse" />
@@ -1207,9 +1240,9 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
             <div className="w-full space-y-3 text-center">
               
               {/* Previous line (subtle and visible for context) */}
-              {classicChunks.length > 1 && !liveInterimText && (
+              {classicDisplay.previous && !liveInterimText && (
                 <div className="text-gray-400 opacity-60 text-lg sm:text-xl lg:text-2xl font-medium tracking-wide max-w-4xl mx-auto break-words">
-                  {getDisplayText(classicChunks[classicChunks.length - 2])}
+                  {classicDisplay.previous}
                 </div>
               )}
 
@@ -1230,10 +1263,10 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
                   </p>
                 ) : (
                   <p 
-                    className={`${getAdaptiveFontClass(classicChunks.length > 0 ? getDisplayText(classicChunks[classicChunks.length - 1]) : '')} text-white drop-shadow-md max-w-4xl break-words`}
+                    className={`${getAdaptiveFontClass(classicDisplay.current)} text-white drop-shadow-md max-w-4xl break-words`}
                     style={{ textShadow: '0 2px 8px rgba(0,0,0,0.95)' }}
                   >
-                    {classicChunks.length > 0 ? getDisplayText(classicChunks[classicChunks.length - 1]) : ''}
+                    {classicDisplay.current}
                   </p>
                 )}
               </div>
@@ -1284,7 +1317,7 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
                 return (
                   <div
                     key={group.id}
-                    className={`p-5 rounded-2xl transition-all duration-300 ${
+                    className={`p-5 rounded-2xl transition-all duration-500 ease-in-out ${
                       group.isLatest
                         ? 'bg-black/80 border-l-4 border-[#00f5ff] text-white shadow-2xl backdrop-blur-md'
                         : 'opacity-60 text-gray-300'
