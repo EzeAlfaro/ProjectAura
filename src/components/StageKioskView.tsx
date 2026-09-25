@@ -359,21 +359,24 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
     lastCommittedTextRef.current = clean;
     lastCommittedTimeRef.current = now;
 
-    // 1. Instant 0ms Native Local Display: Show subtitle on screen immediately!
-    const optimisticChunk: SubtitleChunk = {
-      id: `local-${now}`,
-      stageId: stage?.id || 'stage-1',
-      timestamp: now,
-      originalText: clean,
-      sourceLang: lang,
-      esText: clean,
-      enText: clean,
-      ptText: clean,
-      techTerms: [],
-      confidence: 0.99,
-      isFinal: true
-    };
-    setLocalChunks((prev) => [...prev.slice(-15), optimisticChunk]);
+    // 1. Instant 0ms Native Local Display: Only add optimistic chunk if viewer is watching the spoken language or original
+    // NEVER inject raw spoken language into enText or ptText when translating!
+    if (selectedLang === lang || selectedLang === 'original') {
+      const optimisticChunk: SubtitleChunk = {
+        id: `local-${now}`,
+        stageId: stage?.id || 'stage-1',
+        timestamp: now,
+        originalText: clean,
+        sourceLang: lang,
+        esText: lang === 'es' ? clean : '',
+        enText: lang === 'en' ? clean : '',
+        ptText: (lang as string) === 'pt' ? clean : '',
+        techTerms: [],
+        confidence: 0.99,
+        isFinal: true
+      };
+      setLocalChunks((prev) => [...prev.slice(-15), optimisticChunk]);
+    }
 
     if (onPushLiveTranscript) {
       onPushLiveTranscript(clean, lang);
@@ -772,11 +775,11 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
   const getDisplayText = (chunk: SubtitleChunk): string => {
     switch (selectedLang) {
       case 'es':
-        return chunk.esText || chunk.originalText;
+        return chunk.esText || (chunk.sourceLang === 'es' || !chunk.sourceLang ? chunk.originalText : '');
       case 'en':
-        return chunk.enText || chunk.originalText;
+        return chunk.enText || (chunk.sourceLang === 'en' ? chunk.originalText : '');
       case 'pt':
-        return chunk.ptText || chunk.esText || chunk.originalText;
+        return chunk.ptText || (chunk.sourceLang === 'pt' ? chunk.originalText : '');
       case 'original':
       default:
         return chunk.originalText;
@@ -832,21 +835,23 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
 
   // In Classic mode, format into 1 or 2 broadcast subtitle lines without orphan fragments
   const classicDisplay = React.useMemo(() => {
-    if (effectiveChunks.length === 0) return { current: '', previous: '' };
-    const last = effectiveChunks[effectiveChunks.length - 1];
+    const validChunks = effectiveChunks.filter((c) => getDisplayText(c).trim().length > 0);
+    if (validChunks.length === 0) return { current: '', previous: '' };
+
+    const last = validChunks[validChunks.length - 1];
     let current = getDisplayText(last).trim();
     let previous = '';
 
-    if (effectiveChunks.length > 1) {
-      const prev = effectiveChunks[effectiveChunks.length - 2];
+    if (validChunks.length > 1) {
+      const prev = validChunks[validChunks.length - 2];
       const prevText = getDisplayText(prev).trim();
       const currentWords = current.split(/\s+/).length;
 
       // If current is an orphan (< 4 words), merge them into one unified subtitle!
       if (currentWords < 4 && Math.abs(last.timestamp - prev.timestamp) < 12000) {
         current = `${prevText} ${current}`;
-        if (effectiveChunks.length > 2) {
-          previous = getDisplayText(effectiveChunks[effectiveChunks.length - 3]).trim();
+        if (validChunks.length > 2) {
+          previous = getDisplayText(validChunks[validChunks.length - 3]).trim();
         }
       } else {
         previous = prevText;
@@ -858,7 +863,8 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
 
   // Group chunks into coherent multi-word thoughts for clean teleprompter reading (Never display 1-word cards)
   const prompterGroups = React.useMemo(() => {
-    const raw = effectiveChunks.slice(-10);
+    const validChunks = effectiveChunks.filter((c) => getDisplayText(c).trim().length > 0);
+    const raw = validChunks.slice(-10);
     const groups: { id: string; text: string; isLatest: boolean }[] = [];
     let currentText = '';
     let currentId = '';
@@ -1216,7 +1222,7 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
       {displayMode === 'classic' && (
         <div className="flex-1 flex flex-col justify-end items-center p-6 sm:p-12 pb-16 relative max-w-6xl mx-auto w-full">
           
-          {!classicDisplay.current && !liveInterimText ? (
+          {!classicDisplay.current && !(liveInterimText && (selectedLang === spokenLang || selectedLang === 'original')) ? (
             <div className="m-auto text-center space-y-4 max-w-lg">
               <div className="w-16 h-16 rounded-full bg-[#111520] border-2 border-[#00f5ff]/30 flex items-center justify-center mx-auto text-[#00f5ff]">
                 <Tv className="w-8 h-8 animate-pulse" />
@@ -1240,7 +1246,7 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
             <div className="w-full space-y-3 text-center">
               
               {/* Previous line (subtle and visible for context) */}
-              {classicDisplay.previous && !liveInterimText && (
+              {classicDisplay.previous && !(liveInterimText && (selectedLang === spokenLang || selectedLang === 'original')) && (
                 <div className="text-gray-400 opacity-60 text-lg sm:text-xl lg:text-2xl font-medium tracking-wide max-w-4xl mx-auto break-words">
                   {classicDisplay.previous}
                 </div>
@@ -1253,7 +1259,7 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
                   boxShadow: '0 10px 40px rgba(0,0,0,0.85), 0 0 25px rgba(0,245,255,0.1)'
                 }}
               >
-                {liveInterimText ? (
+                {(liveInterimText && (selectedLang === spokenLang || selectedLang === 'original')) ? (
                   <p 
                     className={`${getAdaptiveFontClass(liveInterimText)} text-[#00f5ff] drop-shadow-md max-w-4xl break-words`}
                     style={{ textShadow: '0 2px 8px rgba(0,0,0,0.95), 0 0 16px rgba(0,245,255,0.45)' }}
@@ -1282,6 +1288,14 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
                 <span className="text-gray-400">
                   MIC: {spokenLang.toUpperCase()}
                 </span>
+                {selectedLang !== spokenLang && selectedLang !== 'original' && liveInterimText && (
+                  <>
+                    <span className="text-[#334155]">•</span>
+                    <span className="text-amber-400 font-mono font-bold animate-pulse">
+                      🎙️ TRADUCIENDO...
+                    </span>
+                  </>
+                )}
               </div>
 
             </div>
@@ -1299,7 +1313,7 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
           aria-relevant="additions"
           className="flex-1 p-6 sm:p-12 overflow-y-auto space-y-6 relative flex flex-col justify-end max-w-6xl mx-auto w-full"
         >
-          {chunks.length === 0 && !liveInterimText ? (
+          {prompterGroups.length === 0 && !(liveInterimText && (selectedLang === spokenLang || selectedLang === 'original')) ? (
             <div className="m-auto text-center space-y-4 max-w-md">
               <div className="w-16 h-16 rounded-full bg-[#111520] border-2 border-[#00f5ff]/30 flex items-center justify-center mx-auto text-[#00f5ff]">
                 <Layers className="w-8 h-8 animate-pulse" />
@@ -1333,8 +1347,8 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
                 );
               })}
 
-              {/* In-Flight Live Interim Speech Words */}
-              {liveInterimText && (
+              {/* In-Flight Live Interim Speech Words (Only if viewing spoken language) */}
+              {liveInterimText && (selectedLang === spokenLang || selectedLang === 'original') && (
                 <div className="p-5 rounded-2xl border-l-4 border-[#00f5ff] bg-[#00f5ff]/15 animate-fade-in shadow-xl backdrop-blur-sm">
                   <p className={`${getFontSizeClass()} text-[#00f5ff] font-bold tracking-wide leading-relaxed`}>
                     "{liveInterimText}"

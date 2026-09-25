@@ -86,13 +86,13 @@ export const OBSOverlayView: React.FC<OBSOverlayViewProps> = ({
     let raw = '';
     switch (selectedLang) {
       case 'es':
-        raw = chunk.esText || chunk.originalText;
+        raw = chunk.esText || (chunk.sourceLang === 'es' || !chunk.sourceLang ? chunk.originalText : '');
         break;
       case 'en':
-        raw = chunk.enText || chunk.originalText;
+        raw = chunk.enText || (chunk.sourceLang === 'en' ? chunk.originalText : '');
         break;
       case 'pt':
-        raw = chunk.ptText || chunk.esText || chunk.originalText;
+        raw = chunk.ptText || (chunk.sourceLang === 'pt' ? chunk.originalText : '');
         break;
       case 'original':
       default:
@@ -103,8 +103,9 @@ export const OBSOverlayView: React.FC<OBSOverlayViewProps> = ({
     return formatBroadcastSubtitle(raw, 12);
   };
 
-  // Get last N chunks for the overlay
-  const recentChunks = isFadedOut ? [] : delayedChunks.slice(-urlParams.lines);
+  // Get last N chunks with valid translated text for the overlay
+  const validDelayedChunks = delayedChunks.filter(c => getDisplayText(c).trim().length > 0);
+  const recentChunks = isFadedOut ? [] : validDelayedChunks.slice(-urlParams.lines);
 
   return (
     <div className={`fixed inset-0 w-screen h-screen ${urlParams.mode === 'tv' ? 'bg-[#030712]' : 'bg-transparent'} pointer-events-none flex flex-col justify-end p-8 sm:p-12 z-50 overflow-hidden font-sans`}>

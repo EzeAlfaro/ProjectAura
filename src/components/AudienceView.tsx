@@ -207,13 +207,13 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
     let raw = '';
     switch (selectedLang) {
       case 'es':
-        raw = chunk.esText || chunk.originalText;
+        raw = chunk.esText || (chunk.sourceLang === 'es' || !chunk.sourceLang ? chunk.originalText : '');
         break;
       case 'en':
-        raw = chunk.enText || chunk.originalText;
+        raw = chunk.enText || (chunk.sourceLang === 'en' ? chunk.originalText : '');
         break;
       case 'pt':
-        raw = chunk.ptText || chunk.esText || chunk.originalText;
+        raw = chunk.ptText || (chunk.sourceLang === 'pt' ? chunk.originalText : '');
         break;
       case 'original':
       default:
@@ -738,6 +738,7 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
               chunks.map((chunk, index) => {
                 const isLatest = index === chunks.length - 1;
                 const displayText = getDisplayText(chunk);
+                if (!displayText) return null;
                 const prevChunk = index > 0 ? chunks[index - 1] : null;
                 // Group thoughts that happened within 8 seconds of each other
                 const isContinuation = prevChunk !== null && (chunk.timestamp - prevChunk.timestamp < 8000);

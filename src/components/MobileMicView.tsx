@@ -522,9 +522,9 @@ export const MobileMicView: React.FC<MobileMicViewProps> = ({
                   </div>
                   <p className="text-sm font-sans font-bold text-white leading-snug">
                     "{previewLang === 'en' 
-                      ? (chunks[chunks.length - 1].enText || chunks[chunks.length - 1].originalText)
+                      ? (chunks[chunks.length - 1].enText || (chunks[chunks.length - 1].sourceLang === 'en' ? chunks[chunks.length - 1].originalText : 'Traduciendo al inglés...'))
                       : previewLang === 'pt'
-                      ? (chunks[chunks.length - 1].ptText || chunks[chunks.length - 1].originalText)
+                      ? (chunks[chunks.length - 1].ptText || (chunks[chunks.length - 1].sourceLang === 'pt' ? chunks[chunks.length - 1].originalText : 'Traduzindo para o português...'))
                       : (chunks[chunks.length - 1].esText || chunks[chunks.length - 1].originalText)}"
                   </p>
                 </div>
