@@ -114,6 +114,16 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
   }, [stage?.id]);
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>(() => {
+    try {
+      const routing = localStorage.getItem('aura_stage_audio_routing');
+      if (routing) {
+        const parsed = JSON.parse(routing);
+        const stageKey = stage?.id;
+        if (stageKey && parsed[stageKey]?.deviceId) {
+          return parsed[stageKey].deviceId;
+        }
+      }
+    } catch (e) {}
     return localStorage.getItem('nerdsub_kiosk_device_id') || '';
   });
   const [audioError, setAudioError] = useState<string | null>(null);
@@ -503,14 +513,22 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
         }
       } else {
         const deviceId = deviceIdToUse || selectedDeviceId;
-        const constraints: MediaStreamConstraints = {
-          audio: deviceId ? { deviceId: { ideal: deviceId } } : true,
-        };
-
-        try {
-          stream = await navigator.mediaDevices.getUserMedia(constraints);
-        } catch (err) {
-          console.warn('Could not grab specific device, falling back to default input:', err);
+        if (deviceId) {
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              audio: { deviceId: { exact: deviceId } }
+            });
+          } catch (exactErr) {
+            try {
+              stream = await navigator.mediaDevices.getUserMedia({
+                audio: { deviceId: { ideal: deviceId } }
+              });
+            } catch (idealErr) {
+              console.warn('[StageKioskView] Could not grab specific device, falling back to default input:', idealErr);
+              stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            }
+          }
+        } else {
           stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         }
       }

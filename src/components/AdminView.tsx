@@ -1462,16 +1462,13 @@ export const AdminView: React.FC<AdminViewProps> = ({
             const isSelected = stage.id === selectedStageId;
             const effectiveSource = getEffectiveSource(stage);
             const isMicRecordingThisStage = isRecording && selectedStageId === stage.id;
-            const assignedDevice = stageMicDevice[stage.id] || (stage.id === selectedStageId ? selectedDeviceId : '');
+            const assignedDevice = stageRouting[stage.id]?.deviceId || stageMicDevice[stage.id] || (stage.id === selectedStageId ? selectedDeviceId : '');
             const isYouTubeLiveOnThisStage = effectiveSource === 'stream' && (isDemoSyncRunning || stage.isLive);
 
             return (
               <div
                 key={stage.id}
-                onClick={() => {
-                  setSelectedStageId(stage.id);
-                  onSelectStage(stage.id);
-                }}
+                onClick={() => handleSelectStage(stage.id)}
                 className={`bg-[#07090e] rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between p-3.5 space-y-3 relative overflow-hidden ${
                   isSelected
                     ? 'border-[#00f5ff] shadow-[0_0_15px_rgba(0,245,255,0.18)] bg-[#090d16]'
@@ -2723,7 +2720,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 <div className="space-y-1 text-[10px] font-mono text-gray-400">
                   <div className="flex items-center justify-between">
                     <span>ENTRADA HARDWARE:</span>
-                    <span className="text-gray-200 font-bold">Jack 3.5mm Line-In</span>
+                    <span className="text-[#00f5ff] font-bold truncate max-w-[160px]" title={stageRouting[stg.id]?.deviceLabel || 'Jack 3.5mm Line-In'}>
+                      {stageRouting[stg.id]?.deviceLabel || 'Jack 3.5mm Line-In'}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span>VÚMETRO DE ENTRADA:</span>
