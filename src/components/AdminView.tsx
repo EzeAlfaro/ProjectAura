@@ -382,7 +382,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
         [stageId]: {
           deviceId,
           deviceLabel: label,
-          sourceKind: current.sourceKind || 'idle',
+          sourceKind: current.sourceKind === 'idle' ? 'mic' : (current.sourceKind || 'mic'),
         },
       };
       saveStageAudioRouting(updated);
@@ -412,6 +412,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const handleDeviceChange = (newDeviceId: string) => {
     setSelectedDeviceId(newDeviceId);
     updateStageAudioAssignment(selectedStageId, newDeviceId);
+    if (isRecordingRef.current) {
+      startMicStreaming();
+    }
   };
 
   const handleSelectStage = (stageId: string) => {
@@ -997,6 +1000,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
       }
 
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+      }
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
@@ -1141,8 +1147,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     setCurrentDbfs(-60);
     setIsClipping(false);
 
-    if (stageId) {
-      updateStageSourceKind(stageId, 'idle');
+    if (stageId && stageAudioSource[stageId] === 'mic') {
       setStageAudioSource((prev) => ({ ...prev, [stageId]: 'idle' }));
     }
   };
@@ -1451,6 +1456,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
     setStageMicDevice((prev) => ({ ...prev, [stageId]: deviceId }));
     if (stageId === selectedStageId) {
       setSelectedDeviceId(deviceId);
+      if (isRecordingRef.current) {
+        startMicStreaming();
+      }
     }
   };
 
@@ -1470,11 +1478,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
     updateStageSourceKind(stageId, kind);
     setStageAudioSource((prev) => ({ ...prev, [stageId]: source }));
     if (source === 'mic') {
-      handleSelectStage(stageId);
-      const assignedDev = stageRouting[stageId]?.deviceId || stageMicDevice[stageId] || selectedDeviceId;
-      if (assignedDev) {
-        setSelectedDeviceId(assignedDev);
-      }
+      handleActivateMicForStage(stageId);
+      return;
     } else if (source === 'stream') {
       setYoutubeTargetStageId(stageId);
       setSyncingYoutubeStageId(stageId);

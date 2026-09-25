@@ -126,6 +126,24 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
     } catch (e) {}
     return localStorage.getItem('nerdsub_kiosk_device_id') || '';
   });
+
+  useEffect(() => {
+    try {
+      const routing = localStorage.getItem('aura_stage_audio_routing');
+      if (routing) {
+        const parsed = JSON.parse(routing);
+        const stageKey = stage?.id;
+        if (stageKey && parsed[stageKey]?.deviceId) {
+          setSelectedDeviceId(parsed[stageKey].deviceId);
+          return;
+        }
+      }
+      if (stage?.assignedDeviceId) {
+        setSelectedDeviceId(stage.assignedDeviceId);
+        return;
+      }
+    } catch (e) {}
+  }, [stage?.id, stage?.assignedDeviceId]);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [inputSourceKind, setInputSourceKind] = useState<'mic' | 'tab'>('mic');
   const [currentDbfs, setCurrentDbfs] = useState(-60);
@@ -572,6 +590,9 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
       mediaStreamRef.current = stream;
 
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+      }
       const source = audioCtx.createMediaStreamSource(stream);
       const gainNode = audioCtx.createGain();
       const linearGain = Math.pow(10, micGainDb / 20);
