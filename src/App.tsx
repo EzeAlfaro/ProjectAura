@@ -43,7 +43,7 @@ export function App() {
       const queryStage = params.get('stage');
       if (queryStage) return queryStage;
     }
-    return '';
+    return 'stage-1';
   });
   const [selectedLang, setSelectedLang] = useState<SupportedLanguage>('es');
   

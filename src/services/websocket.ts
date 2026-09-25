@@ -29,8 +29,8 @@ export class WSClient {
     this.callbacks = callbacks;
   }
 
-  public connect(stageId: string = '', lang: SupportedLanguage = 'original') {
-    this.currentStageId = stageId || this.currentStageId;
+  public connect(stageId: string = 'stage-1', lang: SupportedLanguage = 'original') {
+    this.currentStageId = stageId || this.currentStageId || 'stage-1';
     this.currentLang = lang;
     this.isExplicitlyClosed = false;
 

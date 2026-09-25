@@ -217,12 +217,11 @@ export class StageManager {
     return newStage;
   }
 
-  public updateStage(id: string, updates: Partial<Stage>): Stage {
+  public updateStage(id: string, updates: Partial<Stage>): Stage | null {
     const cleanId = (id || '').trim().toLowerCase();
     let stage = this.stages.get(cleanId);
     if (!stage) {
-      stage = this.createStage({ id: cleanId, ...updates });
-      return stage;
+      return null;
     }
 
     if (updates.name !== undefined) stage.name = updates.name.trim();
@@ -245,23 +244,18 @@ export class StageManager {
     deviceId: string,
     deviceLabel: string,
     sourceKind?: Stage['currentAudioSource']
-  ): Stage {
-    let stage = this.stages.get(stageId);
+  ): Stage | null {
+    const cleanId = (stageId || '').trim().toLowerCase();
+    let stage = this.stages.get(cleanId);
     if (!stage) {
-      stage = this.createStage({
-        id: stageId,
-        name: `Sala ${stageId.replace('stage-', '').toUpperCase()}`,
-        track: 'Track General',
-        speaker: 'Orador de Sala',
-        talkTitle: 'Transmisión en Vivo'
-      });
+      return null;
     }
     stage.assignedDeviceId = deviceId;
     stage.assignedDeviceLabel = deviceLabel;
     if (sourceKind) {
       stage.currentAudioSource = sourceKind;
     }
-    logger.info('stage', `Audio route pinned for stage [${stageId}]: deviceId="${deviceId}", label="${deviceLabel}", sourceKind="${stage.currentAudioSource}"`);
+    logger.info('stage', `Audio route pinned for stage [${cleanId}]: deviceId="${deviceId}", label="${deviceLabel}", sourceKind="${stage.currentAudioSource}"`);
     this.broadcastSystemUpdate();
     return stage;
   }
@@ -293,24 +287,19 @@ export class StageManager {
   }
 
   public getStageData(stageId: string): StageData | null {
-    let stage = this.stages.get(stageId);
+    const cleanId = (stageId || '').trim().toLowerCase();
+    const stage = this.stages.get(cleanId);
     if (!stage) {
-      stage = this.createStage({
-        id: stageId,
-        name: `Sala ${stageId.replace('stage-', '').toUpperCase()}`,
-        track: 'Track General',
-        speaker: 'Orador de Sala',
-        talkTitle: 'Transmisión en Vivo'
-      });
+      return null;
     }
 
     return {
       stage,
-      chunks: (this.stageChunks.get(stageId) || []).slice(-50), // Last 50 chunks
-      takeaways: this.stageTakeaways.get(stageId) || [],
-      suggestedQuestions: this.stageQuestions.get(stageId) || [],
-      executiveSummary: this.stageSummaries.get(stageId) || '',
-      intelModelUsed: this.stageIntelModel.get(stageId) || config.ai.proModel || 'gemini-2.5-pro'
+      chunks: (this.stageChunks.get(cleanId) || []).slice(-50), // Last 50 chunks
+      takeaways: this.stageTakeaways.get(cleanId) || [],
+      suggestedQuestions: this.stageQuestions.get(cleanId) || [],
+      executiveSummary: this.stageSummaries.get(cleanId) || '',
+      intelModelUsed: this.stageIntelModel.get(cleanId) || config.ai.proModel || 'gemini-2.5-pro'
     };
   }
 
@@ -344,20 +333,16 @@ export class StageManager {
       return;
     }
 
-    if (!this.stages.has(stageId)) {
-      this.createStage({
-        id: stageId,
-        name: `Sala ${stageId.replace('stage-', '').toUpperCase()}`,
-        track: 'Track General',
-        speaker: 'Orador de Sala',
-        talkTitle: 'Transmisión en Vivo'
-      });
-    }
+    // Resolve to valid stage without auto-generating ghost stages
+    const cleanStageId = (stageId || '').trim().toLowerCase();
+    const targetStageId = this.stages.has(cleanStageId)
+      ? cleanStageId
+      : (this.stages.has('stage-1') ? 'stage-1' : (this.stages.keys().next().value || 'stage-1'));
 
-    let subs = this.subscribers.get(stageId);
+    let subs = this.subscribers.get(targetStageId);
     if (!subs) {
       subs = new Set();
-      this.subscribers.set(stageId, subs);
+      this.subscribers.set(targetStageId, subs);
     }
 
     // Remove any previous registration for this socket
@@ -372,19 +357,19 @@ export class StageManager {
     }
 
     subs.add({ ws, lang });
-    const stage = this.stages.get(stageId);
+    const stage = this.stages.get(targetStageId);
     if (stage) {
       stage.audienceCount = subs.size;
     }
 
     // Send initial backlog of recent chunks
-    const recentChunks = (this.stageChunks.get(stageId) || []).slice(-15);
+    const recentChunks = (this.stageChunks.get(targetStageId) || []).slice(-15);
     ws.send(JSON.stringify({
       type: 'initial_state',
       stage,
       chunks: recentChunks,
-      takeaways: this.stageTakeaways.get(stageId) || [],
-      suggestedQuestions: this.stageQuestions.get(stageId) || []
+      takeaways: this.stageTakeaways.get(targetStageId) || [],
+      suggestedQuestions: this.stageQuestions.get(targetStageId) || []
     }));
 
     this.broadcastSystemUpdate();
@@ -418,20 +403,14 @@ export class StageManager {
   }
 
   public async pushLiveTranscript(stageId: string, text: string, sourceLang: string = 'es') {
-    let stage = this.stages.get(stageId);
-    if (!stage) {
-      stage = this.createStage({
-        id: stageId,
-        name: `Sala ${stageId.replace('stage-', '').toUpperCase()}`,
-        track: 'Track General',
-        speaker: 'Orador en Vivo',
-        talkTitle: 'Transmisión de Conferencia'
-      });
-    }
+    const cleanId = (stageId || '').trim().toLowerCase();
+    const stage = this.stages.get(cleanId) || this.stages.get('stage-1') || this.stages.values().next().value;
+    if (!stage) return;
+    const resolvedId = stage.id;
 
     const wasLive = stage.isLive;
     const prevSource = stage.currentAudioSource;
-    this.stopDemo(stageId);
+    this.stopDemo(resolvedId);
     stage.isLive = true;
     stage.currentAudioSource = 'mic';
     if (!wasLive || prevSource !== 'mic') {
@@ -439,27 +418,21 @@ export class StageManager {
     }
     const startTime = Date.now();
 
-    const chunk = await geminiService.processLiveText(text, sourceLang, stageId);
+    const chunk = await geminiService.processLiveText(text, sourceLang, resolvedId);
     stage.latencyMs = Math.max(40, Date.now() - startTime);
     stage.detectedLang = chunk.sourceLang as any;
 
-    this.addChunkToStage(stageId, chunk);
+    this.addChunkToStage(resolvedId, chunk);
   }
 
   public async pushAudioChunk(stageId: string, audioBuffer: Buffer, mimeType: string) {
-    let stage = this.stages.get(stageId);
-    if (!stage) {
-      stage = this.createStage({
-        id: stageId,
-        name: `Sala ${stageId.replace('stage-', '').toUpperCase()}`,
-        track: 'Track General',
-        speaker: 'Orador en Vivo',
-        talkTitle: 'Transmisión de Conferencia'
-      });
-    }
+    const cleanId = (stageId || '').trim().toLowerCase();
+    const stage = this.stages.get(cleanId) || this.stages.get('stage-1') || this.stages.values().next().value;
+    if (!stage) return;
+    const resolvedId = stage.id;
     const startTime = Date.now();
 
-    const chunk = await geminiService.processAudioChunk(audioBuffer, mimeType, stageId);
+    const chunk = await geminiService.processAudioChunk(audioBuffer, mimeType, resolvedId);
     const latency = Date.now() - startTime;
     stage.latencyMs = latency;
 
@@ -467,20 +440,20 @@ export class StageManager {
     if (chunk && chunk.originalText && chunk.originalText.trim().length > 0 && !chunk.originalText.startsWith('[')) {
       const wasLive = stage.isLive;
       const prevSource = stage.currentAudioSource;
-      this.stopDemo(stageId);
+      this.stopDemo(resolvedId);
       stage.isLive = true;
       stage.currentAudioSource = 'mic';
       stage.detectedLang = chunk.sourceLang as 'es' | 'en' | 'pt';
       if (!wasLive || prevSource !== 'mic') {
         this.broadcastSystemUpdate();
       }
-      this.addChunkToStage(stageId, chunk);
+      this.addChunkToStage(resolvedId, chunk);
     } else {
       const lastErr = geminiService.getLastError();
       if (lastErr && Date.now() - lastErr.timestamp < 10000) {
-        this.broadcastToStage(stageId, {
+        this.broadcastToStage(resolvedId, {
           type: 'system_alert',
-          stageId,
+          stageId: resolvedId,
           level: 'error',
           code: lastErr.code,
           message: lastErr.message
@@ -491,53 +464,47 @@ export class StageManager {
   }
 
   public async pushPcmChunk(stageId: string, pcmChunk: Buffer) {
-    let stage = this.stages.get(stageId);
-    if (!stage) {
-      stage = this.createStage({
-        id: stageId,
-        name: `Sala ${stageId.replace('stage-', '').toUpperCase()}`,
-        track: 'Track General',
-        speaker: 'Orador en Vivo',
-        talkTitle: 'Transmisión de Conferencia'
-      });
-    }
+    const cleanId = (stageId || '').trim().toLowerCase();
+    const stage = this.stages.get(cleanId) || this.stages.get('stage-1') || this.stages.values().next().value;
+    if (!stage) return;
+    const resolvedId = stage.id;
 
     // Only switch away from demo if active live speech session is already established
-    let session = this.liveSessions.get(stageId);
+    let session = this.liveSessions.get(resolvedId);
     const apiKey = geminiService.getApiKey();
 
     if (!session && apiKey && geminiService.isConfigured()) {
       session = new LiveStageTranscriptionSession({
         apiKey,
-        stageId,
+        stageId: resolvedId,
         mode: 'SMART',
         onInterim: (text: string) => {
-          this.stopDemo(stageId);
+          this.stopDemo(resolvedId);
           stage!.isLive = true;
           stage!.currentAudioSource = 'mic';
-          this.broadcastToStage(stageId, {
+          this.broadcastToStage(resolvedId, {
             type: 'interim',
-            stageId,
+            stageId: resolvedId,
             text
           });
         },
         onFinal: (chunk: SubtitleChunk) => {
-          this.stopDemo(stageId);
+          this.stopDemo(resolvedId);
           stage!.isLive = true;
           stage!.currentAudioSource = 'mic';
-          this.addChunkToStage(stageId, chunk);
+          this.addChunkToStage(resolvedId, chunk);
         },
         onError: (err) => {
-          console.warn(`[StageManager:${stageId}] Gemini Live error:`, err);
+          console.warn(`[StageManager:${resolvedId}] Gemini Live error:`, err);
         }
       });
 
-      this.liveSessions.set(stageId, session);
+      this.liveSessions.set(resolvedId, session);
       try {
         await session.connect();
       } catch (e) {
-        console.error(`[StageManager:${stageId}] Failed to connect Gemini Live session, falling back to chunk pipeline:`, e);
-        this.liveSessions.delete(stageId);
+        console.error(`[StageManager:${resolvedId}] Failed to connect Gemini Live session, falling back to chunk pipeline:`, e);
+        this.liveSessions.delete(resolvedId);
         session = undefined;
       }
     }
@@ -549,21 +516,21 @@ export class StageManager {
     }
 
     // 2. Dual Pipeline Fallback: Buffer raw PCM and periodically ingest as standard WAV audio chunk
-    const currentBufs = this.pcmBuffers.get(stageId) || [];
+    const currentBufs = this.pcmBuffers.get(resolvedId) || [];
     currentBufs.push(pcmChunk);
-    this.pcmBuffers.set(stageId, currentBufs);
+    this.pcmBuffers.set(resolvedId, currentBufs);
 
-    const currentLen = (this.pcmBufferLengths.get(stageId) || 0) + pcmChunk.length;
-    this.pcmBufferLengths.set(stageId, currentLen);
+    const currentLen = (this.pcmBufferLengths.get(resolvedId) || 0) + pcmChunk.length;
+    this.pcmBufferLengths.set(resolvedId, currentLen);
 
     // 64,000 bytes = 2.0 seconds of 16kHz 16-bit Mono PCM
     if (currentLen >= 64000) {
       const combined = Buffer.concat(currentBufs);
-      this.pcmBuffers.set(stageId, []);
-      this.pcmBufferLengths.set(stageId, 0);
+      this.pcmBuffers.set(resolvedId, []);
+      this.pcmBufferLengths.set(resolvedId, 0);
 
       const wavBuffer = pcmToWav(combined, 16000);
-      await this.pushAudioChunk(stageId, wavBuffer, 'audio/wav');
+      await this.pushAudioChunk(resolvedId, wavBuffer, 'audio/wav');
     }
   }
 
