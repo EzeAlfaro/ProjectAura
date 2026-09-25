@@ -178,7 +178,7 @@ export const Header: React.FC<HeaderProps> = ({
                 ? 'border-[#00ff66]/60 text-[#00ff66] bg-[#00ff66]/10'
                 : 'border-[#ffb800]/60 text-[#ffb800] bg-[#ffb800]/10'
             }`}
-            title="Arquitectura Híbrida: Google Gemini 2.5 Cloud + Google Gemma 2B Edge"
+            title="Arquitectura Híbrida: Google Gemini 3.5 Cloud + Google Gemma 2B Edge + Standalone Native"
           >
             <span className={`w-2 h-2 rounded-full ${
               geminiConfigured
@@ -189,7 +189,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`} />
             <span className="hidden lg:inline">
               {geminiConfigured
-                ? 'GEMINI 2.5 CLOUD'
+                ? 'GEMINI 3.5 CLOUD'
                 : gemmaAvailable
                 ? 'GEMMA 2B (EDGE LOCAL)'
                 : 'MOTOR NATIVO (0 MS)'}

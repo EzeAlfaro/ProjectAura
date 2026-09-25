@@ -495,7 +495,7 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
           {/* Bottom Teleprompter Telemetry Ticker */}
           <div className="bg-[#0b0e14] border-t border-[#181d2a] px-3 sm:px-4 py-1.5 flex items-center justify-between text-[10px] font-mono text-[#64748b]">
             <div className="flex items-center gap-2">
-              <span className="text-[#00ff66] font-bold">● ENGINE: GEMINI 2.5 FLASH</span>
+              <span className="text-[#00ff66] font-bold">● ENGINE: GEMINI 3.5 TRANSCRIBE LIVE</span>
               <span>//</span>
               <span className="text-gray-300">MODALIDAD: AUDIO PCM LITTLE-ENDIAN</span>
             </div>
@@ -619,7 +619,7 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
                         PUNTOS CLAVE & BRIEFING EJECUTIVO
                       </span>
                       <span className="text-[9px] text-[#00f5ff] font-mono">
-                        ENGINE: {intelModelUsed?.toUpperCase() || 'GEMINI 2.5 PRO'}
+                        ENGINE: {intelModelUsed?.toUpperCase() || 'GEMINI 3.5 PRO'}
                       </span>
                     </div>
                     {onTriggerDeepIntel && (
@@ -627,7 +627,7 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
                         onClick={onTriggerDeepIntel}
                         disabled={isGeneratingIntel}
                         className="hardware-btn px-2 py-1 rounded text-[10px] font-mono font-bold text-[#00f5ff] hover:border-[#00f5ff] transition-all flex items-center gap-1 disabled:opacity-50"
-                        title="Ejecutar análisis profundo con Gemini 2.5 Pro"
+                        title="Ejecutar análisis profundo con Gemini 3.5 Pro"
                       >
                         <Sparkles className={`w-3 h-3 ${isGeneratingIntel ? 'animate-spin' : ''}`} />
                         <span>{isGeneratingIntel ? 'SINTETIZANDO...' : 'RE-ANALIZAR (PRO)'}</span>
@@ -641,7 +641,7 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
                       <div className="flex items-center justify-between">
                         <span className="text-[9px] font-mono font-bold text-[#00f5ff] uppercase flex items-center gap-1">
                           <Cpu className="w-3 h-3" />
-                          RESUMEN EJECUTIVO (GEMINI 2.5 PRO)
+                          RESUMEN EJECUTIVO (GEMINI 3.5 PRO)
                         </span>
                         <span className="text-[8px] font-mono px-1 rounded bg-[#00f5ff]/20 text-[#00f5ff]">
                           DEEP REASONING
@@ -655,7 +655,7 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
 
                   {takeaways.length === 0 ? (
                     <div className="text-center py-8 text-[#64748b] text-[11px]">
-                      Gemini 2.5 Pro sintetizará los conceptos clave y arquitectura de la charla periódicamente o al presionar Re-analizar.
+                      Gemini 3.5 Pro sintetizará los conceptos clave y arquitectura de la charla periódicamente o al presionar Re-analizar.
                     </div>
                   ) : (
                     takeaways.map((item, idx) => (

@@ -74,7 +74,7 @@ export class StageManager {
       this.stageTakeaways.set(stage.id, []);
       this.stageQuestions.set(stage.id, []);
       this.stageSummaries.set(stage.id, '');
-      this.stageIntelModel.set(stage.id, 'gemini-2.5-pro');
+      this.stageIntelModel.set(stage.id, 'gemini-3.5-pro');
       this.subscribers.set(stage.id, new Set());
     }
   }
@@ -110,7 +110,7 @@ export class StageManager {
     this.stageTakeaways.set(id, []);
     this.stageQuestions.set(id, []);
     this.stageSummaries.set(id, '');
-    this.stageIntelModel.set(id, 'gemini-2.5-pro');
+    this.stageIntelModel.set(id, 'gemini-3.5-pro');
     this.subscribers.set(id, new Set());
 
     this.broadcastSystemUpdate();
@@ -135,7 +135,7 @@ export class StageManager {
       takeaways: this.stageTakeaways.get(stageId) || [],
       suggestedQuestions: this.stageQuestions.get(stageId) || [],
       executiveSummary: this.stageSummaries.get(stageId) || '',
-      intelModelUsed: this.stageIntelModel.get(stageId) || 'gemini-2.5-pro'
+      intelModelUsed: this.stageIntelModel.get(stageId) || 'gemini-3.5-pro'
     };
   }
 

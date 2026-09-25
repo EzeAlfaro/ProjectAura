@@ -466,7 +466,7 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
 
       // Launch ingest engine based on source kind
       if (kind === 'tab') {
-        // Tab Audio Ingest via MediaRecorder + Gemini 2.5 Flash
+        // Tab Audio Ingest via MediaRecorder + Gemini 3.5 Flash / Live
         let mimeType = 'audio/webm;codecs=opus';
         if (typeof MediaRecorder !== 'undefined' && !MediaRecorder.isTypeSupported(mimeType)) {
           mimeType = 'audio/webm';
@@ -479,7 +479,7 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
           mediaRecorder.ondataavailable = async (event) => {
             if (event.data && event.data.size > 2000 && isRecordingRef.current) {
               try {
-                setLiveInterimText('Procesando audio digital de pestaña con Gemini...');
+                setLiveInterimText('Procesando audio digital con Gemini 3.5...');
                 await uploadAudioChunk(stage?.id || 'stage-1', event.data);
                 setLiveInterimText('');
               } catch (e: any) {

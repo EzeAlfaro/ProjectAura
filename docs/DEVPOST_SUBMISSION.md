@@ -30,10 +30,12 @@ Project Aura transforma la experiencia de accesibilidad en eventos masivos de pu
 ### 1. Ingesta de Audio Directa vía AudioWorklet (16kHz PCM)
 Captura audio directamente desde el micrófono de la sala o placa de sonido vía un procesador `AudioWorklet` dedicado que remuestrea a **16-bit 16kHz Linear PCM Little-Endian** en bloques de 100ms sin bloqueo de UI, o permite ejecutar **pruebas automáticas instantáneas en 1 click** con charlas reales de conferencias.
 
-### 2. Doble Motor de Inteligencia Artificial (Google Gemini)
-- **Streaming ASR en Tiempo Real**: Impulsado por **Gemini 3.5 Transcribe Live**, emitiendo tokens de preview provisional en sub-150ms y subtítulos finales de alta fidelidad.
-- **Síntesis Ejecutiva Post-Charla**: Con **Gemini 2.5 Pro**, generando automáticamente resúmenes ejecutivos en Markdown, lecciones clave de arquitectura y preguntas inteligentes para el bloque de Q&A.
-- **Traducción Simultánea Resiliente**: Con **Gemini 2.5 Flash**, traduciendo simultáneamente a Español, Inglés y Portugués.
+### 2. Triple Motor de Inteligencia Artificial (Cloud + Edge + Standalone)
+- **Streaming ASR en Tiempo Real**: Impulsado por el flagship **Gemini 3.5 Transcribe Live**, emitiendo tokens de preview provisional en sub-150ms y subtítulos finales de alta fidelidad con code-switching y biasing técnico.
+- **Síntesis Ejecutiva & Deep Intel**: Con **Gemini 3.5 Pro**, generando automáticamente resúmenes ejecutivos en Markdown, lecciones clave de arquitectura y preguntas inteligentes para el bloque de Q&A.
+- **Traducción Multimodal Ultrarrápida**: Con **Gemini 3.5 Flash**, traduciendo simultáneamente a Español, Inglés y Portugués.
+- **Edge On-Premise Local**: Con **Google Gemma 2B**, garantizando inferencia local privada y continuidad sin conexión a Internet.
+- **Motor Nativo Standalone (0 ms)**: Renderizado instantáneo en navegador vía Web Speech API y normalizador fonético de Sysarmy.
 
 ### 3. NerdGlosario™ Neón Activo
 Inyectamos un diccionario curado de más de **150 términos técnicos de IT** (DevOps, Cloud, Linux, Rust, IA, Kubernetes) en el system prompt para evitar cualquier alucinación. Además, las palabras técnicas se destacan visualmente con insignias neón en los subtítulos: **cualquier asistente puede hacer click para desplegar una tarjeta interactiva con la explicación didáctica del concepto**.
@@ -58,11 +60,11 @@ Al terminar cada bloque, los organizadores pueden descargar en 1 click:
 
 * **Frontend:** React 18, TypeScript, Tailwind CSS, Lucide Icons, diseño industrial inspirado en Teenage Engineering y consolas de hardware Blackmagic.
 * **Backend:** Node.js v22, Express, WebSockets (`ws`), TSX runtime de alta velocidad.
-* **Orquestación de IA:** Google GenAI SDK (`@google/genai`) con soporte para **Gemini 3.5 Transcribe Live**, **Gemini 2.5 Pro** y **Gemini 2.5 Flash**.
+* **Orquestación de IA:** Google GenAI SDK (`@google/genai`) con soporte para el stack insignia **Gemini 3.5 Transcribe Live**, **Gemini 3.5 Pro**, **Gemini 3.5 Flash**, y **Google Gemma 2B Edge**.
 * **Audio Pipeline:** `AudioWorkletProcessor` en hilo de audio dedicado para remuestreo stateful a 16kHz Int16 PCM mono.
 * **Contenedor:** Docker y Docker Compose para despliegue local o en Cloud Run con menos de 150MB de consumo de memoria RAM.
 
 ---
 
 ## 🏷️ Built With
-`react`, `typescript`, `tailwindcss`, `gemini-3.5-live`, `gemini-2.5-pro`, `gemini-2.5-flash`, `audioworklet`, `pcm-audio`, `websockets`, `node.js`, `docker`, `obs-studio`, `accessibility`, `mit-license`
+`react`, `typescript`, `tailwindcss`, `gemini-3.5-live`, `gemini-3.5-pro`, `gemini-3.5-flash`, `google-gemma-2b`, `audioworklet`, `pcm-audio`, `websockets`, `node.js`, `docker`, `obs-studio`, `accessibility`, `mit-license`

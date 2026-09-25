@@ -192,7 +192,7 @@ export class GeminiService {
     const timestamp = Date.now();
     const rawClean = spokenText.trim();
     const cleanText = normalizePhoneticTechTerms(rawClean);
-    const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    const modelName = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 
     // 1. Detect technical terms locally first on the normalized text
     const detectedLocalTerms = extractTechTerms(cleanText);
@@ -310,7 +310,7 @@ export class GeminiService {
   ): Promise<SubtitleChunk> {
     const chunkId = `chunk-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const timestamp = Date.now();
-    const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    const modelName = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 
     if (!this.client || !this.apiKey) {
       // API Key not configured message - inform user honestly
@@ -428,7 +428,7 @@ export class GeminiService {
   }
 
   /**
-   * Deep Intelligence Layer powered by Gemini 2.5 Pro (Dual-Engine Architecture)
+   * Deep Intelligence Layer powered by Gemini 3.5 Pro (Dual-Engine Architecture)
    * Asynchronously synthesizes the accumulated live transcript into:
    * 1. Architectural takeaways
    * 2. High-IQ Q&A questions for the speaker and audience
@@ -444,7 +444,7 @@ export class GeminiService {
     executiveSummary: string;
     modelUsed: string;
   }> {
-    const proModel = process.env.GEMINI_PRO_MODEL || 'gemini-2.5-pro';
+    const proModel = process.env.GEMINI_PRO_MODEL || 'gemini-3.5-pro';
 
     if (!this.client || !this.apiKey || this.isKeyBlocked || !transcriptText.trim()) {
       if (await this.checkGemmaAvailability()) {
@@ -508,7 +508,7 @@ export class GeminiService {
       console.warn(`[GeminiService] Gemini Pro deep insights failed with ${proModel}, trying flash fallback:`, err);
       try {
         const fallbackResponse = await this.client.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3.5-flash',
           contents: [{ parts: [{ text: `Summarize technical talk: ${stageTitle}. Speaker: ${speaker}. Transcript: ${transcriptText}` }] }],
           config: {
             systemInstruction: { parts: [{ text: DEEP_PRO_SYSTEM_INSTRUCTION }] },
@@ -523,7 +523,7 @@ export class GeminiService {
           takeaways: fallbackParsed.takeaways || [],
           questions: fallbackParsed.questions || [],
           executiveSummary: fallbackParsed.executiveSummary || '',
-          modelUsed: 'gemini-2.5-flash (fallback)'
+          modelUsed: 'gemini-3.5-flash (fallback)'
         };
       } catch (fallbackErr) {
         console.error('[GeminiService] Deep insights fallback also failed:', fallbackErr);

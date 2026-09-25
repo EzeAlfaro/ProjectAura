@@ -68,7 +68,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
         </div>
 
         <p className="text-xs text-[#94a3b8] mb-4 leading-relaxed">
-          NerdSub utiliza los modelos <strong>Gemini 2.5 Flash</strong> y procesamiento multimodal de audio para transcribir y traducir en tiempo real. Obtené tu clave gratuita en{' '}
+          NerdSub utiliza el stack insignia <strong>Google Gemini 3.5</strong> (Transcribe Live + Flash + Pro) para subtitulado y traducción instantánea de conferencias. Obtené tu clave en{' '}
           <a
             href="https://aistudio.google.com/"
             target="_blank"
@@ -82,7 +82,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
         {geminiConfigured && (
           <div className="mb-4 flex items-center gap-2 p-3 bg-emerald-950/40 border border-emerald-800/50 rounded-xl text-emerald-400 text-xs">
             <CheckCircle className="w-4 h-4 shrink-0" />
-            <span>Una clave ya se encuentra activa en el servidor. Podés reemplazarla aquí si lo deseás.</span>
+            <span>Una clave Gemini 3.5 ya se encuentra activa en el servidor. Podés reemplazarla aquí si lo deseás.</span>
           </div>
         )}
 
@@ -98,13 +98,13 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
               className="w-full px-3.5 py-2.5 bg-[#0c0f17] border border-[#2a344f] rounded-xl text-xs text-white focus:outline-none focus:border-[#00f0ff] font-mono"
             >
               <option value="gemini-3.5-transcribe-live">
-                ✨ gemini-3.5-transcribe-live (Agosto 2026 - Speech Flagship)
+                ✨ gemini-3.5-transcribe-live (Google Live Streaming Flagship)
               </option>
-              <option value="gemini-2.5-flash">
-                ⚡ gemini-2.5-flash (Multimodal Sub-segundo)
+              <option value="gemini-3.5-flash">
+                ⚡ gemini-3.5-flash (Multimodal Sub-200ms Audio)
               </option>
-              <option value="gemini-2.5-pro">
-                🧠 gemini-2.5-pro (Razonamiento Profundo)
+              <option value="gemini-3.5-pro">
+                🧠 gemini-3.5-pro (Razonamiento Profundo de Arquitectura & Q&A)
               </option>
             </select>
             <p className="text-[10px] text-[#64748b] mt-1 font-mono">
