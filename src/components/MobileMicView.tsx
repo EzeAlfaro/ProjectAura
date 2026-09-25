@@ -26,6 +26,7 @@ export const MobileMicView: React.FC<MobileMicViewProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedFlagUrl, setCopiedFlagUrl] = useState(false);
   const [liveInterim, setLiveInterim] = useState<string>('');
+  const [previewLang, setPreviewLang] = useState<'es' | 'en' | 'pt'>('en');
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -395,25 +396,87 @@ export const MobileMicView: React.FC<MobileMicViewProps> = ({
           </div>
         </div>
 
-        {/* Live Audio / Subtitle Feedback Preview */}
-        <div className="bg-[#0b0e15] border border-[#1b2230] rounded-2xl p-3 space-y-2 flex-1 min-h-[120px] flex flex-col justify-end">
-          <div className="flex items-center justify-between text-[10px] font-mono text-gray-500 border-b border-[#181f2e] pb-1">
-            <span className="text-cyan-400 font-bold uppercase">MONITOR DE SUBTÍTULOS SALIENTES:</span>
-            <span>GEMINI LIVE</span>
+        {/* Live Audio / Subtitle Feedback Preview with Multi-Language Translation */}
+        <div className="bg-[#0b0e15] border border-[#1b2230] rounded-2xl p-3.5 space-y-2.5 flex-1 min-h-[160px] flex flex-col justify-between">
+          <div className="flex items-center justify-between border-b border-[#181f2e] pb-2 text-[10px] font-mono">
+            <span className="text-cyan-400 font-bold uppercase flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-[#00f5ff]" />
+              TRADUCCIÓN SIMULTÁNEA EN VIVO:
+            </span>
+            {/* Language Selector Tabs */}
+            <div className="flex items-center gap-1 bg-[#121622] p-0.5 rounded-lg border border-[#222a3d]">
+              <button
+                onClick={() => setPreviewLang('es')}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                  previewLang === 'es' ? 'bg-[#00f5ff] text-black' : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                🇪🇸 ES
+              </button>
+              <button
+                onClick={() => setPreviewLang('en')}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                  previewLang === 'en' ? 'bg-[#00f5ff] text-black' : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                🇬🇧 EN
+              </button>
+              <button
+                onClick={() => setPreviewLang('pt')}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                  previewLang === 'pt' ? 'bg-[#00f5ff] text-black' : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                🇧🇷 PT
+              </button>
+            </div>
           </div>
 
-          <div className="flex-1 flex flex-col justify-end overflow-hidden">
-            {liveInterim ? (
+          <div className="flex-1 flex flex-col justify-end space-y-2">
+            {liveInterim && (
               <p className="text-xs sm:text-sm font-mono text-amber-300 italic animate-pulse">
-                "{liveInterim}"
+                🎙️ "{liveInterim}"
               </p>
-            ) : chunks.length > 0 ? (
-              <p className="text-xs sm:text-sm font-sans font-medium text-white">
-                "{chunks[chunks.length - 1].esText || chunks[chunks.length - 1].originalText}"
-              </p>
+            )}
+
+            {chunks.length > 0 ? (
+              <div className="space-y-2">
+                {/* Active Selected Translation */}
+                <div className="bg-[#121622] border border-cyan-500/30 rounded-xl p-2.5 shadow-inner">
+                  <div className="text-[9px] font-mono text-cyan-400 font-bold uppercase mb-1 flex items-center justify-between">
+                    <span>
+                      {previewLang === 'es' ? '🇪🇸 Español (Original / Subtítulo):' : previewLang === 'en' ? '🇬🇧 English (Simultaneous Translation):' : '🇧🇷 Português (Tradução Simultânea):'}
+                    </span>
+                    <span className="text-gray-500 text-[8px]">CANAL {selectedStageId.toUpperCase()}</span>
+                  </div>
+                  <p className="text-sm font-sans font-bold text-white leading-snug">
+                    "{previewLang === 'en' 
+                      ? (chunks[chunks.length - 1].enText || chunks[chunks.length - 1].originalText)
+                      : previewLang === 'pt'
+                      ? (chunks[chunks.length - 1].ptText || chunks[chunks.length - 1].originalText)
+                      : (chunks[chunks.length - 1].esText || chunks[chunks.length - 1].originalText)}"
+                  </p>
+                </div>
+
+                {/* Compact All-3 Language Subtitle Stream */}
+                <div className="grid grid-cols-3 gap-1.5 text-[10px] font-mono text-gray-300 bg-[#07090e] p-2 rounded-lg border border-[#1a2130]">
+                  <div className="truncate">
+                    <span className="text-[#00f5ff] font-bold">ES: </span>
+                    <span className="text-gray-200">{chunks[chunks.length - 1].esText || chunks[chunks.length - 1].originalText}</span>
+                  </div>
+                  <div className="truncate">
+                    <span className="text-[#00ff66] font-bold">EN: </span>
+                    <span className="text-gray-200">{chunks[chunks.length - 1].enText || 'Traduciendo...'}</span>
+                  </div>
+                  <div className="truncate">
+                    <span className="text-amber-400 font-bold">PT: </span>
+                    <span className="text-gray-200">{chunks[chunks.length - 1].ptText || 'Traduzindo...'}</span>
+                  </div>
+                </div>
+              </div>
             ) : (
-              <p className="text-xs font-mono text-gray-600 text-center py-4">
-                El texto traducido aparecerá aquí mientras hablás por el celular...
+              <p className="text-xs font-mono text-gray-500 text-center py-3">
+                Hablá al micrófono para ver la transcripción y traducción simultánea (ES / EN / PT) en vivo...
               </p>
             )}
           </div>
