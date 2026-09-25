@@ -30,6 +30,67 @@ export function pcmToWav(pcm: Buffer, sampleRate: number = 16000): Buffer {
   return Buffer.concat([header, pcm]);
 }
 
+/**
+ * Known acoustic hallucinations, silence artifacts, and noise emitted by speech models in silence
+ */
+const HALLUCINATION_PATTERNS = [
+  /^\[.*\]$/,                          // [Música], [Aplausos], [Risas], [Music], [Silence]
+  /^((\w+)\s+)\2{2,}$/i,               // stutter loops: "you you you", "bla bla bla"
+  /^[\s\.\,\-\_\:\;\?\!\'\"·…]+$/,     // lone punctuation or symbols
+  /subt[íi]tulos\s+realizados\s+por/i, // subtitle metadata credits
+  /thank\s+you\s+for\s+watching/i,
+  /suscr[íi]bete\s+al\s+canal/i,
+  /^amara\.org/i
+];
+
+function isAcousticHallucination(text: string): boolean {
+  if (!text) return true;
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return true;
+  return HALLUCINATION_PATTERNS.some(p => p.test(trimmed));
+}
+
+function normalizeForOverlap(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"'¡¿]/g, '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+/**
+ * Trims duplicated prefix words in incoming chunk if they overlap with the end of previous chunk.
+ * (e.g. prev: "vamos a desplegar en Kubernetes", incoming: "Kubernetes y microservicios" -> "y microservicios")
+ */
+function trimSeamOverlap(prevText: string, newText: string): string {
+  if (!prevText || !newText) return newText;
+  const prevWords = normalizeForOverlap(prevText);
+  const newWords = normalizeForOverlap(newText);
+  if (prevWords.length === 0 || newWords.length === 0) return newText;
+
+  const maxCheck = Math.min(5, Math.min(prevWords.length, newWords.length));
+  let overlapCount = 0;
+
+  for (let k = maxCheck; k >= 1; k--) {
+    const prevSlice = prevWords.slice(-k).join(' ');
+    const newSlice = newWords.slice(0, k).join(' ');
+    if (prevSlice === newSlice) {
+      overlapCount = k;
+      break;
+    }
+  }
+
+  if (overlapCount === 0) return newText;
+
+  const wordsOriginal = newText.trim().split(/\s+/);
+  if (overlapCount >= wordsOriginal.length) {
+    return '';
+  }
+
+  return wordsOriginal.slice(overlapCount).join(' ').trim();
+}
+
 export class StageManager {
   private stages: Map<string, Stage> = new Map();
   private stageChunks: Map<string, SubtitleChunk[]> = new Map();
@@ -380,8 +441,13 @@ export class StageManager {
 
   public addChunkToStage(stageId: string, chunk: SubtitleChunk) {
     const chunks = this.stageChunks.get(stageId) || [];
-    const incomingText = (chunk.originalText || '').trim();
+    let incomingText = (chunk.originalText || '').trim();
     if (!incomingText) return;
+
+    // 0. Acoustic Hallucination & Silence Noise Filter
+    if (isAcousticHallucination(incomingText)) {
+      return;
+    }
 
     const last = chunks[chunks.length - 1];
 
@@ -390,7 +456,23 @@ export class StageManager {
       return;
     }
 
-    // 2. Fragment Merging: If incoming chunk has 1-2 words and arrived quickly after previous chunk,
+    // 2. Seam Overlap Deduplication: Remove overlapping prefix if model repeated words across chunk seams
+    if (last && last.originalText) {
+      const trimmed = trimSeamOverlap(last.originalText, incomingText);
+      if (trimmed === '') {
+        // Complete duplicate within last chunk
+        return;
+      }
+      if (trimmed !== incomingText) {
+        incomingText = trimmed;
+        chunk.originalText = trimmed;
+        if (chunk.esText) chunk.esText = trimSeamOverlap(last.esText || '', chunk.esText);
+        if (chunk.enText) chunk.enText = trimSeamOverlap(last.enText || '', chunk.enText);
+        if (chunk.ptText) chunk.ptText = trimSeamOverlap(last.ptText || '', chunk.ptText);
+      }
+    }
+
+    // 3. Fragment Merging: If incoming chunk has 1-2 words and arrived quickly after previous chunk,
     // merge it into the previous thought instead of creating an ugly orphan 1-word card!
     const wordCount = incomingText.split(/\s+/).length;
     if (last && wordCount <= 2 && (Date.now() - last.timestamp < 3000) && last.originalText.length < 85) {

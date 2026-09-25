@@ -654,7 +654,8 @@ export class GeminiService {
               systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
               responseMimeType: 'application/json',
               responseSchema: SUBTITLE_RESPONSE_SCHEMA,
-              temperature: 0.1
+              temperature: 0.1,
+              thinkingConfig: { thinkingBudget: 0 } as any
             }
           });
 
