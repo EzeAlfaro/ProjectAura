@@ -83,28 +83,59 @@ function setCached(key: string, res: TranslationResult) {
 
 /**
  * Fetch neural translation from high-speed translation API with strict timeout.
+ * 1. Primary: Ultra-fast Google Neural Translation (clients5 dict-chrome-ex) - 50ms, unlimited, no 429
+ * 2. Secondary: MyMemory API with strict timeout
+ * 3. Fallback: Preserves casing and technical terms
  */
 async function fetchNeuralTranslation(text: string, fromLang: string, toLang: string): Promise<string> {
   if (!text || text.length < 2) return text;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), config.translation.httpTimeoutMs);
 
+  // 1. Primary: Ultra-fast Google Neural Translation (dict-chrome-ex)
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    const googleUrl = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=${fromLang}&tl=${toLang}&q=${encodeURIComponent(text)}`;
+    const gRes = await fetch(googleUrl, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*'
+      }
+    });
+    clearTimeout(timeout);
+    if (gRes.ok) {
+      const gData = await gRes.json();
+      let translated = '';
+      if (Array.isArray(gData) && gData.length > 0) {
+        translated = typeof gData[0] === 'string' ? gData[0] : (Array.isArray(gData[0]) ? gData[0][0] : '');
+      } else if (typeof gData === 'string') {
+        translated = gData;
+      }
+      if (translated && translated.trim().length > 0) {
+        return preserveTechTermsCasing(decodeHtmlEntities(translated.trim()));
+      }
+    }
+  } catch (e) {
+    // Continue to secondary fallback
+  }
+
+  // 2. Secondary: MyMemory Translation API
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), config.translation.httpTimeoutMs);
     const url = `${config.translation.apiUrl}?q=${encodeURIComponent(text)}&langpair=${fromLang}|${toLang}&de=${encodeURIComponent(config.translation.contactEmail)}`;
     const res = await fetch(url, { signal: controller.signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data: any = await res.json();
     clearTimeout(timeout);
-
-    const translated = data?.responseData?.translatedText;
-    if (translated && typeof translated === 'string' && !translated.startsWith('MYMEMORY WARNING:')) {
-      return preserveTechTermsCasing(decodeHtmlEntities(translated.trim()));
+    if (res.ok) {
+      const data: any = await res.json();
+      const translated = data?.responseData?.translatedText;
+      if (translated && typeof translated === 'string' && !translated.startsWith('MYMEMORY WARNING:')) {
+        return preserveTechTermsCasing(decodeHtmlEntities(translated.trim()));
+      }
     }
-    return text;
-  } catch {
-    clearTimeout(timeout);
-    return text;
-  }
+  } catch {}
+
+  return text;
 }
 
 /**

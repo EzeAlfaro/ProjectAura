@@ -16,6 +16,7 @@ export const OBSOverlayView: React.FC<OBSOverlayViewProps> = ({
   stage,
   chunks,
   selectedLang,
+  onSelectLang,
   onExit,
   interimText,
 }) => {
@@ -158,14 +159,36 @@ export const OBSOverlayView: React.FC<OBSOverlayViewProps> = ({
         
         {/* Speaker & Stage subtle badge (Overlay mode) */}
         {urlParams.mode !== 'tv' && stage && (
-          <div className="mb-2 flex items-center gap-2 bg-black/80 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-white text-xs font-mono">
+          <div className="mb-2 flex items-center gap-2 bg-black/85 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/15 text-white text-xs font-mono shadow-lg pointer-events-auto">
             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
             <span className="font-bold text-[#00f0ff]">{stage.name}</span>
             <span className="text-gray-400">•</span>
             <span className="text-gray-200">{stage.speaker}</span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded bg-white/10 uppercase">
-              {selectedLang}
-            </span>
+
+            {/* Language Switcher Pills */}
+            <div className="flex items-center gap-1 ml-1 bg-white/10 p-0.5 rounded-md text-[10px]">
+              {(['es', 'en', 'pt'] as const).map((l) => (
+                <button
+                  key={l}
+                  onClick={() => onSelectLang && onSelectLang(l)}
+                  className={`px-1.5 py-0.5 rounded font-bold uppercase transition-all ${
+                    selectedLang === l ? 'bg-[#00f5ff] text-black shadow-sm' : 'text-gray-300 hover:text-white'
+                  }`}
+                  title={`Cambiar a ${l.toUpperCase()}`}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+
+            {/* Lines Toggle (1 or 2 lines) */}
+            <button
+              onClick={() => setUrlParams((prev) => ({ ...prev, lines: prev.lines === 1 ? 2 : 1 }))}
+              className="text-[10px] px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white transition-all font-bold"
+              title="Alternar entre 1 sola línea (solo lo último hablado) o 2 líneas continuas"
+            >
+              {urlParams.lines === 1 ? '1 LÍNEA' : '2 LÍNEAS'}
+            </button>
           </div>
         )}
 
