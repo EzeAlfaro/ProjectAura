@@ -19,6 +19,7 @@
 
 ## 📌 Índice de Contenidos
 - [🛠️ Manifiesto del Operador](#️-manifiesto-del-operador--the-operators-creed)
+- [📸 Capturas de Pantalla e Interfaz](#-capturas-de-pantalla-e-interfaz-de-operación)
 - [✨ Características Principales](#-características-principales)
 - [🏗️ Arquitectura del Sistema](#️-arquitectura-del-sistema)
 - [🚀 Guía de Instalación Paso a Paso (Con Google Gemma 2)](#-guía-de-instalación-paso-a-paso-con-soporte-completo-de-google-gemma-2)
@@ -40,6 +41,22 @@
 | **Baterías agotadas en micrófonos inalámbricos**: Si muere el bodypack del speaker, la charla se detiene. | **Micrófono Móvil de Emergencia (`/?view=mic`)**: Push-to-Talk instantáneo desde cualquier celular vía Wi-Fi con vúmetro real. |
 | **Caídas de Internet exterior en el venue**: El Wi-Fi del predio se satura con 3.000 asistentes. | **Failover de 3 Niveles en Caliente**: Conmutación automática a Ollama/Gemma 2 local o Motor Standalone sin cortar la sala. |
 | **Costos confiscatorios por minuto / usuario**: Inviable para eventos comunitarios gratuitos de 3 días. | **1 Ingesta -> N Espectadores**: Un único stream central alimenta miles de teléfonos móviles por WebSocket sin costo extra ($0.053 USD/hora). |
+
+---
+
+## 📸 Capturas de Pantalla e Interfaz de Operación
+
+La interfaz de Project Aura fue diseñada pensando en la cabina de sonido y el operador de escenario en el Konex: estética industrial de hardware, alto contraste visual y tipografía legible a 10 metros de distancia.
+
+| 🎛️ Mesa Técnica / Master Control Room (`/admin`) | 📺 Pantalla de Sala / Stage Kiosk (`/kiosk`) |
+| :---: | :---: |
+| <a href="docs/screenshots/01_control_room_admin.png"><img src="docs/screenshots/01_control_room_admin.png" width="480" alt="Master Control Room" /></a> | <a href="docs/screenshots/02_stage_kiosk_subtitles.png"><img src="docs/screenshots/02_stage_kiosk_subtitles.png" width="480" alt="Stage Kiosk Subtitles" /></a> |
+| *Matriz de ruteo de audio (Patchbay), racks de hardware y Tally de streaming* | *Subtitulado cinematográfico bilingüe (ES/EN), QR dinámico y glosario en vivo* |
+
+| 📱 Teleprompter Móvil Audiencia (`/?view=audience`) | 🎙️ Micrófono Móvil de Emergencia (`/?view=mic`) |
+| :---: | :---: |
+| <a href="docs/screenshots/03_audience_mobile.png"><img src="docs/screenshots/03_audience_mobile.png" width="280" alt="Audience Mobile" /></a> | <a href="docs/screenshots/04_emergency_mobile_mic.png"><img src="docs/screenshots/04_emergency_mobile_mic.png" width="280" alt="Emergency Mic" /></a> |
+| *Acceso instantáneo por QR, cambio de idioma (ES/EN/PT) y glosario IT flotante* | *Push-to-Talk inalámbrico de contingencia con vúmetro LED y baja latencia* |
 
 ---
 
