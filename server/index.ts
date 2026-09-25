@@ -423,7 +423,7 @@ app.post('/api/schedule/:stageId/sync/:talkId', (req: Request, res: Response) =>
   stage.speaker = `${talk.speaker} (${talk.speakerCompany || talk.speakerRole})`;
   stage.description = talk.description;
 
-  stageManager.broadcastSystemUpdate(stageId);
+  stageManager.broadcastSystemUpdate();
   logger.info('stage', `Synced stage ${stageId} with schedule talk: ${talk.title}`);
   res.json({ success: true, stage, talk });
 });

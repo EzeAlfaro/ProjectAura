@@ -6,6 +6,30 @@ import { extractTechTerms } from './glossary.js';
 import { LiveStageTranscriptionSession } from './geminiLiveTranscriber.js';
 import { logger } from './logger.js';
 
+export function pcmToWav(pcm: Buffer, sampleRate: number = 16000): Buffer {
+  const channels = 1;
+  const bitsPerSample = 16;
+  const byteRate = sampleRate * channels * (bitsPerSample / 8);
+  const blockAlign = channels * (bitsPerSample / 8);
+
+  const header = Buffer.alloc(44);
+  header.write("RIFF", 0, "ascii");
+  header.writeUInt32LE(36 + pcm.length, 4);
+  header.write("WAVE", 8, "ascii");
+  header.write("fmt ", 12, "ascii");
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20); // 1 = PCM
+  header.writeUInt16LE(channels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write("data", 36, "ascii");
+  header.writeUInt32LE(pcm.length, 40);
+
+  return Buffer.concat([header, pcm]);
+}
+
 export class StageManager {
   private stages: Map<string, Stage> = new Map();
   private stageChunks: Map<string, SubtitleChunk[]> = new Map();
@@ -16,6 +40,8 @@ export class StageManager {
   private subscribers: Map<string, Set<{ ws: WebSocket; lang: SupportedLanguage }>> = new Map();
   private activeDemoTimers: Map<string, NodeJS.Timeout> = new Map();
   private liveSessions: Map<string, LiveStageTranscriptionSession> = new Map();
+  private pcmBuffers: Map<string, Buffer[]> = new Map();
+  private pcmBufferLengths: Map<string, number> = new Map();
 
   constructor() {
     this.initializeDefaultStages();
@@ -295,13 +321,9 @@ export class StageManager {
     stage.currentAudioSource = 'mic';
 
     let session = this.liveSessions.get(stageId);
-    if (!session) {
-      const apiKey = geminiService.getApiKey();
-      if (!apiKey) {
-        // Fallback: convert/send via audio chunk if no live API key
-        return;
-      }
+    const apiKey = geminiService.getApiKey();
 
+    if (!session && apiKey && geminiService.isConfigured()) {
       session = new LiveStageTranscriptionSession({
         apiKey,
         stageId,
@@ -325,13 +347,35 @@ export class StageManager {
       try {
         await session.connect();
       } catch (e) {
-        console.error(`[StageManager:${stageId}] Failed to connect Gemini Live session:`, e);
+        console.error(`[StageManager:${stageId}] Failed to connect Gemini Live session, falling back to chunk pipeline:`, e);
         this.liveSessions.delete(stageId);
-        return;
+        session = undefined;
       }
     }
 
-    session.sendPcmChunk(pcmChunk);
+    // 1. If Gemini Live session is connected, stream directly in real-time
+    if (session && session.getIsConnected()) {
+      session.sendPcmChunk(pcmChunk);
+      return;
+    }
+
+    // 2. Dual Pipeline Fallback: Buffer raw PCM and periodically ingest as standard WAV audio chunk
+    const currentBufs = this.pcmBuffers.get(stageId) || [];
+    currentBufs.push(pcmChunk);
+    this.pcmBuffers.set(stageId, currentBufs);
+
+    const currentLen = (this.pcmBufferLengths.get(stageId) || 0) + pcmChunk.length;
+    this.pcmBufferLengths.set(stageId, currentLen);
+
+    // 64,000 bytes = 2.0 seconds of 16kHz 16-bit Mono PCM
+    if (currentLen >= 64000) {
+      const combined = Buffer.concat(currentBufs);
+      this.pcmBuffers.set(stageId, []);
+      this.pcmBufferLengths.set(stageId, 0);
+
+      const wavBuffer = pcmToWav(combined, 16000);
+      await this.pushAudioChunk(stageId, wavBuffer, 'audio/wav');
+    }
   }
 
   public addChunkToStage(stageId: string, chunk: SubtitleChunk) {

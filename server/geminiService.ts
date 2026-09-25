@@ -803,6 +803,10 @@ export class GeminiService {
       };
     }
 
+    if (!this.client) {
+      throw new Error('Gemini client is not initialized');
+    }
+
     try {
       const prompt = `Talk Title: "${stageTitle}"\nSpeaker: "${speaker}"\n\nLive Transcript:\n"""\n${transcriptText}\n"""\n\nExtract top architectural takeaways, 3 insightful Q&A questions, and a concise 2-paragraph executive summary.`;
 
@@ -827,7 +831,7 @@ export class GeminiService {
     } catch (err) {
       console.warn(`[GeminiService] Gemini Pro deep insights failed with ${proModel}, trying flash fallback:`, err);
       try {
-        const fallbackResponse = await this.client.models.generateContent({
+        const fallbackResponse = await this.client!.models.generateContent({
           model: 'gemini-3.5-flash',
           contents: [{ parts: [{ text: `Summarize technical talk: ${stageTitle}. Speaker: ${speaker}. Transcript: ${transcriptText}` }] }],
           config: {

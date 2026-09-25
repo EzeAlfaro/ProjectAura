@@ -1,6 +1,7 @@
 import { GoogleGenAI, Modality } from '@google/genai';
 import { SubtitleChunk, TechTerm } from './types.js';
 import { extractTechTerms, TECH_GLOSSARY } from './glossary.js';
+import { translateConferenceText } from './localTranslator.js';
 
 export interface LiveTranscriberOptions {
   apiKey: string;
@@ -26,6 +27,10 @@ export class LiveStageTranscriptionSession {
   private options: LiveTranscriberOptions;
   private currentStageHistory: string[] = [];
 
+  public getIsConnected(): boolean {
+    return this.isConnected;
+  }
+
   constructor(options: LiveTranscriberOptions) {
     this.options = options;
     this.ai = new GoogleGenAI({ apiKey: options.apiKey });
@@ -34,7 +39,9 @@ export class LiveStageTranscriptionSession {
   public async connect(): Promise<void> {
     const candidateModels = [
       process.env.GEMINI_LIVE_MODEL || 'gemini-3.5-transcribe-live',
-      'gemini-2.0-flash-exp'
+      'gemini-2.0-flash-exp',
+      'gemini-2.5-flash-native-audio-latest',
+      'gemini-2.0-flash'
     ];
 
     const vocab = this.options.customVocabulary && this.options.customVocabulary.length > 0
@@ -57,7 +64,17 @@ export class LiveStageTranscriptionSession {
               languageCodes: [], // Automatic multi-lingual & code-switching (85+ languages)
               customVocabulary: vocab.slice(0, 1000),
               mode: (this.options.mode || 'SMART') as any
-            }
+            },
+            realtimeInputConfig: {
+              activityHandling: 'NO_INTERRUPTION',
+              automaticActivityDetection: {
+                disabled: false,
+                startOfSpeechSensitivity: 'START_SENSITIVITY_HIGH',
+                endOfSpeechSensitivity: 'END_SENSITIVITY_LOW',
+                prefixPaddingMs: 100,
+                silenceDurationMs: 800
+              }
+            } as any
           },
           callbacks: {
             onopen: () => {
@@ -113,12 +130,14 @@ export class LiveStageTranscriptionSession {
     if (!this.isConnected || !this.session) return;
 
     try {
+      const base64Data = pcmChunk.toString('base64');
+      const blob = { data: base64Data, mimeType: 'audio/pcm;rate=16000' };
+      // Pass both { media: blob } and { mediaChunks: [blob] } for universal SDK / proto compatibility
       this.session.sendRealtimeInput({
-        audio: {
-          data: pcmChunk.toString('base64'),
-          mimeType: 'audio/pcm;rate=16000'
-        }
-      });
+        media: blob,
+        mediaChunks: [blob],
+        audio: blob
+      } as any);
     } catch (e) {
       console.warn(`[GeminiLive:${this.options.stageId}] Error sending PCM chunk:`, e);
     }
@@ -195,14 +214,25 @@ export class LiveStageTranscriptionSession {
         ptText: parsed.ptText || parsed.esText || text
       };
     } catch {
-      // Local instant translation fallback - preserves exact words
-      const isEnglish = /^[a-zA-Z0-9\s.,?!'-]+$/.test(text) && /\b(the|is|are|we|with|deploy)\b/i.test(text);
-      return {
-        sourceLang: isEnglish ? 'en' : 'es',
-        esText: text,
-        enText: isEnglish ? text : `[EN] ${text}`,
-        ptText: isEnglish ? `[PT] ${text}` : text
-      };
+      // Local high-speed neural and glossary translation fallback
+      try {
+        const localRes = await translateConferenceText(text, 'auto');
+        const isEnglish = /^[a-zA-Z0-9\s.,?!'-]+$/.test(text) && /\b(the|is|are|we|with|deploy)\b/i.test(text);
+        return {
+          sourceLang: isEnglish ? 'en' : 'es',
+          esText: localRes.esText || text,
+          enText: localRes.enText || text,
+          ptText: localRes.ptText || text
+        };
+      } catch {
+        const isEnglish = /^[a-zA-Z0-9\s.,?!'-]+$/.test(text) && /\b(the|is|are|we|with|deploy)\b/i.test(text);
+        return {
+          sourceLang: isEnglish ? 'en' : 'es',
+          esText: text,
+          enText: text,
+          ptText: text
+        };
+      }
     }
   }
 

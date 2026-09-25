@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 export type LogLevel = 'info' | 'warn' | 'error' | 'debug';
-export type Subsystem = 'gemini' | 'audio' | 'stage' | 'ws' | 'auth' | 'system';
+export type Subsystem = 'gemini' | 'audio' | 'stage' | 'ws' | 'auth' | 'system' | 'api';
 
 export interface LogEntry {
   id: string;
