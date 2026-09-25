@@ -31,7 +31,8 @@ import {
   ThumbsUp,
   Send,
   Pin,
-  MessageSquare
+  MessageSquare,
+  Mic
 } from 'lucide-react';
 import { getExportUrl } from '../services/api.js';
 import { RackUnit, HexScrew } from './HardwareControls.js';
@@ -49,6 +50,7 @@ interface AudienceViewProps {
   takeaways: StageTakeaway[];
   suggestedQuestions: StageQA[];
   onOpenQrModal: () => void;
+  onOpenMobileMic?: () => void;
   executiveSummary?: string;
   intelModelUsed?: string;
   onTriggerDeepIntel?: () => void;
@@ -67,6 +69,7 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
   takeaways,
   suggestedQuestions,
   onOpenQrModal,
+  onOpenMobileMic,
   executiveSummary,
   intelModelUsed,
   onTriggerDeepIntel,
@@ -335,6 +338,17 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
           subTitle="Selección de sala en vivo y conmutación instantánea de idioma de salida"
           rightBadge={
             <div className="flex items-center gap-2">
+              {onOpenMobileMic && (
+                <button
+                  onClick={onOpenMobileMic}
+                  className="hardware-btn flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono font-bold text-cyan-300 hover:text-white border border-cyan-500/40 bg-cyan-950/40"
+                  title="Usar este celular como micrófono inalámbrico de emergencia"
+                >
+                  <Mic className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                  <span className="hidden sm:inline">MIC_EMERGENCIA</span>
+                </button>
+              )}
+
               <button
                 onClick={onOpenQrModal}
                 className="hardware-btn flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono font-bold text-gray-200 hover:text-white"

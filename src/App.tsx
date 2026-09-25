@@ -10,12 +10,13 @@ import { VMixModal } from './components/VMixModal.js';
 import { LogViewerModal } from './components/LogViewerModal.js';
 import { ScheduleModal } from './components/ScheduleModal.js';
 import { ThemeSelectorModal } from './components/ThemeSelectorModal.js';
+import { MobileMicView } from './components/MobileMicView.js';
 import { WSClient } from './services/websocket.js';
 import { fetchStages, fetchStatus, triggerDeepIntel } from './services/api.js';
 import { Stage, SubtitleChunk, StageTakeaway, StageQA, SupportedLanguage } from './types.js';
 
 export function App() {
-  const [currentView, setCurrentView] = useState<'audience' | 'admin' | 'overlay' | 'kiosk'>('audience');
+  const [currentView, setCurrentView] = useState<'audience' | 'admin' | 'overlay' | 'kiosk' | 'mic'>('audience');
   const [stages, setStages] = useState<Stage[]>([]);
   const [selectedStageId, setSelectedStageId] = useState<string>('stage-1');
   const [selectedLang, setSelectedLang] = useState<SupportedLanguage>('es');
@@ -57,6 +58,8 @@ export function App() {
       setCurrentView('kiosk');
     } else if (queryView === 'overlay' || path.includes('overlay') || params.has('overlay') || window.location.hash.includes('overlay')) {
       setCurrentView('overlay');
+    } else if (queryView === 'mic' || path.includes('mic') || params.has('mic')) {
+      setCurrentView('mic');
     }
   }, []);
 
@@ -261,6 +264,20 @@ export function App() {
     );
   }
 
+  // If in dedicated Emergency Wireless Mobile Mic mode
+  if (currentView === 'mic') {
+    return (
+      <MobileMicView
+        stages={stages}
+        selectedStageId={selectedStageId}
+        onSelectStage={handleSelectStage}
+        wsClient={wsClientRef.current}
+        onExit={() => setCurrentView('audience')}
+        chunks={chunks}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#0c0f17] text-[#f1f5f9] flex flex-col font-sans">
       {/* Top Header */}
@@ -300,6 +317,7 @@ export function App() {
             isGeneratingIntel={isGeneratingIntel}
             interimText={interimText}
             wsClient={wsClientRef.current}
+            onOpenMobileMic={() => setCurrentView('mic')}
           />
         )}
 
