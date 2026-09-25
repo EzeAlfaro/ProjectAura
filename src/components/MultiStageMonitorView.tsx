@@ -35,6 +35,7 @@ interface MultiStageMonitorViewProps {
   onSwitchToAdmin: (stageId?: string) => void;
   onOpenApiKeyModal?: () => void;
   geminiConfigured?: boolean;
+  activeEngine?: 'gemini-cloud' | 'gemma-local' | 'native-offline';
 }
 
 export const MultiStageMonitorView: React.FC<MultiStageMonitorViewProps> = ({
@@ -44,7 +45,8 @@ export const MultiStageMonitorView: React.FC<MultiStageMonitorViewProps> = ({
   onSelectStage,
   onSwitchToAdmin,
   onOpenApiKeyModal,
-  geminiConfigured = false
+  geminiConfigured = false,
+  activeEngine = 'native-offline'
 }) => {
   const [globalLang, setGlobalLang] = useState<SupportedLanguage>('es');
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -123,6 +125,45 @@ export const MultiStageMonitorView: React.FC<MultiStageMonitorViewProps> = ({
   };
 
   const totalChunksCount = Object.values(allStageChunks).reduce((acc, list) => acc + list.length, 0);
+  const liveStagesCount = stages.filter(s => s.isLive || (s.audioLevel && s.audioLevel > 5)).length;
+
+  // Real cost calculation: $0.00 for local/edge, or dynamic cloud rate based on actual streaming stages
+  const getCostInfo = () => {
+    if (activeEngine === 'gemini-cloud' && geminiConfigured) {
+      if (liveStagesCount > 0) {
+        return {
+          label: 'COSTO CLOUD',
+          value: `$${(liveStagesCount * 0.053).toFixed(3)}/h`,
+          colorClass: 'text-emerald-400',
+          badge: `${liveStagesCount} en vivo`
+        };
+      }
+      return {
+        label: 'COSTO CLOUD',
+        value: '$0.00/h',
+        colorClass: 'text-gray-400',
+        badge: 'Standby'
+      };
+    }
+
+    if (activeEngine === 'gemma-local') {
+      return {
+        label: 'COSTO',
+        value: '$0.00',
+        colorClass: 'text-[#00ff66]',
+        badge: 'Gemma 2B Edge'
+      };
+    }
+
+    return {
+      label: 'COSTO',
+      value: '$0.00',
+      colorClass: 'text-[#00ff66]',
+      badge: '100% Local / Gratis'
+    };
+  };
+
+  const costInfo = getCostInfo();
 
   return (
     <div className="min-h-screen bg-[#06080e] text-white flex flex-col font-sans select-none pb-12">
@@ -167,7 +208,34 @@ export const MultiStageMonitorView: React.FC<MultiStageMonitorViewProps> = ({
             <span className="text-gray-600">|</span>
             <div className="flex items-center gap-1.5 text-gray-300">
               <span className="text-[#ffb800]">$</span>
-              <span>COSTO: <strong className="text-emerald-400">$0.053/h</strong></span>
+              <span>{costInfo.label}: <strong className={costInfo.colorClass}>{costInfo.value}</strong></span>
+              <span className="px-1.5 py-0.2 rounded bg-[#10141e] border border-[#202738] text-[9px] text-gray-400">
+                {costInfo.badge}
+              </span>
+            </div>
+            <span className="text-gray-600">|</span>
+            <div className="flex items-center gap-1.5 text-[11px]">
+              <span className={`w-2 h-2 rounded-full ${
+                activeEngine === 'gemini-cloud' && geminiConfigured
+                  ? 'bg-[#00f5ff] shadow-[0_0_6px_#00f5ff]'
+                  : activeEngine === 'gemma-local'
+                  ? 'bg-[#00ff66] shadow-[0_0_6px_#00ff66]'
+                  : 'bg-[#ffb800]'
+              }`} />
+              <span className="text-gray-400">MOTOR:</span>
+              <strong className={
+                activeEngine === 'gemini-cloud' && geminiConfigured
+                  ? 'text-[#00f5ff]'
+                  : activeEngine === 'gemma-local'
+                  ? 'text-[#00ff66]'
+                  : 'text-[#ffb800]'
+              }>
+                {activeEngine === 'gemini-cloud' && geminiConfigured
+                  ? 'GEMINI CLOUD'
+                  : activeEngine === 'gemma-local'
+                  ? 'GEMMA EDGE'
+                  : 'LOCAL'}
+              </strong>
             </div>
           </div>
 
@@ -251,16 +319,16 @@ export const MultiStageMonitorView: React.FC<MultiStageMonitorViewProps> = ({
                     <span className="w-7 h-7 rounded-lg bg-[#141a2c] border border-[#232e4c] font-mono text-xs font-bold text-[#00f5ff] flex items-center justify-center shrink-0">
                       0{index + 1}
                     </span>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm font-black text-white uppercase tracking-tight truncate">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-mono text-sm font-black text-white uppercase tracking-tight" title={stg.name}>
                           {stg.name}
                         </span>
                         <span className="px-1.5 py-0.2 rounded bg-cyan-950/60 border border-cyan-800 text-cyan-300 font-mono text-[9px] font-bold shrink-0">
                           {stg.track || 'TRACK'}
                         </span>
                       </div>
-                      <div className="text-[10px] font-mono text-gray-400 truncate">
+                      <div className="text-[10px] font-mono text-gray-400 truncate" title={`${stg.speaker || 'Orador'} — ${stg.talkTitle || 'Transmisión Oficial'}`}>
                         🎙️ {stg.speaker || 'Orador'} — {stg.talkTitle || 'Transmisión Oficial'}
                       </div>
                     </div>

@@ -404,6 +404,7 @@ export function App() {
             }}
             onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
             geminiConfigured={geminiConfigured}
+            activeEngine={activeEngine}
           />
         )}
       </main>
