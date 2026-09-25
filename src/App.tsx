@@ -26,6 +26,8 @@ export function App() {
   const [interimText, setInterimText] = useState<string>('');
   
   const [geminiConfigured, setGeminiConfigured] = useState<boolean>(false);
+  const [gemmaAvailable, setGemmaAvailable] = useState<boolean>(false);
+  const [activeEngine, setActiveEngine] = useState<'gemini-cloud' | 'gemma-local' | 'native-offline'>('native-offline');
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState<boolean>(false);
   const [isVMixModalOpen, setIsVMixModalOpen] = useState<boolean>(false);
@@ -55,6 +57,8 @@ export function App() {
     fetchStatus()
       .then((status) => {
         setGeminiConfigured(status.geminiConfigured);
+        if (status.gemmaAvailable !== undefined) setGemmaAvailable(status.gemmaAvailable);
+        if (status.activeEngine) setActiveEngine(status.activeEngine);
       })
       .catch((e) => console.warn('Status check warning:', e));
 
@@ -204,6 +208,8 @@ export function App() {
         currentView={currentView}
         onSelectView={setCurrentView}
         geminiConfigured={geminiConfigured}
+        gemmaAvailable={gemmaAvailable}
+        activeEngine={activeEngine}
         onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
         onOpenQrModal={() => setIsQrModalOpen(true)}
         onOpenVMixModal={() => setIsVMixModalOpen(true)}

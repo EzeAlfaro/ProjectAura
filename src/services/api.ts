@@ -7,6 +7,8 @@ export async function fetchStatus(): Promise<{
   appName: string;
   version: string;
   geminiConfigured: boolean;
+  gemmaAvailable?: boolean;
+  activeEngine?: 'gemini-cloud' | 'gemma-local' | 'native-offline';
   stagesCount: number;
 }> {
   const res = await fetch(`${API_BASE}/status`);

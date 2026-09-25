@@ -36,12 +36,15 @@ const upload = multer({
 ======================================================== */
 
 // Health & System Status
-app.get('/api/status', (req: Request, res: Response) => {
+app.get('/api/status', async (req: Request, res: Response) => {
+  const gemmaAvailable = await geminiService.checkGemmaAvailability();
   res.json({
     status: 'online',
     appName: 'Project Aura',
     version: '1.0.0',
     geminiConfigured: geminiService.isConfigured(),
+    gemmaAvailable,
+    activeEngine: geminiService.getActiveEngineName(),
     stagesCount: stageManager.getStages().length,
     timestamp: Date.now()
   });
