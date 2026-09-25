@@ -238,6 +238,8 @@ export class GeminiService {
 
       const prompt = `Transcribe and translate this technical conference audio chunk. ${glossaryContext}`;
 
+      const cleanMimeType = (mimeType || 'audio/webm').split(';')[0].trim();
+
       const response = await this.client.models.generateContent({
         model: modelName,
         contents: [
@@ -245,7 +247,7 @@ export class GeminiService {
             parts: [
               {
                 inlineData: {
-                  mimeType: mimeType,
+                  mimeType: cleanMimeType,
                   data: base64Audio
                 }
               },

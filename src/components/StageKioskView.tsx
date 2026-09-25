@@ -31,6 +31,7 @@ import { HardwareVuMeter, HardwareOscilloscope } from './HardwareControls.js';
 import { WSClient } from '../services/websocket.js';
 import QRCode from 'qrcode';
 import { findBroadcastSplitIndex, formatBroadcastSubtitle, normalizePhoneticTechTerms } from '../utils/broadcastSegmenter.js';
+import { uploadAudioChunk } from '../services/api.js';
 
 
 interface StageKioskViewProps {
@@ -87,6 +88,7 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const isRecordingRef = useRef(false);
   const prompterContainerRef = useRef<HTMLDivElement | null>(null);
   const restartTimerRef = useRef<any>(null);
@@ -445,8 +447,37 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
         setIsClipping(db >= -1);
       }, 80);
 
-      // Launch resilient speech recognition
-      createAndStartRecognition();
+      // Launch ingest engine based on source kind
+      if (kind === 'tab') {
+        // Tab Audio Ingest via MediaRecorder + Gemini 2.5 Flash
+        let mimeType = 'audio/webm;codecs=opus';
+        if (typeof MediaRecorder !== 'undefined' && !MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = 'audio/webm';
+        }
+
+        if (typeof MediaRecorder !== 'undefined') {
+          const mediaRecorder = new MediaRecorder(stream, { mimeType });
+          mediaRecorderRef.current = mediaRecorder;
+
+          mediaRecorder.ondataavailable = async (event) => {
+            if (event.data && event.data.size > 2000 && isRecordingRef.current) {
+              try {
+                setLiveInterimText('Procesando audio digital de pestaña con Gemini...');
+                await uploadAudioChunk(stage?.id || 'stage-1', event.data);
+                setLiveInterimText('');
+              } catch (e: any) {
+                console.warn('[TabAudio] Error al enviar chunk a Gemini:', e);
+              }
+            }
+          };
+
+          // Send 3.5s audio chunks to Gemini
+          mediaRecorder.start(3500);
+        }
+      } else {
+        // Microphone Ingest via Web Speech API (low latency)
+        createAndStartRecognition();
+      }
 
       setIsRecording(true);
     } catch (err: any) {
@@ -459,6 +490,15 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
   const stopIngest = () => {
     isRecordingRef.current = false;
     setLiveInterimText('');
+
+    if (mediaRecorderRef.current) {
+      try {
+        if (mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+        }
+      } catch (e) {}
+      mediaRecorderRef.current = null;
+    }
 
     if (silenceFlushTimerRef.current) {
       clearTimeout(silenceFlushTimerRef.current);
