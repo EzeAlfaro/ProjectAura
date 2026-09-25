@@ -607,7 +607,7 @@ export class StageManager {
     });
   }
 
-  private broadcastToStage(stageId: string, payload: any) {
+  public broadcastToStage(stageId: string, payload: any) {
     const subs = this.subscribers.get(stageId);
     if (!subs) return;
 
@@ -630,7 +630,7 @@ export class StageManager {
     }
   }
 
-  private broadcastSystemUpdate() {
+  public broadcastSystemUpdate() {
     const payload = JSON.stringify({
       type: 'stages_update',
       stages: this.getStages()

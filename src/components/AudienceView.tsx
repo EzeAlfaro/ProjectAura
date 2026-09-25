@@ -5,7 +5,8 @@ import {
   StageTakeaway, 
   StageQA, 
   SupportedLanguage, 
-  TechTerm 
+  TechTerm,
+  AudienceQuestion 
 } from '../types.js';
 import { 
   Volume2, 
@@ -26,11 +27,17 @@ import {
   Check,
   QrCode,
   Tv,
-  Cpu
+  Cpu,
+  ThumbsUp,
+  Send,
+  Pin,
+  MessageSquare
 } from 'lucide-react';
 import { getExportUrl } from '../services/api.js';
 import { RackUnit, HexScrew } from './HardwareControls.js';
 import { normalizePhoneticTechTerms } from '../utils/broadcastSegmenter.js';
+import { ttsService } from '../services/ttsService.js';
+import { WSClient } from '../services/websocket.js';
 
 interface AudienceViewProps {
   stages: Stage[];
@@ -47,6 +54,7 @@ interface AudienceViewProps {
   onTriggerDeepIntel?: () => void;
   isGeneratingIntel?: boolean;
   interimText?: string;
+  wsClient?: WSClient | null;
 }
 
 export const AudienceView: React.FC<AudienceViewProps> = ({
@@ -64,6 +72,7 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
   onTriggerDeepIntel,
   isGeneratingIntel,
   interimText,
+  wsClient,
 }) => {
   const [autoScroll, setAutoScroll] = useState(true);
   const [fontSize, setFontSize] = useState<'normal' | 'large' | 'cinema'>('large');
@@ -71,6 +80,58 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
   const [selectedTerm, setSelectedTerm] = useState<TechTerm | null>(null);
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
+
+  // Accessible TTS (Voice for the Blind) State
+  const [ttsState, setTtsState] = useState<{ enabled: boolean; isSpeaking: boolean; currentText: string }>({
+    enabled: ttsService.isEnabled(),
+    isSpeaking: false,
+    currentText: ''
+  });
+
+  // Audience Q&A State
+  const [audienceQuestions, setAudienceQuestions] = useState<AudienceQuestion[]>([]);
+  const [pinnedQuestion, setPinnedQuestion] = useState<AudienceQuestion | null>(null);
+  const [newQuestionAuthor, setNewQuestionAuthor] = useState<string>(() => {
+    try {
+      return localStorage.getItem('nerdsub_user_alias') || '';
+    } catch (e) {
+      return '';
+    }
+  });
+  const [newQuestionText, setNewQuestionText] = useState<string>('');
+  const [isSubmittingQ, setIsSubmittingQ] = useState<boolean>(false);
+  const [votedQuestionIds, setVotedQuestionIds] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem('nerdsub_voted_questions');
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch (e) {
+      return new Set();
+    }
+  });
+
+  // Subscribe to TTS changes
+  useEffect(() => {
+    const unsub = ttsService.subscribe(setTtsState);
+    return unsub;
+  }, []);
+
+  // Fetch Audience Questions on Stage Change
+  const fetchQuestions = React.useCallback(() => {
+    fetch(`/api/stages/${selectedStageId}/questions`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.questions) setAudienceQuestions(data.questions);
+        if (data.onStage) setPinnedQuestion(data.onStage);
+        else setPinnedQuestion(null);
+      })
+      .catch(err => console.warn('[QA] Fetch error:', err));
+  }, [selectedStageId]);
+
+  useEffect(() => {
+    fetchQuestions();
+    const interval = setInterval(fetchQuestions, 8000);
+    return () => clearInterval(interval);
+  }, [fetchQuestions]);
 
   const currentStage = stages.find((s) => s.id === selectedStageId) || stages[0];
   const subtitlesContainerRef = useRef<HTMLDivElement>(null);
@@ -140,6 +201,74 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
         break;
     }
     return normalizePhoneticTechTerms(raw);
+  };
+
+  // Automatic Speech Synthesis for Incoming Captions (TTS Accessibility)
+  const lastSpokenChunkIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ttsState.enabled || chunks.length === 0) return;
+    const latest = chunks[chunks.length - 1];
+    if (latest && latest.id !== lastSpokenChunkIdRef.current) {
+      lastSpokenChunkIdRef.current = latest.id;
+      const textToSpeak = getDisplayText(latest);
+      if (textToSpeak) {
+        ttsService.speak(textToSpeak, selectedLang);
+      }
+    }
+  }, [chunks, ttsState.enabled, selectedLang]);
+
+  const handleSubmitQuestion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newQuestionText.trim() || isSubmittingQ) return;
+    setIsSubmittingQ(true);
+    try {
+      const author = newQuestionAuthor.trim() || 'Asistente';
+      try {
+        localStorage.setItem('nerdsub_user_alias', author);
+      } catch (err) {}
+
+      if (wsClient) {
+        wsClient.sendQASubmit(selectedStageId, author, newQuestionText.trim());
+      } else {
+        await fetch(`/api/stages/${selectedStageId}/questions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ author, text: newQuestionText.trim() })
+        });
+      }
+      setNewQuestionText('');
+      setTimeout(fetchQuestions, 400);
+    } catch (err) {
+      console.error('[QA] Error submitting question:', err);
+    } finally {
+      setIsSubmittingQ(false);
+    }
+  };
+
+  const handleVoteQuestion = async (qId: string) => {
+    if (votedQuestionIds.has(qId)) return;
+    const nextSet = new Set(votedQuestionIds);
+    nextSet.add(qId);
+    setVotedQuestionIds(nextSet);
+    try {
+      localStorage.setItem('nerdsub_voted_questions', JSON.stringify(Array.from(nextSet)));
+    } catch (err) {}
+
+    // Optimistic UI update
+    setAudienceQuestions(prev => prev.map(q => q.id === qId ? { ...q, votes: q.votes + 1 } : q));
+    if (pinnedQuestion && pinnedQuestion.id === qId) {
+      setPinnedQuestion({ ...pinnedQuestion, votes: pinnedQuestion.votes + 1 });
+    }
+
+    try {
+      if (wsClient) {
+        wsClient.sendQAVote(selectedStageId, qId);
+      } else {
+        await fetch(`/api/stages/${selectedStageId}/questions/${qId}/vote`, { method: 'POST' });
+      }
+    } catch (err) {
+      console.error('[QA] Vote error:', err);
+    }
   };
 
   const getFontSizeClass = () => {
@@ -365,6 +494,30 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
                 </button>
               </div>
 
+              {/* Accessible Voice Readout (TTS for Blind / Low Vision Attendees) */}
+              <button
+                onClick={() => {
+                  const next = ttsService.toggle();
+                  if (next && chunks.length > 0) {
+                    const latest = chunks[chunks.length - 1];
+                    ttsService.speak(getDisplayText(latest), selectedLang);
+                  }
+                }}
+                className={`hardware-btn px-2 py-1 rounded text-[10px] font-mono font-bold flex items-center gap-1.5 transition-all ${
+                  ttsState.enabled
+                    ? 'hardware-btn-active text-[#00ff66] border-[#00ff66] bg-[#00ff66]/15 shadow-[0_0_8px_rgba(0,255,102,0.3)] animate-pulse'
+                    : 'text-[#64748b] hover:text-white'
+                }`}
+                title="Voz accesible: Lee los subtítulos en tiempo real para personas no videntes"
+                aria-label="Activar audio descripción y lectura de subtítulos en voz alta"
+                aria-pressed={ttsState.enabled}
+              >
+                <Volume2 className={`w-3 h-3 ${ttsState.isSpeaking ? 'text-[#00ff66] animate-bounce' : ''}`} />
+                <span className="hidden sm:inline">VOZ ACCESIBLE</span>
+                <span className="sm:hidden">TTS</span>
+                <span className={`w-1.5 h-1.5 rounded-full ${ttsState.enabled ? 'bg-[#00ff66]' : 'bg-[#334155]'}`} />
+              </button>
+
               <button
                 onClick={() => setAutoScroll(!autoScroll)}
                 className={`hardware-btn px-2 py-1 rounded text-[10px] font-bold ${autoScroll ? 'text-[#00ff66]' : 'text-[#64748b]'}`}
@@ -396,6 +549,47 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
               )}
             </div>
           </div>
+
+          {/* Accessible TTS Speaking Telemetry Strip */}
+          {ttsState.enabled && ttsState.isSpeaking && (
+            <div className="bg-[#00ff66]/10 border-b border-[#00ff66]/30 px-3 sm:px-4 py-1.5 flex items-center justify-between text-xs font-mono text-[#00ff66] animate-pulse">
+              <div className="flex items-center gap-2 truncate">
+                <Volume2 className="w-3.5 h-3.5 shrink-0 animate-ping" />
+                <span className="font-bold shrink-0">VOZ EN VIVO:</span>
+                <span className="truncate text-gray-200">"{ttsState.currentText}"</span>
+              </div>
+              <button 
+                onClick={() => ttsService.stop()} 
+                className="shrink-0 text-[10px] text-gray-400 hover:text-white underline ml-2"
+              >
+                Pausar
+              </button>
+            </div>
+          )}
+
+          {/* Stage Pinned Question (Highlighted from Tech Booth) */}
+          {pinnedQuestion && (
+            <div className="bg-[#ffb800]/15 border-b-2 border-[#ffb800] p-3 sm:p-4 flex items-start gap-3 shadow-lg animate-in slide-in-from-top-2">
+              <span className="text-xl sm:text-2xl pt-0.5">📌</span>
+              <div className="flex-1 min-w-0 font-mono">
+                <div className="flex items-center justify-between gap-2 text-[10px] font-bold text-[#ffb800] uppercase mb-1">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-[#ffb800] animate-ping" />
+                    PREGUNTA DEL PÚBLICO EN ESCENARIO
+                  </span>
+                  <span className="bg-[#ffb800]/20 px-2 py-0.5 rounded text-white border border-[#ffb800]/40">
+                    ▲ {pinnedQuestion.votes} VOTOS
+                  </span>
+                </div>
+                <p className="text-sm sm:text-base font-bold text-white font-sans leading-snug">
+                  "{pinnedQuestion.text}"
+                </p>
+                <div className="text-[10px] text-gray-400 mt-1">
+                  Enviado por: <strong className="text-gray-200">{pinnedQuestion.author}</strong>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Teleprompter Display Glass with Dual Fade Mask */}
           <div
@@ -677,36 +871,139 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
                 </div>
               )}
 
-              {/* TAB 3: SUGGESTED Q&A QUESTIONS */}
+              {/* TAB 3: LIVE AUDIENCE Q&A & UPVOTING */}
               {activeSidebarTab === 'qa' && (
-                <div className="space-y-3">
+                <div className="space-y-3.5">
                   <div className="flex items-center justify-between border-b border-[#1b2230] pb-2">
-                    <span className="text-[10px] font-bold text-[#64748b] uppercase">
-                      PREGUNTAS SUGERIDAS (Q&A)
-                    </span>
-                    <span className="text-[9px] text-[#ffb800]">PARA EL FINAL</span>
+                    <div>
+                      <span className="text-[10px] font-bold text-[#64748b] uppercase block">
+                        PREGUNTAS DEL PÚBLICO (Q&A)
+                      </span>
+                      <span className="text-[9px] text-[#ffb800]">
+                        {audienceQuestions.length} ENVIADAS • VOTACIÓN EN VIVO
+                      </span>
+                    </div>
+                    <button
+                      onClick={fetchQuestions}
+                      className="text-[10px] text-gray-400 hover:text-white flex items-center gap-1 font-mono"
+                      title="Refrescar preguntas"
+                    >
+                      <span>↻</span>
+                      <span>ACTUALIZAR</span>
+                    </button>
                   </div>
 
-                  {suggestedQuestions.length === 0 ? (
-                    <div className="text-center py-8 text-[#64748b] text-[11px]">
-                      Preguntas técnicas inteligentes sugeridas por la IA para hacerle al orador.
+                  {/* Ask Question Form */}
+                  <form onSubmit={handleSubmitQuestion} className="bg-[#0b0e14] border border-[#1b2230] rounded-lg p-2.5 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={newQuestionAuthor}
+                        onChange={(e) => setNewQuestionAuthor(e.target.value)}
+                        placeholder="Tu nombre o handle (opcional)..."
+                        className="w-full bg-[#07090e] border border-[#1b2230] rounded px-2 py-1 text-[11px] text-gray-200 placeholder-gray-600 focus:outline-none focus:border-[#00f5ff]"
+                      />
                     </div>
-                  ) : (
-                    suggestedQuestions.map((q, idx) => (
-                      <div key={q.id || idx} className="p-2.5 bg-[#0c0f16] border border-[#1b2230] rounded space-y-1">
-                        <div className="text-[9px] text-[#ffb800] font-bold">
-                          PREGUNTA #{idx + 1}
-                        </div>
-                        <div className="text-white text-[11px] leading-relaxed font-semibold">
-                          {q.question}
-                        </div>
-                        {q.context && (
-                          <div className="text-[9px] text-[#64748b]">
-                            Contexto: {q.context}
-                          </div>
-                        )}
+                    <textarea
+                      value={newQuestionText}
+                      onChange={(e) => setNewQuestionText(e.target.value)}
+                      placeholder="Escribe tu pregunta técnica para el orador..."
+                      rows={2}
+                      className="w-full bg-[#07090e] border border-[#1b2230] rounded p-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-[#00f5ff] resize-none"
+                    />
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-[9px] text-gray-500">
+                        Las más votadas suben al teleprompter del speaker
+                      </span>
+                      <button
+                        type="submit"
+                        disabled={!newQuestionText.trim() || isSubmittingQ}
+                        className="hardware-btn px-3 py-1 rounded text-[10px] font-mono font-bold text-[#00f5ff] hover:text-black hover:bg-[#00f5ff] flex items-center gap-1 disabled:opacity-40 transition-all"
+                      >
+                        <Send className="w-3 h-3" />
+                        <span>{isSubmittingQ ? 'ENVIANDO...' : 'ENVIAR PREGUNTA'}</span>
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* Questions Feed */}
+                  <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                    {audienceQuestions.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500 text-[11px] space-y-1">
+                        <MessageSquare className="w-6 h-6 mx-auto text-gray-600 opacity-60" />
+                        <p>No hay preguntas todavía. ¡Sé el primero en preguntar al speaker!</p>
                       </div>
-                    ))
+                    ) : (
+                      audienceQuestions.map((q) => {
+                        const hasVoted = votedQuestionIds.has(q.id);
+                        const isOnStage = q.status === 'on_stage';
+
+                        return (
+                          <div
+                            key={q.id}
+                            className={`p-2.5 rounded-lg border transition-all flex items-start gap-2.5 ${
+                              isOnStage
+                                ? 'bg-[#ffb800]/15 border-[#ffb800] shadow-md shadow-[#ffb800]/10'
+                                : 'bg-[#0c0f16] border-[#1b2230] hover:border-[#2b364c]'
+                            }`}
+                          >
+                            {/* Upvote Button */}
+                            <button
+                              onClick={() => handleVoteQuestion(q.id)}
+                              disabled={hasVoted}
+                              className={`shrink-0 flex flex-col items-center justify-center w-9 py-1 rounded border text-xs font-mono font-bold transition-all ${
+                                hasVoted
+                                  ? 'bg-[#00f5ff]/20 border-[#00f5ff] text-[#00f5ff]'
+                                  : 'bg-[#07090e] border-[#1e2535] text-gray-400 hover:border-[#00f5ff] hover:text-white'
+                              }`}
+                              title={hasVoted ? 'Ya votaste esta pregunta' : 'Votar esta pregunta'}
+                            >
+                              <span className="text-[10px] leading-none">▲</span>
+                              <span className="text-[11px] leading-tight mt-0.5">{q.votes}</span>
+                            </button>
+
+                            {/* Content */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1 mb-1">
+                                <span className="text-[10px] font-bold text-gray-300 truncate">
+                                  {q.author}
+                                </span>
+                                {isOnStage && (
+                                  <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-[#ffb800] text-black shrink-0">
+                                    EN PANTALLA
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-white text-[11px] leading-relaxed font-sans">
+                                {q.text}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* AI Suggested Questions Accordion */}
+                  {suggestedQuestions.length > 0 && (
+                    <div className="pt-2 border-t border-[#1b2230]">
+                      <span className="text-[9px] font-mono text-gray-500 uppercase tracking-wide block mb-1.5">
+                        SUGERIDAS POR GEMINI ({suggestedQuestions.length})
+                      </span>
+                      <div className="space-y-1.5">
+                        {suggestedQuestions.slice(0, 3).map((q, idx) => (
+                          <div
+                            key={q.id || idx}
+                            onClick={() => setNewQuestionText(q.question)}
+                            className="p-2 bg-[#080a0f] border border-[#171b26] hover:border-[#00f5ff]/40 rounded cursor-pointer transition-all text-[11px] text-gray-300 hover:text-white"
+                            title="Hacer clic para copiar al campo de pregunta"
+                          >
+                            <span className="text-[#ffb800] text-[9px] font-bold mr-1">✦</span>
+                            {q.question}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
               )}

@@ -87,3 +87,32 @@ export interface EngineStatus {
   stagesCount: number;
   timestamp: number;
 }
+
+export interface EventTalk {
+  id: string;
+  stageId: string;
+  stageName: string;
+  startTime: string;
+  endTime: string;
+  startMinutes: number;
+  endMinutes: number;
+  speaker: string;
+  speakerRole: string;
+  speakerCompany: string;
+  title: string;
+  track: string;
+  language: 'es' | 'en' | 'mixed';
+  level: 'Introductorio' | 'Intermedio' | 'Avanzado';
+  description: string;
+  tags: string[];
+}
+
+export interface AudienceQuestion {
+  id: string;
+  stageId: string;
+  author: string;
+  text: string;
+  timestamp: number;
+  votes: number;
+  status: 'pending' | 'approved' | 'on_stage' | 'dismissed';
+}

@@ -1,4 +1,4 @@
-import { SubtitleChunk, Stage, StageTakeaway, StageQA, SupportedLanguage, StageData } from '../types.js';
+import { SubtitleChunk, Stage, StageTakeaway, StageQA, SupportedLanguage, StageData, AudienceQuestion } from '../types.js';
 
 export interface WSCallbacks {
   onCaption?: (chunk: SubtitleChunk) => void;
@@ -12,6 +12,7 @@ export interface WSCallbacks {
   onRemoteReload?: (stageId: string) => void;
   onDeepIntel?: (data: { stageId: string; takeaways: StageTakeaway[]; suggestedQuestions: StageQA[]; executiveSummary: string; intelModelUsed: string }) => void;
   onInterim?: (data: { stageId: string; text: string }) => void;
+  onQAUpdate?: (data: { stageId: string; question: AudienceQuestion; action: 'add' | 'vote' | 'status' }) => void;
 }
 
 export class WSClient {
@@ -88,6 +89,9 @@ export class WSClient {
               break;
             case 'interim':
               this.callbacks.onInterim?.(msg);
+              break;
+            case 'qa_update':
+              this.callbacks.onQAUpdate?.(msg);
               break;
           }
         } catch (err) {
@@ -182,6 +186,32 @@ export class WSClient {
     this.send({
       type: 'remote_reload',
       stageId
+    });
+  }
+
+  public sendQASubmit(stageId: string, author: string, text: string) {
+    this.send({
+      type: 'qa_submit',
+      stageId,
+      author,
+      text
+    });
+  }
+
+  public sendQAVote(stageId: string, questionId: string) {
+    this.send({
+      type: 'qa_vote',
+      stageId,
+      questionId
+    });
+  }
+
+  public sendQAStatus(stageId: string, questionId: string, status: AudienceQuestion['status']) {
+    this.send({
+      type: 'qa_status',
+      stageId,
+      questionId,
+      status
     });
   }
 

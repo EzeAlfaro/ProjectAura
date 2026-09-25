@@ -1,5 +1,4 @@
-import React from 'react';
-import { Radio, Tv, Sliders, KeyRound, Sparkles, Volume2, QrCode, Terminal, Activity, ShieldCheck, Smartphone, Monitor } from 'lucide-react';
+import { Radio, Tv, Sliders, KeyRound, Sparkles, Volume2, QrCode, Terminal, Activity, ShieldCheck, Smartphone, Monitor, Calendar, Palette } from 'lucide-react';
 
 interface HeaderProps {
   currentView: 'audience' | 'admin' | 'overlay' | 'kiosk';
@@ -12,6 +11,8 @@ interface HeaderProps {
   onOpenQrModal: () => void;
   onOpenVMixModal?: () => void;
   onOpenLogModal?: () => void;
+  onOpenScheduleModal?: () => void;
+  onOpenThemeModal?: () => void;
   isConnected: boolean;
   activeStageName?: string;
 }
@@ -171,6 +172,30 @@ export const Header: React.FC<HeaderProps> = ({
             <QrCode className="w-3.5 h-3.5 text-[#00f5ff]" />
             <span className="hidden sm:inline">QR_SALA</span>
           </button>
+
+          {/* Conference Schedule & Agenda */}
+          {onOpenScheduleModal && (
+            <button
+              onClick={onOpenScheduleModal}
+              className="hardware-btn flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded text-xs font-mono font-bold text-gray-200 hover:text-white border border-[#222a3d] hover:border-cyan-500/40 bg-[#10141e] transition-all"
+              title="Ver agenda completa de Nerdearla 2026 y sincronizar salas"
+            >
+              <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden sm:inline">AGENDA</span>
+            </button>
+          )}
+
+          {/* Theme & Visual Skins Switcher */}
+          {onOpenThemeModal && (
+            <button
+              onClick={onOpenThemeModal}
+              className="hardware-btn flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded text-xs font-mono font-bold text-gray-200 hover:text-white border border-[#222a3d] hover:border-amber-500/40 bg-[#10141e] transition-all"
+              title="Cambiar tema visual (Rack Pro-AV, Cyberpunk, Alto Contraste AAA, Daylight, Retro CRT)"
+            >
+              <Palette className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden md:inline">TEMAS</span>
+            </button>
+          )}
 
           {/* Real-time Telemetry & Log Viewer */}
           {onOpenLogModal && (

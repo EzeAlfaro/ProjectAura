@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Stage, 
   TechTerm,
-  SubtitleChunk 
+  SubtitleChunk,
+  AudienceQuestion 
 } from '../types.js';
 import { 
   Sliders, 
@@ -39,7 +40,9 @@ import {
   Timer,
   RotateCcw,
   ShieldCheck,
-  Languages
+  Languages,
+  Pin,
+  ThumbsUp
 } from 'lucide-react';
 import { 
   triggerDemo, 
@@ -86,6 +89,48 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [audioError, setAudioError] = useState<string | null>(null);
   const [glossaryTerms, setGlossaryTerms] = useState<TechTerm[]>([]);
   const [remoteReloadFeedback, setRemoteReloadFeedback] = useState<string | null>(null);
+
+  // Audience Q&A Moderation State
+  const [adminQuestions, setAdminQuestions] = useState<AudienceQuestion[]>([]);
+  const [qaFilter, setQaFilter] = useState<'all' | 'on_stage' | 'pending' | 'approved'>('all');
+
+  const fetchAdminQuestions = React.useCallback(() => {
+    fetch(`/api/stages/${selectedStageId}/questions`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.questions) setAdminQuestions(data.questions);
+      })
+      .catch(err => console.warn('[Admin QA] Fetch error:', err));
+  }, [selectedStageId]);
+
+  useEffect(() => {
+    fetchAdminQuestions();
+    const interval = setInterval(fetchAdminQuestions, 6000);
+    return () => clearInterval(interval);
+  }, [fetchAdminQuestions]);
+
+  const handleUpdateQuestionStatus = async (qId: string, status: AudienceQuestion['status']) => {
+    try {
+      if (wsClient) {
+        wsClient.sendQAStatus(selectedStageId, qId, status);
+      } else {
+        await fetch(`/api/stages/${selectedStageId}/questions/${qId}/status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status })
+        });
+      }
+      // Optimistic local update
+      setAdminQuestions(prev => prev.map(q => {
+        if (status === 'on_stage' && q.id !== qId && q.status === 'on_stage') {
+          return { ...q, status: 'approved' };
+        }
+        return q.id === qId ? { ...q, status } : q;
+      }));
+    } catch (err) {
+      console.error('[Admin QA] Status update error:', err);
+    }
+  };
   
   // Audio Devices & Hardware Diagnostics
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
@@ -1794,6 +1839,129 @@ export const AdminView: React.FC<AdminViewProps> = ({
             ))}
           </div>
 
+        </div>
+      </RackUnit>
+
+      {/* 19" RACK UNIT 06: MESA TÉCNICA - MODERACIÓN DE PREGUNTAS DEL PÚBLICO (Q&A) */}
+      <RackUnit
+        unitId="RACK_06"
+        uHeight="2U"
+        title="CONSOLA DE MODERACIÓN DE PREGUNTAS (Q&A) & FIJADO EN TELEPROMPTER"
+        subTitle="Control de preguntas enviadas por los asistentes desde el QR de sala. Pincha preguntas para mostrarlas en la pantalla de retorno del orador."
+        rightBadge={
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono font-bold text-[#ffb800] bg-[#ffb800]/15 px-2 py-0.5 rounded border border-[#ffb800]/30">
+              {adminQuestions.length} PREGUNTAS EN COLA
+            </span>
+          </div>
+        }
+      >
+        <div className="space-y-3 font-mono text-xs">
+          {/* Filter Bar */}
+          <div className="flex items-center justify-between flex-wrap gap-2 border-b border-[#1b2230] pb-2">
+            <div className="flex items-center gap-1.5">
+              {(['all', 'on_stage', 'approved', 'pending'] as const).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setQaFilter(tab)}
+                  className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-all ${
+                    qaFilter === tab
+                      ? 'bg-[#182030] text-[#00f5ff] border border-[#00f5ff]/40 shadow-sm'
+                      : 'bg-[#0d1017] text-gray-400 hover:text-white border border-[#1b2230]'
+                  }`}
+                >
+                  {tab === 'all' ? 'TODAS' : tab === 'on_stage' ? '📌 EN ESCENARIO' : tab === 'approved' ? 'APROBADAS' : 'PENDIENTES'}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={fetchAdminQuestions}
+              className="text-[10px] text-gray-400 hover:text-white flex items-center gap-1 font-mono"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>ACTUALIZAR COLA</span>
+            </button>
+          </div>
+
+          {/* Questions Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 max-h-96 overflow-y-auto pr-1">
+            {adminQuestions.length === 0 ? (
+              <div className="col-span-2 text-center py-8 text-gray-500 text-xs">
+                No hay preguntas del público para este escenario en este momento.
+              </div>
+            ) : (
+              adminQuestions
+                .filter(q => qaFilter === 'all' || q.status === qaFilter)
+                .map(q => {
+                  const isOnStage = q.status === 'on_stage';
+                  return (
+                    <div
+                      key={q.id}
+                      className={`p-3 rounded-lg border flex flex-col justify-between space-y-2 transition-all ${
+                        isOnStage
+                          ? 'bg-[#ffb800]/15 border-[#ffb800] shadow-md shadow-[#ffb800]/20 ring-1 ring-[#ffb800]'
+                          : 'bg-[#0a0d14] border-[#1b2230] hover:border-[#2a364a]'
+                      }`}
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-bold text-gray-300">
+                            {q.author}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] text-[#00f5ff] bg-[#00f5ff]/10 px-1.5 py-0.5 rounded border border-[#00f5ff]/30 font-bold">
+                              ▲ {q.votes} VOTOS
+                            </span>
+                            {isOnStage && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#ffb800] text-black">
+                                EN ESCENARIO
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-white text-xs font-sans font-medium leading-relaxed">
+                          "{q.text}"
+                        </p>
+                      </div>
+
+                      {/* Operator Action Buttons */}
+                      <div className="pt-2 border-t border-[#1b2230] flex items-center justify-between gap-1.5 text-[10px]">
+                        {isOnStage ? (
+                          <button
+                            onClick={() => handleUpdateQuestionStatus(q.id, 'approved')}
+                            className="px-2.5 py-1 rounded bg-[#ffb800]/20 hover:bg-[#ffb800]/30 border border-[#ffb800] text-[#ffb800] font-bold flex items-center gap-1 transition-all"
+                            title="Quitar esta pregunta de la pantalla del orador"
+                          >
+                            <Pin className="w-3 h-3" />
+                            <span>DESFIJAR DE PANTALLA</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleUpdateQuestionStatus(q.id, 'on_stage')}
+                            className="px-2.5 py-1 rounded bg-[#00f5ff]/15 hover:bg-[#00f5ff]/25 border border-[#00f5ff]/50 text-[#00f5ff] font-bold flex items-center gap-1 transition-all"
+                            title="Fijar de inmediato en el prompter del speaker y pantalla gigante"
+                          >
+                            <Pin className="w-3 h-3" />
+                            <span>FIJAR EN TELEPROMPTER</span>
+                          </button>
+                        )}
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleUpdateQuestionStatus(q.id, 'dismissed')}
+                            className="p-1 rounded bg-[#10141e] hover:bg-[#ff1744]/20 border border-[#202738] hover:border-[#ff1744] text-gray-400 hover:text-[#ff1744] transition-all"
+                            title="Descartar pregunta de la moderación"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+            )}
+          </div>
         </div>
       </RackUnit>
 

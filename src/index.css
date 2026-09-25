@@ -197,3 +197,132 @@
   color: #64748b;
   user-select: none;
 }
+
+/* ========================================================
+   THEME SKINS (Broadcast Rack, Cyberpunk, AAA, Paper, Retro)
+======================================================== */
+
+/* 1. Cyberpunk Konex */
+body.theme-cyberpunk-konex {
+  background-color: #0b071a !important;
+  color: #f1f5f9 !important;
+  background-image: 
+    radial-gradient(rgba(255, 0, 127, 0.12) 1px, transparent 1px),
+    linear-gradient(to bottom, #0d061c, #160a2b) !important;
+}
+body.theme-cyberpunk-konex .bg-slate-900\/90,
+body.theme-cyberpunk-konex .bg-slate-900,
+body.theme-cyberpunk-konex .bg-slate-950 {
+  background-color: #120a26 !important;
+  border-color: #3b1764 !important;
+}
+body.theme-cyberpunk-konex .border-slate-800 {
+  border-color: #431a72 !important;
+}
+body.theme-cyberpunk-konex .text-cyan-400 {
+  color: #00f5ff !important;
+  text-shadow: 0 0 8px rgba(0, 245, 255, 0.5);
+}
+
+/* 2. High-Contrast AAA (WCAG Certified 21:1) */
+body.theme-high-contrast-aaa {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  background-image: none !important;
+}
+body.theme-high-contrast-aaa .bg-slate-900\/90,
+body.theme-high-contrast-aaa .bg-slate-900,
+body.theme-high-contrast-aaa .bg-slate-950,
+body.theme-high-contrast-aaa .bg-slate-800 {
+  background-color: #000000 !important;
+  border-color: #ffff00 !important;
+  border-width: 2px !important;
+}
+body.theme-high-contrast-aaa .border-slate-800,
+body.theme-high-contrast-aaa .border-slate-700 {
+  border-color: #ffff00 !important;
+}
+body.theme-high-contrast-aaa .text-cyan-400,
+body.theme-high-contrast-aaa .text-amber-400 {
+  color: #ffff00 !important;
+  font-weight: 800 !important;
+}
+body.theme-high-contrast-aaa .text-slate-400,
+body.theme-high-contrast-aaa .text-slate-300 {
+  color: #ffffff !important;
+}
+
+/* 3. Paper Light (Daylight Stage) */
+body.theme-paper-light {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+  background-image: 
+    radial-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, #f8fafc, #e2e8f0) !important;
+}
+body.theme-paper-light .bg-slate-900\/90,
+body.theme-paper-light .bg-slate-900,
+body.theme-paper-light .bg-slate-950 {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
+}
+body.theme-paper-light .bg-slate-800 {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+}
+body.theme-paper-light .border-slate-800,
+body.theme-paper-light .border-slate-700 {
+  border-color: #cbd5e1 !important;
+}
+body.theme-paper-light .text-slate-400,
+body.theme-paper-light .text-slate-500 {
+  color: #475569 !important;
+}
+body.theme-paper-light .text-slate-200,
+body.theme-paper-light .text-slate-300,
+body.theme-paper-light .text-white {
+  color: #0f172a !important;
+}
+body.theme-paper-light .text-cyan-400 {
+  color: #0284c7 !important;
+}
+body.theme-paper-light .hardware-btn,
+body.theme-paper-light .hw-keycap {
+  background: linear-gradient(180deg, #ffffff 0%, #e2e8f0 100%) !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.06) !important;
+}
+
+/* 4. Retro CRT Green Phosphor */
+body.theme-retro-crt {
+  background-color: #08100a !important;
+  color: #39ff14 !important;
+  background-image: 
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.35) 50%),
+    linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.02)) !important;
+  background-size: 100% 3px, 3px 100% !important;
+}
+body.theme-retro-crt .bg-slate-900\/90,
+body.theme-retro-crt .bg-slate-900,
+body.theme-retro-crt .bg-slate-950 {
+  background-color: #050d06 !important;
+  border-color: #1b4d24 !important;
+  box-shadow: inset 0 0 15px rgba(57, 255, 20, 0.05) !important;
+}
+body.theme-retro-crt .border-slate-800,
+body.theme-retro-crt .border-slate-700 {
+  border-color: #1b4d24 !important;
+}
+body.theme-retro-crt .text-cyan-400,
+body.theme-retro-crt .text-slate-200,
+body.theme-retro-crt .text-white {
+  color: #39ff14 !important;
+  text-shadow: 0 0 6px rgba(57, 255, 20, 0.6) !important;
+}
+body.theme-retro-crt .text-slate-400,
+body.theme-retro-crt .text-slate-500 {
+  color: #1b7a2e !important;
+}

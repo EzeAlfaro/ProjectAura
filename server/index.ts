@@ -12,6 +12,8 @@ import { geminiService } from './geminiService.js';
 import { TECH_GLOSSARY, registerCustomTerm } from './glossary.js';
 import { SupportedLanguage } from './types.js';
 import { logger } from './logger.js';
+import { scheduleManager } from './schedule.js';
+import { qaManager } from './qaManager.js';
 
 dotenv.config();
 
@@ -374,6 +376,105 @@ app.post('/api/glossary', (req: Request, res: Response) => {
 });
 
 /* ========================================================
+   Schedule / Agenda Endpoints
+======================================================== */
+
+app.get('/api/schedule', (_req: Request, res: Response) => {
+  res.json({ talks: scheduleManager.getAll() });
+});
+
+app.get('/api/schedule/:stageId', (req: Request, res: Response) => {
+  res.json({ talks: scheduleManager.getByStage(req.params.stageId) });
+});
+
+app.get('/api/schedule/:stageId/current', (req: Request, res: Response) => {
+  const current = scheduleManager.getCurrentAndNext(req.params.stageId);
+  res.json(current);
+});
+
+app.post('/api/schedule/:stageId/sync/:talkId', (req: Request, res: Response) => {
+  const { stageId, talkId } = req.params;
+  const talk = scheduleManager.getById(talkId);
+  if (!talk) {
+    return res.status(404).json({ error: 'Talk not found in schedule' });
+  }
+  const stage = stageManager.getStage(stageId);
+  if (!stage) {
+    return res.status(404).json({ error: 'Stage not found' });
+  }
+
+  stage.talkTitle = talk.title;
+  stage.speaker = `${talk.speaker} (${talk.speakerCompany || talk.speakerRole})`;
+  stage.description = talk.description;
+
+  stageManager.broadcastSystemUpdate(stageId);
+  logger.info('stage', `Synced stage ${stageId} with schedule talk: ${talk.title}`);
+  res.json({ success: true, stage, talk });
+});
+
+/* ========================================================
+   Audience Q&A & On-Stage Moderation Endpoints
+======================================================== */
+
+app.get('/api/stages/:id/questions', (req: Request, res: Response) => {
+  const questions = qaManager.getByStage(req.params.id);
+  const onStage = qaManager.getOnStage(req.params.id);
+  res.json({ questions, onStage });
+});
+
+app.post('/api/stages/:id/questions', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { author, text } = req.body;
+  if (!text || typeof text !== 'string' || !text.trim()) {
+    return res.status(400).json({ error: 'Question text is required' });
+  }
+  const q = qaManager.addQuestion(id, author || 'Asistente', text);
+  stageManager.broadcastToStage(id, {
+    type: 'qa_update',
+    stageId: id,
+    question: q,
+    action: 'add'
+  });
+  logger.info('api', `New audience question for ${id}: "${text.substring(0, 40)}..." by ${author}`);
+  res.status(201).json({ question: q });
+});
+
+app.post('/api/stages/:id/questions/:questionId/vote', (req: Request, res: Response) => {
+  const { id, questionId } = req.params;
+  const q = qaManager.upvote(questionId);
+  if (!q) {
+    return res.status(404).json({ error: 'Question not found' });
+  }
+  stageManager.broadcastToStage(id, {
+    type: 'qa_update',
+    stageId: id,
+    question: q,
+    action: 'vote'
+  });
+  res.json({ question: q });
+});
+
+app.post('/api/stages/:id/questions/:questionId/status', (req: Request, res: Response) => {
+  const { id, questionId } = req.params;
+  const { status } = req.body;
+  if (!['pending', 'approved', 'on_stage', 'dismissed'].includes(status)) {
+    return res.status(400).json({ error: 'Invalid status' });
+  }
+  const q = qaManager.updateStatus(questionId, status);
+  if (!q) {
+    return res.status(404).json({ error: 'Question not found' });
+  }
+  stageManager.broadcastToStage(id, {
+    type: 'qa_update',
+    stageId: id,
+    question: q,
+    action: 'status'
+  });
+  logger.info('stage', `Question ${questionId} updated to status '${status}' on stage ${id}`);
+  res.json({ question: q });
+});
+
+/* ========================================================
    WebSocket Real-Time Broadcast Server
 ======================================================== */
 
@@ -451,6 +552,49 @@ wss.on('connection', (ws: WebSocket) => {
         case 'remote_reload': {
           if (message.stageId) {
             stageManager.remoteReloadStage(message.stageId);
+          }
+          break;
+        }
+
+        case 'qa_submit': {
+          if (message.stageId && message.text) {
+            const q = qaManager.addQuestion(message.stageId, message.author || 'Asistente', message.text);
+            stageManager.broadcastToStage(message.stageId, {
+              type: 'qa_update',
+              stageId: message.stageId,
+              question: q,
+              action: 'add'
+            });
+          }
+          break;
+        }
+
+        case 'qa_vote': {
+          if (message.stageId && message.questionId) {
+            const q = qaManager.upvote(message.questionId);
+            if (q) {
+              stageManager.broadcastToStage(message.stageId, {
+                type: 'qa_update',
+                stageId: message.stageId,
+                question: q,
+                action: 'vote'
+              });
+            }
+          }
+          break;
+        }
+
+        case 'qa_status': {
+          if (message.stageId && message.questionId && message.status) {
+            const q = qaManager.updateStatus(message.questionId, message.status);
+            if (q) {
+              stageManager.broadcastToStage(message.stageId, {
+                type: 'qa_update',
+                stageId: message.stageId,
+                question: q,
+                action: 'status'
+              });
+            }
           }
           break;
         }

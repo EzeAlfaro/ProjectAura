@@ -3,7 +3,9 @@ import {
   Stage, 
   SubtitleChunk, 
   SupportedLanguage, 
-  TechTerm 
+  TechTerm,
+  AudienceQuestion,
+  EventTalk 
 } from '../types.js';
 import { 
   Mic, 
@@ -27,7 +29,9 @@ import {
   Download,
   FileText,
   Key,
-  Terminal
+  Terminal,
+  Calendar,
+  Palette
 } from 'lucide-react';
 import { HardwareVuMeter, HardwareOscilloscope } from './HardwareControls.js';
 import { WSClient } from '../services/websocket.js';
@@ -50,6 +54,8 @@ interface StageKioskViewProps {
   activeEngine?: 'gemini-cloud' | 'gemma-local' | 'native-offline';
   onOpenApiKeyModal?: () => void;
   onOpenLogModal?: () => void;
+  onOpenScheduleModal?: () => void;
+  onOpenThemeModal?: () => void;
 }
 
 export const StageKioskView: React.FC<StageKioskViewProps> = ({
@@ -66,11 +72,46 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
   activeEngine = 'gemini-cloud',
   onOpenApiKeyModal,
   onOpenLogModal,
+  onOpenScheduleModal,
+  onOpenThemeModal,
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [spokenLang, setSpokenLang] = useState<'es' | 'en'>(() => {
     return stage?.detectedLang === 'en' ? 'en' : 'es';
   });
+
+  // Audience Q&A Pinned on Stage
+  const [pinnedQuestion, setPinnedQuestion] = useState<AudienceQuestion | null>(null);
+
+  // Live Conference Talk Schedule & Countdown
+  const [scheduleInfo, setScheduleInfo] = useState<{ currentTalk?: EventTalk; remainingMinutes: number; progressPercent: number }>({
+    remainingMinutes: 0,
+    progressPercent: 0
+  });
+
+  useEffect(() => {
+    const currentStageId = stage?.id || 'stage-1';
+    const fetchKioskTelemetry = () => {
+      fetch(`/api/stages/${currentStageId}/questions`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.onStage) setPinnedQuestion(data.onStage);
+          else setPinnedQuestion(null);
+        })
+        .catch(err => console.warn('[Kiosk QA] Fetch error:', err));
+
+      fetch(`/api/schedule/${currentStageId}/current`)
+        .then(res => res.json())
+        .then(data => {
+          if (data) setScheduleInfo(data);
+        })
+        .catch(err => console.warn('[Kiosk Schedule] Fetch error:', err));
+    };
+
+    fetchKioskTelemetry();
+    const timer = setInterval(fetchKioskTelemetry, 6000);
+    return () => clearInterval(timer);
+  }, [stage?.id]);
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>(() => {
     return localStorage.getItem('nerdsub_kiosk_device_id') || '';
@@ -988,6 +1029,41 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
             </button>
           )}
 
+          {/* Live Talk Countdown */}
+          {scheduleInfo.remainingMinutes > 0 && (
+            <div 
+              onClick={onOpenScheduleModal}
+              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-cyan-950/60 border border-cyan-700/60 text-cyan-300 font-mono text-[11px] font-bold cursor-pointer hover:bg-cyan-900/60 transition-all"
+              title="Tiempo restante para la charla actual. Clic para ver la agenda completa."
+            >
+              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+              <span>⏱️ {scheduleInfo.remainingMinutes}M RESTANTES</span>
+            </div>
+          )}
+
+          {/* Conference Schedule & Agenda */}
+          {onOpenScheduleModal && (
+            <button
+              onClick={onOpenScheduleModal}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded font-mono text-[11px] font-bold border border-[#222a3d] hover:border-cyan-500/40 bg-[#10141e] text-gray-300 hover:text-white transition-all"
+              title="Ver agenda completa de charlas de Nerdearla 2026"
+            >
+              <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden xl:inline">AGENDA</span>
+            </button>
+          )}
+
+          {/* Theme & Skins Switcher */}
+          {onOpenThemeModal && (
+            <button
+              onClick={onOpenThemeModal}
+              className="p-1.5 rounded font-mono text-[11px] font-bold border border-[#222a3d] hover:border-amber-500/40 bg-[#10141e] text-amber-400 hover:text-white transition-all"
+              title="Cambiar tema visual (Rack Pro-AV, Cyberpunk, Alto Contraste AAA, Daylight, Retro CRT)"
+            >
+              <Palette className="w-4 h-4" />
+            </button>
+          )}
+
           {/* Real-time Telemetry & Log Viewer */}
           {onOpenLogModal && (
             <button
@@ -1055,6 +1131,30 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
         <div className="bg-[#ff1744]/20 border-b border-[#ff1744]/40 px-4 py-2 text-center text-xs font-mono text-[#ff1744] flex items-center justify-center gap-2 z-20">
           <AlertCircle className="w-4 h-4" />
           <span>{audioError}</span>
+        </div>
+      )}
+
+      {/* On-Stage Pinned Audience Question Banner */}
+      {pinnedQuestion && (
+        <div className="bg-[#ffb800]/20 border-b-2 border-[#ffb800] px-6 py-4 flex items-start gap-4 shadow-2xl z-20 animate-in slide-in-from-top-2">
+          <span className="text-3xl pt-1">❓</span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2 text-xs font-mono font-bold text-[#ffb800] uppercase mb-1">
+              <span className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#ffb800] animate-ping" />
+                PREGUNTA DEL PÚBLICO FIJADA POR LA MESA TÉCNICA
+              </span>
+              <span className="bg-[#ffb800]/30 px-2.5 py-0.5 rounded text-white border border-[#ffb800]/60 font-black">
+                ▲ {pinnedQuestion.votes} VOTOS
+              </span>
+            </div>
+            <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-white font-sans leading-tight">
+              "{pinnedQuestion.text}"
+            </p>
+            <div className="text-xs font-mono text-gray-300 mt-2">
+              Enviada por: <strong className="text-white">{pinnedQuestion.author}</strong>
+            </div>
+          </div>
         </div>
       )}
 

@@ -8,6 +8,8 @@ import { ApiKeyModal } from './components/ApiKeyModal.js';
 import { QRCodeModal } from './components/QRCodeModal.js';
 import { VMixModal } from './components/VMixModal.js';
 import { LogViewerModal } from './components/LogViewerModal.js';
+import { ScheduleModal } from './components/ScheduleModal.js';
+import { ThemeSelectorModal } from './components/ThemeSelectorModal.js';
 import { WSClient } from './services/websocket.js';
 import { fetchStages, fetchStatus, triggerDeepIntel } from './services/api.js';
 import { Stage, SubtitleChunk, StageTakeaway, StageQA, SupportedLanguage } from './types.js';
@@ -35,6 +37,8 @@ export function App() {
   const [isQrModalOpen, setIsQrModalOpen] = useState<boolean>(false);
   const [isVMixModalOpen, setIsVMixModalOpen] = useState<boolean>(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState<boolean>(false);
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState<boolean>(false);
+  const [isThemeModalOpen, setIsThemeModalOpen] = useState<boolean>(false);
   const [isConnected, setIsConnected] = useState<boolean>(false);
 
   const wsClientRef = useRef<WSClient | null>(null);
@@ -208,6 +212,8 @@ export function App() {
           activeEngine={activeEngine}
           onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
           onOpenLogModal={() => setIsLogModalOpen(true)}
+          onOpenScheduleModal={() => setIsScheduleModalOpen(true)}
+          onOpenThemeModal={() => setIsThemeModalOpen(true)}
         />
 
         {/* API Key & Engine Manager Modal for Kiosk Operator */}
@@ -235,6 +241,22 @@ export function App() {
           isOpen={isLogModalOpen}
           onClose={() => setIsLogModalOpen(false)}
         />
+
+        {/* Conference Schedule & Agenda Modal */}
+        <ScheduleModal
+          isOpen={isScheduleModalOpen}
+          onClose={() => setIsScheduleModalOpen(false)}
+          activeStageId={selectedStageId}
+          onSyncTalk={() => {
+            fetchStages().then(setStages).catch(() => {});
+          }}
+        />
+
+        {/* Theme & Visual Skins Modal */}
+        <ThemeSelectorModal
+          isOpen={isThemeModalOpen}
+          onClose={() => setIsThemeModalOpen(false)}
+        />
       </>
     );
   }
@@ -253,6 +275,8 @@ export function App() {
         onOpenQrModal={() => setIsQrModalOpen(true)}
         onOpenVMixModal={() => setIsVMixModalOpen(true)}
         onOpenLogModal={() => setIsLogModalOpen(true)}
+        onOpenScheduleModal={() => setIsScheduleModalOpen(true)}
+        onOpenThemeModal={() => setIsThemeModalOpen(true)}
         isConnected={isConnected}
         activeStageName={currentStage?.name}
       />
@@ -275,6 +299,7 @@ export function App() {
             onTriggerDeepIntel={handleTriggerDeepIntel}
             isGeneratingIntel={isGeneratingIntel}
             interimText={interimText}
+            wsClient={wsClientRef.current}
           />
         )}
 
@@ -358,6 +383,22 @@ export function App() {
       <LogViewerModal
         isOpen={isLogModalOpen}
         onClose={() => setIsLogModalOpen(false)}
+      />
+
+      {/* Conference Schedule & Agenda Modal */}
+      <ScheduleModal
+        isOpen={isScheduleModalOpen}
+        onClose={() => setIsScheduleModalOpen(false)}
+        activeStageId={selectedStageId}
+        onSyncTalk={() => {
+          fetchStages().then(setStages).catch(() => {});
+        }}
+      />
+
+      {/* Theme & Visual Skins Modal */}
+      <ThemeSelectorModal
+        isOpen={isThemeModalOpen}
+        onClose={() => setIsThemeModalOpen(false)}
       />
     </div>
   );
