@@ -35,6 +35,34 @@ const upload = multer({
    REST API Endpoints
 ======================================================== */
 
+function syncEnvFile(keyToSet?: string, modelToSet?: string) {
+  try {
+    const envPath = path.resolve(__dirname, '../.env');
+    let envContent = '';
+    if (fs.existsSync(envPath)) {
+      envContent = fs.readFileSync(envPath, 'utf-8');
+    }
+    if (keyToSet !== undefined) {
+      if (envContent.includes('GEMINI_API_KEY=')) {
+        envContent = envContent.replace(/GEMINI_API_KEY=.*/, `GEMINI_API_KEY=${keyToSet}`);
+      } else {
+        envContent += `\nGEMINI_API_KEY=${keyToSet}`;
+      }
+    }
+    if (modelToSet !== undefined) {
+      if (envContent.includes('GEMINI_MODEL=')) {
+        envContent = envContent.replace(/GEMINI_MODEL=.*/, `GEMINI_MODEL=${modelToSet}`);
+      } else {
+        envContent += `\nGEMINI_MODEL=${modelToSet}`;
+      }
+    }
+    fs.writeFileSync(envPath, envContent.trim() + '\n', 'utf-8');
+    console.log('[Config] Synced key/model changes to .env file');
+  } catch (err) {
+    console.warn('[Config] Could not sync .env file:', err);
+  }
+}
+
 // Health & System Status
 app.get('/api/status', async (req: Request, res: Response) => {
   const gemmaAvailable = await geminiService.checkGemmaAvailability();
@@ -59,6 +87,7 @@ app.post('/api/config/key', (req: Request, res: Response) => {
 
   if (disconnect || (typeof apiKey === 'string' && apiKey.trim() === '')) {
     geminiService.disconnectAll();
+    syncEnvFile('');
     return res.json({
       success: true,
       geminiConfigured: false,
@@ -77,6 +106,7 @@ app.post('/api/config/key', (req: Request, res: Response) => {
     console.log(`[Config] Active Gemini speech model set to: ${modelName.trim()}`);
   }
   geminiService.reloadKey(cleanKey);
+  syncEnvFile(cleanKey, modelName?.trim());
 
   res.json({
     success: true,

@@ -25,7 +25,8 @@ import {
   ChevronDown,
   Sliders,
   Download,
-  FileText
+  FileText,
+  Key
 } from 'lucide-react';
 import { HardwareVuMeter, HardwareOscilloscope } from './HardwareControls.js';
 import { WSClient } from '../services/websocket.js';
@@ -44,6 +45,9 @@ interface StageKioskViewProps {
   wsClient?: WSClient | null;
   onPushLiveTranscript?: (text: string, sourceLang?: string) => void;
   onExit?: () => void;
+  geminiConfigured?: boolean;
+  activeEngine?: 'gemini-cloud' | 'gemma-local' | 'native-offline';
+  onOpenApiKeyModal?: () => void;
 }
 
 export const StageKioskView: React.FC<StageKioskViewProps> = ({
@@ -56,6 +60,9 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
   wsClient,
   onPushLiveTranscript,
   onExit,
+  geminiConfigured = false,
+  activeEngine = 'gemini-cloud',
+  onOpenApiKeyModal,
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [spokenLang, setSpokenLang] = useState<'es' | 'en'>(() => {
@@ -90,6 +97,7 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const tabSliceTimerRef = useRef<any>(null);
   const isRecordingRef = useRef(false);
   const prompterContainerRef = useRef<HTMLDivElement | null>(null);
   const restartTimerRef = useRef<any>(null);
@@ -466,31 +474,66 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
 
       // Launch ingest engine based on source kind
       if (kind === 'tab') {
-        // Tab Audio Ingest via MediaRecorder + Gemini 3.5 Flash / Live
+        // Route tab audio to speaker output so operator can monitor what is playing
+        try {
+          source.connect(audioCtx.destination);
+        } catch (e) {
+          console.warn('[TabAudio] Could not route audio to speaker output:', e);
+        }
+
         let mimeType = 'audio/webm;codecs=opus';
         if (typeof MediaRecorder !== 'undefined' && !MediaRecorder.isTypeSupported(mimeType)) {
           mimeType = 'audio/webm';
         }
 
-        if (typeof MediaRecorder !== 'undefined') {
-          const mediaRecorder = new MediaRecorder(stream, { mimeType });
-          mediaRecorderRef.current = mediaRecorder;
+        // Discrete slice recorder: each slice is an independent, valid WebM container with full EBML header
+        const recordTabSlice = () => {
+          if (!isRecordingRef.current || !mediaStreamRef.current) return;
+          try {
+            const mr = new MediaRecorder(mediaStreamRef.current, { mimeType });
+            mediaRecorderRef.current = mr;
+            const sliceBlobs: Blob[] = [];
 
-          mediaRecorder.ondataavailable = async (event) => {
-            if (event.data && event.data.size > 2000 && isRecordingRef.current) {
-              try {
-                setLiveInterimText('Procesando audio digital con Gemini 3.5...');
-                await uploadAudioChunk(stage?.id || 'stage-1', event.data);
-                setLiveInterimText('');
-              } catch (e: any) {
-                console.warn('[TabAudio] Error al enviar chunk a Gemini:', e);
+            mr.ondataavailable = (event) => {
+              if (event.data && event.data.size > 0) {
+                sliceBlobs.push(event.data);
               }
-            }
-          };
+            };
 
-          // Send 3.5s audio chunks to Gemini
-          mediaRecorder.start(3500);
-        }
+            mr.onstop = async () => {
+              if (!isRecordingRef.current) return;
+              const completeBlob = new Blob(sliceBlobs, { type: mimeType });
+              if (completeBlob.size > 2000) {
+                try {
+                  setLiveInterimText('Procesando audio digital con Gemini 3.5...');
+                  await uploadAudioChunk(stage?.id || 'stage-1', completeBlob);
+                  setLiveInterimText('');
+                } catch (e: any) {
+                  console.warn('[TabAudio] Error al enviar chunk a Gemini:', e);
+                  setLiveInterimText('');
+                }
+              }
+
+              // Chain next discrete slice
+              if (isRecordingRef.current) {
+                recordTabSlice();
+              }
+            };
+
+            mr.start();
+
+            // Record in discrete 3500ms slices so every chunk has valid container headers
+            tabSliceTimerRef.current = setTimeout(() => {
+              if (mr.state === 'recording') {
+                mr.stop();
+              }
+            }, 3500);
+          } catch (e) {
+            console.error('[TabAudio] Error al iniciar slice recorder:', e);
+          }
+        };
+
+        recordTabSlice();
       } else {
         // Microphone Ingest via Web Speech API (low latency)
         createAndStartRecognition();
@@ -507,6 +550,11 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
   const stopIngest = () => {
     isRecordingRef.current = false;
     setLiveInterimText('');
+
+    if (tabSliceTimerRef.current) {
+      clearTimeout(tabSliceTimerRef.current);
+      tabSliceTimerRef.current = null;
+    }
 
     if (mediaRecorderRef.current) {
       try {
@@ -901,6 +949,29 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
             <span className="hidden md:inline">.SRT</span>
           </a>
 
+          {/* Engine / API Key Trigger */}
+          {onOpenApiKeyModal && (
+            <button
+              onClick={onOpenApiKeyModal}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded font-mono text-[11px] font-bold border transition-all ${
+                geminiConfigured
+                  ? 'bg-[#00f5ff]/10 border-[#00f5ff]/40 text-[#00f5ff] hover:bg-[#00f5ff]/20'
+                  : 'bg-[#ffba00]/10 border-[#ffba00]/40 text-[#ffba00] hover:bg-[#ffba00]/20'
+              }`}
+              title="Configurar Gemini API Key, Cola de Keys o cambiar motor de IA"
+            >
+              <Key className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">
+                {activeEngine === 'gemini-cloud'
+                  ? 'GEMINI 3.5'
+                  : activeEngine === 'gemma-local'
+                  ? 'GEMMA 2B'
+                  : 'NATIVO 0MS'}
+              </span>
+              <span className={`w-2 h-2 rounded-full ${geminiConfigured ? 'bg-[#00ff66]' : 'bg-[#ffba00]'}`} />
+            </button>
+          )}
+
           {/* Config Drawer Toggle */}
           <button
             onClick={() => setShowConfigDrawer(!showConfigDrawer)}
@@ -933,6 +1004,24 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
         </div>
       )}
 
+      {/* Tab Audio Notice if Gemini is not configured */}
+      {inputSourceKind === 'tab' && !geminiConfigured && (
+        <div className="bg-[#ffba00]/15 border-b border-[#ffba00]/40 px-4 py-2 text-center text-xs font-mono text-[#ffba00] flex items-center justify-center gap-3 z-20">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>
+            El <strong>Modo Pestaña</strong> captura audio digital del navegador y requiere una Gemini API Key configurada para transcribir con Gemini 3.5.
+          </span>
+          {onOpenApiKeyModal && (
+            <button
+              onClick={onOpenApiKeyModal}
+              className="px-2.5 py-1 bg-[#ffba00] text-black font-black rounded hover:bg-[#ffba00]/90 transition-all text-[11px]"
+            >
+              CONFIGURAR API KEY
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Error Banner */}
       {audioError && (
         <div className="bg-[#ff1744]/20 border-b border-[#ff1744]/40 px-4 py-2 text-center text-xs font-mono text-[#ff1744] flex items-center justify-center gap-2 z-20">
@@ -958,7 +1047,15 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
                 {stage?.name || 'ESCENARIO PRINCIPAL'}
               </div>
               <p className="font-mono text-xs text-gray-400 leading-relaxed">
-                MODO SUBTÍTULO CLÁSICO ACTIVO • Presioná <strong className="text-[#00f5ff]">"ARMAR_ENTRADA"</strong> arriba para transmitir desde el Jack 3.5mm o dispositivo USB conectado. Los subtítulos aparecerán en grande y centrados aquí.
+                {inputSourceKind === 'tab' ? (
+                  <>
+                    MODO PESTAÑA ACTIVO • Presioná <strong className="text-[#00f5ff]">"CAPTURAR_PESTAÑA"</strong> para capturar el audio digital de otra pestaña (ej. YouTube, streaming de Nerdearla). Asegurate de tildar <em>"Compartir audio de la pestaña"</em> en Chrome.
+                  </>
+                ) : (
+                  <>
+                    MODO SUBTÍTULO CLÁSICO ACTIVO • Presioná <strong className="text-[#00f5ff]">"ARMAR_ENTRADA"</strong> arriba para transmitir desde el Jack 3.5mm o dispositivo USB conectado. Los subtítulos aparecerán en grande y centrados aquí.
+                  </>
+                )}
               </p>
             </div>
           ) : (

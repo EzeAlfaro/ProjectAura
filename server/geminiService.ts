@@ -557,19 +557,19 @@ export class GeminiService {
     const timestamp = Date.now();
     const modelName = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 
-    if (!this.client || !this.apiKey) {
-      // API Key not configured message - inform user honestly
+    if (!this.client || !this.apiKey || this.forcedEngine === 'native-offline') {
+      console.warn(`[GeminiService] Audio chunk received (${(audioBuffer.length / 1024).toFixed(1)} KB) but Gemini API Key is not configured or engine is forced offline.`);
       return {
         id: chunkId,
         stageId,
         timestamp,
-        originalText: `[Audio recibido: ${(audioBuffer.length / 1024).toFixed(1)} KB]`,
+        originalText: '',
         sourceLang: 'es',
-        esText: `[Audio recibido: ${(audioBuffer.length / 1024).toFixed(1)} KB — Configura tu Gemini API Key en el botón superior o habla para transcribir en vivo]`,
-        enText: `[Audio chunk received: ${(audioBuffer.length / 1024).toFixed(1)} KB]`,
-        ptText: `[Áudio recebido: ${(audioBuffer.length / 1024).toFixed(1)} KB]`,
+        esText: '',
+        enText: '',
+        ptText: '',
         techTerms: [],
-        confidence: 0.9,
+        confidence: 0,
         isFinal: true
       };
     }
@@ -638,18 +638,18 @@ export class GeminiService {
 
     } catch (error: any) {
       this.handleKeyError(error);
-      console.error('[GeminiService] Error processing audio with Gemini API:', error);
+      console.error('[GeminiService] Error processing audio with Gemini API:', error?.message || error);
       return {
         id: chunkId,
         stageId,
         timestamp,
-        originalText: `[Audio chunk: ${(audioBuffer.length / 1024).toFixed(1)} KB - Error decodificando audio en API]`,
+        originalText: '',
         sourceLang: 'es',
-        esText: `[Audio recibido - Error en decodificación de API Gemini]`,
-        enText: `[Audio received - Error decoding in Gemini API]`,
-        ptText: `[Áudio recebido - Erro na API Gemini]`,
+        esText: '',
+        enText: '',
+        ptText: '',
         techTerms: [],
-        confidence: 0.5,
+        confidence: 0,
         isFinal: true
       };
     }

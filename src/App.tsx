@@ -189,19 +189,44 @@ export function App() {
   // If in autonomous On-Stage Mini PC Kiosk mode
   if (currentView === 'kiosk') {
     return (
-      <StageKioskView
-        stage={currentStage}
-        stages={stages}
-        onSelectStage={handleSelectStage}
-        chunks={chunks}
-        selectedLang={selectedLang}
-        onSelectLang={handleSelectLang}
-        wsClient={wsClientRef.current}
-        onPushLiveTranscript={(text: string, sourceLang?: string) => {
-          wsClientRef.current?.sendLiveTranscript(selectedStageId, text, sourceLang || 'es');
-        }}
-        onExit={() => setCurrentView('admin')}
-      />
+      <>
+        <StageKioskView
+          stage={currentStage}
+          stages={stages}
+          onSelectStage={handleSelectStage}
+          chunks={chunks}
+          selectedLang={selectedLang}
+          onSelectLang={handleSelectLang}
+          wsClient={wsClientRef.current}
+          onPushLiveTranscript={(text: string, sourceLang?: string) => {
+            wsClientRef.current?.sendLiveTranscript(selectedStageId, text, sourceLang || 'es');
+          }}
+          onExit={() => setCurrentView('admin')}
+          geminiConfigured={geminiConfigured}
+          activeEngine={activeEngine}
+          onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
+        />
+
+        {/* API Key & Engine Manager Modal for Kiosk Operator */}
+        <ApiKeyModal
+          isOpen={isApiKeyModalOpen}
+          onClose={() => setIsApiKeyModalOpen(false)}
+          geminiConfigured={geminiConfigured}
+          gemmaAvailable={gemmaAvailable}
+          activeEngine={activeEngine}
+          forcedEngine={forcedEngine}
+          keyPool={keyPool}
+          onKeyUpdated={(configured, newActiveEngine, updatedPool) => {
+            setGeminiConfigured(configured);
+            if (newActiveEngine) setActiveEngine(newActiveEngine as any);
+            if (updatedPool) setKeyPool(updatedPool);
+          }}
+          onEngineChanged={(newForced, newActive) => {
+            setForcedEngine(newForced as any);
+            setActiveEngine(newActive as any);
+          }}
+        />
+      </>
     );
   }
 

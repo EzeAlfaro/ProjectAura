@@ -257,9 +257,12 @@ export class StageManager {
     const chunk = await geminiService.processAudioChunk(audioBuffer, mimeType, stageId);
     const latency = Date.now() - startTime;
     stage.latencyMs = latency;
-    stage.detectedLang = chunk.sourceLang as 'es' | 'en' | 'pt';
 
-    this.addChunkToStage(stageId, chunk);
+    // Only add and broadcast if chunk has valid transcribed speech
+    if (chunk && chunk.originalText && chunk.originalText.trim().length > 0 && !chunk.originalText.startsWith('[')) {
+      stage.detectedLang = chunk.sourceLang as 'es' | 'en' | 'pt';
+      this.addChunkToStage(stageId, chunk);
+    }
   }
 
   public async pushPcmChunk(stageId: string, pcmChunk: Buffer) {
