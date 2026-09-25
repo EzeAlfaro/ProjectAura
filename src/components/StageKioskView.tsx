@@ -23,7 +23,9 @@ import {
   X,
   Layers,
   ChevronDown,
-  Sliders
+  Sliders,
+  Download,
+  FileText
 } from 'lucide-react';
 import { HardwareVuMeter, HardwareOscilloscope } from './HardwareControls.js';
 import { WSClient } from '../services/websocket.js';
@@ -247,7 +249,10 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
     }
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition) {
+      setAudioError('Navegador sin Web Speech API nativa. Recomendado: Google Chrome o Microsoft Edge para captura directa en navegador.');
+      return;
+    }
 
     const targetLang = overrideLang || spokenLang;
 
@@ -812,6 +817,17 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
             <QrCode className="w-4 h-4" />
           </button>
 
+          {/* Quick Download SRT for Stage Technician */}
+          <a
+            href={`/api/stages/${stage?.id || 'stage-1'}/export/srt?lang=${selectedLang}`}
+            download={`nerdsub-${stage?.id || 'stage-1'}-${selectedLang}.srt`}
+            className="flex items-center gap-1 px-2 py-1.5 rounded bg-[#090c14] hover:bg-[#141b29] border border-[#1e2535] hover:border-[#00ff66]/50 text-gray-400 hover:text-[#00ff66] font-mono text-[10px] font-bold transition-all"
+            title="Descargar subtítulos .SRT sincronizados para YouTube de esta charla"
+          >
+            <Download className="w-3.5 h-3.5 text-[#00ff66]" />
+            <span className="hidden md:inline">.SRT</span>
+          </a>
+
           {/* Config Drawer Toggle */}
           <button
             onClick={() => setShowConfigDrawer(!showConfigDrawer)}
@@ -1146,6 +1162,43 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
                   {sz === 'cinema' ? 'Cine (XL)' : sz}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Post-Talk Subtitle Export */}
+          <div className="space-y-1.5 pt-2 border-t border-[#181d2a]">
+            <label className="text-[10px] text-gray-400 uppercase flex items-center gap-1.5">
+              <Download className="w-3 h-3 text-[#00ff66]" />
+              EXPORTACIÓN POST-CHARLA (YOUTUBE / ARCHIVO):
+            </label>
+            <div className="grid grid-cols-3 gap-1">
+              <a
+                href={`/api/stages/${stage?.id || 'stage-1'}/export/srt?lang=${selectedLang}`}
+                download={`nerdsub-${stage?.id || 'stage-1'}-${selectedLang}.srt`}
+                className="py-1.5 rounded bg-[#07090e] hover:bg-[#141b29] border border-[#1e2535] hover:border-[#00ff66] text-center font-bold text-gray-300 hover:text-[#00ff66] transition-all flex items-center justify-center gap-1 text-[11px]"
+                title="Subtítulos sincronizados .SRT para YouTube"
+              >
+                <Download className="w-3 h-3 text-[#00ff66]" />
+                .SRT
+              </a>
+              <a
+                href={`/api/stages/${stage?.id || 'stage-1'}/export/vtt?lang=${selectedLang}`}
+                download={`nerdsub-${stage?.id || 'stage-1'}-${selectedLang}.vtt`}
+                className="py-1.5 rounded bg-[#07090e] hover:bg-[#141b29] border border-[#1e2535] hover:border-[#00f5ff] text-center font-bold text-gray-300 hover:text-[#00f5ff] transition-all flex items-center justify-center gap-1 text-[11px]"
+                title="Subtítulos estándar WebVTT"
+              >
+                <FileText className="w-3 h-3 text-[#00f5ff]" />
+                .VTT
+              </a>
+              <a
+                href={`/api/stages/${stage?.id || 'stage-1'}/export/txt?lang=${selectedLang}`}
+                download={`nerdsub-${stage?.id || 'stage-1'}-${selectedLang}.txt`}
+                className="py-1.5 rounded bg-[#07090e] hover:bg-[#141b29] border border-[#1e2535] hover:border-[#ffba00] text-center font-bold text-gray-300 hover:text-[#ffba00] transition-all flex items-center justify-center gap-1 text-[11px]"
+                title="Transcripción en texto plano UTF-8"
+              >
+                <FileText className="w-3 h-3 text-[#ffba00]" />
+                .TXT
+              </a>
             </div>
           </div>
 

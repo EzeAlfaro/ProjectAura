@@ -32,64 +32,78 @@ export class LiveStageTranscriptionSession {
   }
 
   public async connect(): Promise<void> {
-    try {
-      const vocab = this.options.customVocabulary && this.options.customVocabulary.length > 0
-        ? this.options.customVocabulary
-        : Object.keys(TECH_GLOSSARY).concat([
-            'Nerdearla', 'deployar', 'mergear', 'crashear', 'on-call', 'deadlock',
-            'pipeline', 'troubleshooting', 'eBPF', 'Kubernetes', 'WebAssembly', 'Sysarmy'
-          ]);
+    const candidateModels = [
+      process.env.GEMINI_LIVE_MODEL || 'gemini-3.5-transcribe-live',
+      'gemini-2.0-flash-exp'
+    ];
 
-      this.session = await this.ai.live.connect({
-        model: 'gemini-3.5-transcribe-live',
-        config: {
-          responseModalities: [Modality.TEXT],
-          inputAudioTranscription: {
-            languageCodes: [], // Automatic multi-lingual & code-switching (85+ languages)
-            customVocabulary: vocab.slice(0, 1000),
-            mode: (this.options.mode || 'SMART') as any
-          }
-        },
-        callbacks: {
-          onopen: () => {
-            this.isConnected = true;
-            console.log(`[GeminiLive:${this.options.stageId}] Connected to gemini-3.5-transcribe-live`);
-            this.scheduleSessionRenewal();
-          },
-          onmessage: async (message: any) => {
-            const content = message.serverContent;
-            if (!content) return;
+    const vocab = this.options.customVocabulary && this.options.customVocabulary.length > 0
+      ? this.options.customVocabulary
+      : Object.keys(TECH_GLOSSARY).concat([
+          'Nerdearla', 'deployar', 'mergear', 'crashear', 'on-call', 'deadlock',
+          'pipeline', 'troubleshooting', 'eBPF', 'Kubernetes', 'WebAssembly', 'Sysarmy'
+        ]);
 
-            // 1. Interim Hypothesis (Real-time sub-150ms subtitle preview)
-            if (content.interimInputTranscription?.text) {
-              this.options.onInterim(content.interimInputTranscription.text);
+    let lastError: any = null;
+
+    for (const model of candidateModels) {
+      try {
+        console.log(`[GeminiLive:${this.options.stageId}] Attempting live connection with model: ${model}`);
+        this.session = await this.ai.live.connect({
+          model,
+          config: {
+            responseModalities: [Modality.TEXT],
+            inputAudioTranscription: {
+              languageCodes: [], // Automatic multi-lingual & code-switching (85+ languages)
+              customVocabulary: vocab.slice(0, 1000),
+              mode: (this.options.mode || 'SMART') as any
             }
+          },
+          callbacks: {
+            onopen: () => {
+              this.isConnected = true;
+              console.log(`[GeminiLive:${this.options.stageId}] Connected successfully to ${model}`);
+              this.scheduleSessionRenewal();
+            },
+            onmessage: async (message: any) => {
+              const content = message.serverContent;
+              if (!content) return;
 
-            // 2. Finalized Transcript Segment
-            if (content.inputTranscription?.text) {
-              const text = content.inputTranscription.text.trim();
-              if (text.length > 0) {
-                await this.handleFinalTranscript(text);
+              // 1. Interim Hypothesis (Real-time sub-150ms subtitle preview)
+              if (content.interimInputTranscription?.text) {
+                this.options.onInterim(content.interimInputTranscription.text);
               }
+
+              // 2. Finalized Transcript Segment
+              if (content.inputTranscription?.text) {
+                const text = content.inputTranscription.text.trim();
+                if (text.length > 0) {
+                  await this.handleFinalTranscript(text);
+                }
+              }
+            },
+            onerror: (err: any) => {
+              console.error(`[GeminiLive:${this.options.stageId}] Session error on ${model}:`, err);
+              this.isConnected = false;
+              this.options.onError(err);
+              this.scheduleReconnect();
+            },
+            onclose: (event: any) => {
+              console.log(`[GeminiLive:${this.options.stageId}] Session closed:`, event?.reason || 'Normal closure');
+              this.isConnected = false;
             }
-          },
-          onerror: (err: any) => {
-            console.error(`[GeminiLive:${this.options.stageId}] Session error:`, err);
-            this.isConnected = false;
-            this.options.onError(err);
-            this.scheduleReconnect();
-          },
-          onclose: (event: any) => {
-            console.log(`[GeminiLive:${this.options.stageId}] Session closed:`, event?.reason || 'Normal closure');
-            this.isConnected = false;
           }
-        }
-      });
-    } catch (error) {
-      console.error(`[GeminiLive:${this.options.stageId}] Live session initialization error:`, error);
-      this.scheduleReconnect();
-      throw error;
+        });
+        return; // Successfully connected
+      } catch (error) {
+        lastError = error;
+        console.warn(`[GeminiLive:${this.options.stageId}] Model ${model} failed to connect, trying next candidate if available...`, error);
+      }
     }
+
+    console.error(`[GeminiLive:${this.options.stageId}] All candidate models failed to connect:`, lastError);
+    this.scheduleReconnect();
+    throw lastError;
   }
 
   /**
