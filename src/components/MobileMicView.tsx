@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Mic, MicOff, Radio, Volume2, ShieldAlert, Sparkles, Check, Copy, ExternalLink, ArrowLeft, RefreshCw } from 'lucide-react';
 import { Stage, SupportedLanguage, SubtitleChunk } from '../types.js';
 import { WSClient } from '../services/websocket.js';
+import { findBroadcastSplitIndex, normalizePhoneticTechTerms } from '../utils/broadcastSegmenter.js';
 
 interface MobileMicViewProps {
   stages: Stage[];
@@ -33,6 +34,16 @@ export const MobileMicView: React.FC<MobileMicViewProps> = ({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const recognitionRef = useRef<any>(null);
+  const committedCharsRef = useRef<number>(0);
+  const silenceFlushTimerRef = useRef<any>(null);
+
+  const commitPhrase = (phrase: string) => {
+    const clean = normalizePhoneticTechTerms(phrase.trim());
+    if (!clean || clean.length < 2) return;
+    if (wsClient) {
+      wsClient.sendLiveTranscript(selectedStageId, clean, spokenLang);
+    }
+  };
 
   const isSecure = typeof window !== 'undefined' && (
     window.isSecureContext ||
@@ -147,18 +158,72 @@ export const MobileMicView: React.FC<MobileMicViewProps> = ({
           recognition.lang = spokenLang === 'en' ? 'en-US' : 'es-AR';
 
           recognition.onresult = (event: any) => {
-            let interim = '';
+            if (silenceFlushTimerRef.current) {
+              clearTimeout(silenceFlushTimerRef.current);
+              silenceFlushTimerRef.current = null;
+            }
+
             for (let i = event.resultIndex; i < event.results.length; ++i) {
-              if (event.results[i].isFinal) {
-                const text = event.results[i][0].transcript.trim();
-                if (text && wsClient) {
-                  wsClient.sendLiveTranscript(selectedStageId, text, spokenLang);
+              const res = event.results[i];
+              const transcript = res[0]?.transcript || '';
+
+              if (res.isFinal) {
+                const finalRemaining = transcript.substring(committedCharsRef.current).trim();
+                if (finalRemaining && finalRemaining.length > 1) {
+                  commitPhrase(finalRemaining);
                 }
-              } else {
-                interim += event.results[i][0].transcript;
+                committedCharsRef.current = 0;
+                setLiveInterim('');
+                return;
+              }
+
+              if (transcript) {
+                if (committedCharsRef.current > transcript.length) {
+                  committedCharsRef.current = 0;
+                }
+
+                // Broadcast phrase chunking: 6-12 words (so it cuts continuously into crisp subtitles!)
+                while (true) {
+                  const uncommitted = transcript.substring(committedCharsRef.current).trimStart();
+                  if (!uncommitted) break;
+
+                  const splitPos = findBroadcastSplitIndex(uncommitted, {
+                    maxWords: 12,
+                    maxChars: 65,
+                    minWordsBeforeCut: 6,
+                  });
+
+                  if (splitPos === null) break;
+
+                  const chunkText = uncommitted.substring(0, splitPos).trim();
+                  if (!chunkText) break;
+
+                  commitPhrase(chunkText);
+
+                  const matchIdx = transcript.indexOf(chunkText, committedCharsRef.current);
+                  if (matchIdx !== -1) {
+                    committedCharsRef.current = matchIdx + chunkText.length;
+                  } else {
+                    committedCharsRef.current += splitPos;
+                  }
+                }
+
+                const remaining = transcript.substring(committedCharsRef.current).trim();
+                setLiveInterim(normalizePhoneticTechTerms(remaining));
+
+                // Natural silence pause: 1200ms flushes the current phrase
+                if (remaining.length > 0) {
+                  silenceFlushTimerRef.current = setTimeout(() => {
+                    const toFlush = transcript.substring(committedCharsRef.current).trim();
+                    if (toFlush && (toFlush.split(/\s+/).length >= 2 || /[.!?]$/.test(toFlush))) {
+                      commitPhrase(toFlush);
+                      committedCharsRef.current = transcript.length;
+                      setLiveInterim('');
+                    }
+                  }, 1200);
+                }
               }
             }
-            if (interim) setLiveInterim(interim);
           };
 
           recognition.onerror = (e: any) => {
@@ -194,6 +259,12 @@ export const MobileMicView: React.FC<MobileMicViewProps> = ({
       } catch (e) {}
       recognitionRef.current = null;
     }
+
+    if (silenceFlushTimerRef.current) {
+      clearTimeout(silenceFlushTimerRef.current);
+      silenceFlushTimerRef.current = null;
+    }
+    committedCharsRef.current = 0;
 
     if (audioContextRef.current) {
       try {
