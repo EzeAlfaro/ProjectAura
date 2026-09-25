@@ -134,6 +134,17 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
   const [watchdogStatus, setWatchdogStatus] = useState<'healthy' | 'recovering'>('healthy');
   const [deviceChangeNotice, setDeviceChangeNotice] = useState<string | null>(null);
   const [localChunks, setLocalChunks] = useState<SubtitleChunk[]>([]);
+  const [tabVideoStream, setTabVideoStream] = useState<MediaStream | null>(null);
+  const [micGainDb, setMicGainDb] = useState<number>(3.5); // Default +3.5dB Boost
+  const gainNodeRef = useRef<GainNode | null>(null);
+
+  const handleGainChange = (newDb: number) => {
+    setMicGainDb(newDb);
+    if (gainNodeRef.current) {
+      const linear = Math.pow(10, newDb / 20);
+      gainNodeRef.current.gain.value = linear;
+    }
+  };
 
   // Audio & Speech Recognition Refs
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -479,8 +490,14 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
 
       if (kind === 'tab') {
         stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-        // Drop the video track: we only need pristine digital audio
-        stream.getVideoTracks().forEach((t) => t.stop());
+        const vTracks = stream.getVideoTracks();
+        if (vTracks.length > 0) {
+          const vStream = new MediaStream([vTracks[0]]);
+          setTabVideoStream(vStream);
+          vTracks[0].onended = () => {
+            setTabVideoStream(null);
+          };
+        }
         if (stream.getAudioTracks().length === 0) {
           throw new Error('No se detectó audio en la pestaña. Tildá la opción "Compartir audio de la pestaña" en la ventana de Chrome.');
         }
@@ -502,9 +519,15 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
 
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
       const source = audioCtx.createMediaStreamSource(stream);
+      const gainNode = audioCtx.createGain();
+      const linearGain = Math.pow(10, micGainDb / 20);
+      gainNode.gain.value = linearGain;
+      gainNodeRef.current = gainNode;
+
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
-      source.connect(analyser);
+      source.connect(gainNode);
+      gainNode.connect(analyser);
 
       audioContextRef.current = audioCtx;
       analyserRef.current = analyser;
@@ -529,9 +552,9 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
 
       // Launch ingest engine based on source kind
       if (kind === 'tab') {
-        // Route tab audio to speaker output so operator can monitor what is playing
+        // Route tab audio through gain to speaker output so operator can monitor
         try {
-          source.connect(audioCtx.destination);
+          gainNode.connect(audioCtx.destination);
         } catch (e) {
           console.warn('[TabAudio] Could not route audio to speaker output:', e);
         }
@@ -654,6 +677,8 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
     }
 
     analyserRef.current = null;
+    gainNodeRef.current = null;
+    setTabVideoStream(null);
     setIsRecording(false);
     setCurrentDbfs(-60);
     setIsClipping(false);
@@ -832,6 +857,30 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
             <span className={`text-[9px] ${isClipping ? 'text-[#ff1744] font-bold' : 'text-gray-400'}`}>
               {currentDbfs} dB
             </span>
+          </div>
+
+          {/* Mic Boost / Gain Control */}
+          <div className="flex items-center bg-[#07090e] p-0.5 rounded border border-[#1b2230] text-[10px] font-mono font-bold" title="Amplificación Digital de Micrófono (Gain Boost)">
+            <span className="text-[9px] text-[#ffb800] px-1.5 hidden xl:inline font-bold">BOOST:</span>
+            {[
+              { label: '0dB', val: 0 },
+              { label: '+3.5dB', val: 3.5 },
+              { label: '+6dB', val: 6 },
+              { label: '+12dB', val: 12 }
+            ].map((b) => (
+              <button
+                key={b.val}
+                onClick={() => handleGainChange(b.val)}
+                className={`px-1.5 py-0.5 rounded transition-all text-[9px] ${
+                  micGainDb === b.val
+                    ? 'bg-[#ffb800] text-black font-black shadow-[0_0_8px_rgba(255,184,0,0.4)]'
+                    : 'text-[#64748b] hover:text-white'
+                }`}
+                title={`Ganancia digital: ${b.val > 0 ? '+' : ''}${b.val} dB`}
+              >
+                {b.label}
+              </button>
+            ))}
           </div>
 
           {/* Display Mode Switcher: Clásico vs Teleprómpter */}
@@ -1153,6 +1202,34 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
             </p>
             <div className="text-xs font-mono text-gray-300 mt-2">
               Enviada por: <strong className="text-white">{pinnedQuestion.author}</strong>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          LIVE TAB VIDEO FEED (YOUTUBE / PRESENTATION MONITOR)
+         ======================================================== */}
+      {tabVideoStream && (
+        <div className="px-4 sm:px-8 pt-3 max-w-3xl mx-auto w-full animate-fade-in shrink-0">
+          <div className="relative rounded-2xl overflow-hidden border-2 border-[#00f5ff]/40 shadow-2xl bg-black aspect-video max-h-[260px] sm:max-h-[320px] mx-auto group">
+            <video
+              ref={(el) => {
+                if (el && el.srcObject !== tabVideoStream) {
+                  el.srcObject = tabVideoStream;
+                }
+              }}
+              autoPlay
+              muted
+              playsInline
+              className="w-full h-full object-contain bg-black"
+            />
+            <div className="absolute top-2 left-2 flex items-center gap-2 bg-black/85 backdrop-blur-md px-2.5 py-1 rounded-full border border-red-500/50 text-[10px] font-mono font-bold text-red-400 shadow-xl">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+              <span>● LIVE TAB FEED // NERDEARLA STREAM</span>
+            </div>
+            <div className="absolute bottom-2 right-2 bg-black/80 backdrop-blur-md px-2 py-0.5 rounded text-[9px] font-mono text-[#00f5ff] border border-[#00f5ff]/30">
+              AUDIO DIGITAL PCM SINCRONIZADO
             </div>
           </div>
         </div>
