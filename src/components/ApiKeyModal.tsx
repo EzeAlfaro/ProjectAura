@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { KeyRound, CheckCircle, AlertCircle, X, ExternalLink, Sparkles, RefreshCw, Trash2, PowerOff, Cpu, Zap, Cloud, Bot, Eye, EyeOff } from 'lucide-react';
-import { updateApiKey, setEngineModeApi, disconnectApi, addKeyToPoolApi, rotateApiKeyApi, removeKeyFromPoolApi } from '../services/api.js';
+import { updateApiKey, setEngineModeApi, disconnectApi, addKeyToPoolApi, rotateApiKeyApi, removeKeyFromPoolApi, testModelApi } from '../services/api.js';
 
 interface ApiKeyModalProps {
   isOpen: boolean;
@@ -29,6 +29,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   const [newApiKey, setNewApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isTestingModel, setIsTestingModel] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   if (!isOpen) return null;
@@ -118,6 +119,24 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
       }
     } catch (e: any) {
       setStatusMsg({ type: 'error', text: 'Error al eliminar clave' });
+    }
+  };
+
+  // Handle Test Model Connection (Ping)
+  const handleTestModel = async () => {
+    setIsTestingModel(true);
+    setStatusMsg(null);
+    try {
+      const res = await testModelApi(newApiKey.trim() || undefined, selectedModel);
+      if (res.success) {
+        setStatusMsg({ type: 'success', text: `✓ ${res.message}` });
+      } else {
+        setStatusMsg({ type: 'error', text: `✗ ${res.message}` });
+      }
+    } catch (e: any) {
+      setStatusMsg({ type: 'error', text: `Error de conexión: ${e.message || 'Verifica tu red y clave'}` });
+    } finally {
+      setIsTestingModel(false);
     }
   };
 
@@ -412,9 +431,9 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
               </div>
 
               {/* Model Choice for Gemini */}
-              <div>
-                <label className="block text-[11px] font-mono text-[#94a3b8] mb-1">
-                  Modelo Gemini Speech / Audio:
+              <div className="space-y-2">
+                <label className="block text-[11px] font-mono text-[#94a3b8]">
+                  Modelo Gemini Speech & Audio:
                 </label>
                 <select
                   value={selectedModel}
@@ -422,18 +441,37 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                   className="w-full px-3 py-2 bg-[#06080d] border border-[#202738] rounded-xl text-xs text-gray-200 focus:outline-none focus:border-[#00f0ff] font-mono"
                 >
                   <option value="gemini-2.0-flash-exp">
-                    ✨ gemini-2.0-flash-exp (Google Live Bidirectional Audio API)
+                    ✨ gemini-2.0-flash-exp (Google Live Bidirectional Audio API — GA Default)
                   </option>
                   <option value="gemini-2.5-flash">
-                    ⚡ gemini-2.5-flash (Google Flagship Audio & Sub-200ms Multimodal)
+                    ⚡ gemini-2.5-flash (Google Flagship Audio & Sub-200ms Multimodal — GA)
                   </option>
                   <option value="gemini-2.5-pro">
-                    🧠 gemini-2.5-pro (Google Deep Reasoning, Architecture & Q&A)
+                    🧠 gemini-2.5-pro (Google Deep Reasoning & Q&A — GA Oficial)
+                  </option>
+                  <option value="gemini-3.5-pro">
+                    🔮 gemini-3.5-pro (Preview / Opt-in vía GEMINI_ENABLE_35PRO)
                   </option>
                   <option value="gemini-2.0-flash">
-                    🚀 gemini-2.0-flash (Ultra Low-Latency Speech Stream)
+                    🚀 gemini-2.0-flash (Ultra Low-Latency Speech Stream — GA)
                   </option>
                 </select>
+
+                <div className="flex justify-between items-center pt-1">
+                  <span className="text-[10px] text-gray-500 font-mono">
+                    Verificación de conexión & latencia con Google AI Studio
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleTestModel}
+                    disabled={isTestingModel || loading}
+                    className="px-3 py-1.5 bg-[#171b26] hover:bg-[#202738] border border-[#2e384d] hover:border-[#00f0ff] text-[#00f0ff] rounded-lg text-xs font-mono font-bold transition-all flex items-center gap-1.5 shrink-0"
+                    title="Envía una prueba de latencia al modelo seleccionado en Google AI Studio"
+                  >
+                    {isTestingModel ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3 text-[#00f0ff]" />}
+                    <span>{isTestingModel ? 'Probando...' : 'Probar Modelo (Ping)'}</span>
+                  </button>
+                </div>
               </div>
             </form>
           </div>

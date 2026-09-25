@@ -118,6 +118,15 @@ export async function removeKeyFromPoolApi(id: string): Promise<{ success: boole
   return res.json();
 }
 
+export async function testModelApi(apiKey?: string, modelName?: string): Promise<{ success: boolean; model: string; message: string; latencyMs: number }> {
+  const res = await fetch(`${API_BASE}/config/test-model`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ apiKey, modelName }),
+  });
+  return res.json();
+}
+
 export async function triggerDemo(stageId: string, talkId: string): Promise<any> {
   const res = await fetch(`${API_BASE}/stages/${stageId}/demo/${talkId}`, {
     method: 'POST',

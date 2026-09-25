@@ -193,6 +193,13 @@ app.post('/api/config/key', requireAdminAuth, (req: Request, res: Response) => {
   });
 });
 
+// Test Gemini Model Connection & Latency (Ping Verification)
+app.post('/api/config/test-model', requireAdminAuth, async (req: Request, res: Response) => {
+  const { apiKey, modelName } = req.body;
+  const result = await geminiService.testModelConnection(apiKey, modelName || 'gemini-2.5-flash');
+  res.json(result);
+});
+
 // Select / Force Engine Mode ('auto' | 'gemini-cloud' | 'gemma-local' | 'native-offline')
 app.post('/api/config/engine-mode', requireAdminAuth, (req: Request, res: Response) => {
   const { mode } = req.body;

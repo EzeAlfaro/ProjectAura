@@ -372,6 +372,42 @@ export class GeminiService {
     return this.apiKey;
   }
 
+  public async testModelConnection(apiKey?: string, modelName: string = 'gemini-2.5-flash'): Promise<{ success: boolean; model: string; message: string; latencyMs: number }> {
+    const keyToUse = apiKey?.trim() || this.apiKey;
+    if (!keyToUse) {
+      return { success: false, model: modelName, message: 'No hay API Key configurada para probar. Ingresá una clave.', latencyMs: 0 };
+    }
+    const testClient = new GoogleGenAI({ apiKey: keyToUse });
+    const start = performance.now();
+    try {
+      const response = await testClient.models.generateContent({
+        model: modelName,
+        contents: [{ parts: [{ text: 'Ping test: respond with single word OK' }] }],
+        config: {
+          maxOutputTokens: 5,
+          temperature: 0.1
+        }
+      });
+      const latencyMs = Math.round(performance.now() - start);
+      const text = response.text?.trim() || 'OK';
+      return {
+        success: true,
+        model: modelName,
+        message: `Conexión verificada con ${modelName} (${latencyMs}ms). Respuesta: "${text}"`,
+        latencyMs
+      };
+    } catch (err: any) {
+      const latencyMs = Math.round(performance.now() - start);
+      const msg = err?.message || String(err);
+      return {
+        success: false,
+        model: modelName,
+        message: `Error al conectar con ${modelName} (${latencyMs}ms): ${msg}`,
+        latencyMs
+      };
+    }
+  }
+
   public async checkGemmaAvailability(): Promise<boolean> {
     const now = Date.now();
     if (now - this.gemmaLastCheck < 15000) {

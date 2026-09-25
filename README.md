@@ -39,8 +39,11 @@
 - **Audio Check Pre-vuelo & Demos**: Diagnóstico acústico con sondeo de decibelios peak/avg, alerta de clipping y 3 charlas reales pre-cargadas para pruebas sin orador en vivo.
 
 ### 🧠 2. Matriz Redundante de 3 Motores de IA
-- **Tier 1 (Nube en Tiempo Real)**: **Google Gemini Live API (`gemini-2.0-flash-exp` / `gemini-2.5-flash`)** sobre WebSockets bidireccionales con streaming de audio PCM 16kHz, preview especulativo sub-150ms y puntuación natural (con soporte forward-compatible para Gemini 3.5 Transcribe).
-- **Tier 1B (Síntesis Ejecutiva)**: **Gemini 2.5 Pro** con schema JSON estructurado para extraer 5 puntos clave de arquitectura y 3 preguntas incisivas para el orador.
+- **Tier 1 (Nube en Tiempo Real — GA Defaults)**:
+  - **Live Speech Streaming**: **Google Gemini Live API (`gemini-2.0-flash-exp`)** sobre WebSockets bidireccionales con streaming de audio PCM 16kHz, preview especulativo sub-150ms y puntuación natural.
+  - **Traducción Multimodal & Sub-200ms**: **`gemini-2.5-flash`** (GA Oficial).
+  - **Síntesis Ejecutiva & Deep Reasoning**: **`gemini-2.5-pro`** (GA Oficial verificado) para extracción de key takeaways y preguntas incisivas.
+  - **Gemini 3.5 Pro (Preview Opt-In)**: Soporte preparado y opt-in mediante `GEMINI_ENABLE_35PRO=true` en `.env`.
 - **Tier 2 (Edge Local)**: **Google Gemma 2** vía Ollama (`127.0.0.1:11434`) si el predio pierde salida a Internet.
 - **Tier 3 (Standalone de Contingencia)**: Motor neuronal offline con caché y macros regex instantáneos (<5ms).
 - **Multi-Key Pool con Rotación Automática**: Detección de HTTP 429 y conmutación en caliente a la siguiente clave del pool sin desconectar la sala.
@@ -143,6 +146,32 @@ Project Aura implementa una arquitectura híbrida que se adapta automáticamente
 - 🚀 **Modo Producción & Docker (`docker compose up` o `npm run build && npm start`)**:
   - **Servidor Unificado**: Express sirve **exclusivamente en el puerto `3001`** tanto la API, los WebSockets como los archivos estáticos compilados de `dist/`. No requiere Nginx ni proxies secundarios.
   - Acceso directo: `http://localhost:3001`.
+
+---
+
+## 🛡️ Seguridad de Operador & Control de Acceso (`ADMIN_TOKEN`)
+
+Project Aura incorpora un esquema de **seguridad soft de 1-token** diseñado específicamente para eventos en vivo, protegiendo la cabina contra sabotajes o inyecciones no autorizadas desde la red Wi-Fi de la conferencia, pero garantizando **cero fricción para el público espectador**.
+
+### Modos de Operación:
+1. **Modo Demo Abierto (`ADMIN_TOKEN` vacío o no configurado en `.env`)**:
+   - Ideal para evaluación ágil por parte de jurados o desarrollo local sin requerir credenciales.
+   - Todas las acciones están abiertas.
+
+2. **Modo Producción Protegido (`ADMIN_TOKEN=tu_token_secreto` en `.env`)**:
+   - **Endpoints y WebSocket Mutantes Exigen Autenticación**: Apagón de sala (`/emergency-clear`), recarga remota F5 (`/remote-reload`), borrado de subtítulos (`DELETE /chunks/last`), inyección de audio/texto (`/audio`, `/live-text`), configuración de claves (`/api/config/*`) y moderación de Q&A.
+   - **Canales de Autenticación**: El token puede enviarse por:
+     - Header HTTP: `x-admin-token: tu_token_secreto`
+     - Query Param en URL: `?key=tu_token_secreto` o `?token=tu_token_secreto`
+     - Mensajes WebSocket: campo `{ adminToken: "tu_token_secreto" }` o query param en handshake `ws://host:3001/ws?token=tu_token_secreto`.
+
+### Audiencia Pública vs Operador Técnico:
+| Rol | URL de Acceso | Requiere Token | Capacidades Permitidas |
+| :--- | :--- | :---: | :--- |
+| **Audiencia Móvil (QR)** | `http://<IP>:3000/` o `http://<IP>:3001/` | ❌ **NO (Libre)** | Ver subtítulos en tiempo real, cambiar idiomas (ES/EN/PT), escuchar voz accesible (TTS), enviar y votar preguntas Q&A, descargar resúmenes `.srt`. |
+| **Operador de Cabina** | `http://<IP>:3000/?view=admin&key=tu_token` | ✅ **SÍ (`ADMIN_TOKEN`)** | Control de escenarios, inyección de audio mic, switching de IA, panic button, apagón EDM, recarga remota, pool de API Keys. |
+
+*(Nota: En la Consola de Operador también podés ingresar el token directamente haciendo clic en el botón `[OPERADOR: AUTH / OPEN]` ubicado en el panel superior, el cual se persiste de forma segura en `localStorage`).*
 
 ---
 
