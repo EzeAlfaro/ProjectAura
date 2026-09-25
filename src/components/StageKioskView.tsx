@@ -187,7 +187,7 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
 
   // Listen for backend system alerts (e.g. Gemini 403 API_KEY_SERVICE_BLOCKED)
   useEffect(() => {
-    if (!wsClient) return;
+    if (!wsClient || typeof (wsClient as any).onMessage !== 'function') return;
     const unsub = wsClient.onMessage((msg: any) => {
       if (msg.type === 'system_alert') {
         setAudioError(msg.message || 'Alerta del motor de transcripción');

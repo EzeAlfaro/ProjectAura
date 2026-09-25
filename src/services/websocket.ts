@@ -22,6 +22,7 @@ export class WSClient {
   private currentLang: SupportedLanguage = 'original';
   private reconnectTimer: NodeJS.Timeout | null = null;
   private isExplicitlyClosed: boolean = false;
+  private messageListeners: Set<(msg: any) => void> = new Set();
 
   constructor(callbacks: WSCallbacks) {
     this.callbacks = callbacks;
@@ -94,6 +95,15 @@ export class WSClient {
               this.callbacks.onQAUpdate?.(msg);
               break;
           }
+
+          // Notify any registered raw message listeners
+          this.messageListeners.forEach((listener) => {
+            try {
+              listener(msg);
+            } catch (err) {
+              console.warn('[WSClient] Listener threw error:', err);
+            }
+          });
         } catch (err) {
           console.error('[WSClient] Error parsing message:', err);
         }
@@ -114,6 +124,13 @@ export class WSClient {
       console.error('[WSClient] Connection failed:', e);
       this.scheduleReconnect();
     }
+  }
+
+  public onMessage(handler: (msg: any) => void): () => void {
+    this.messageListeners.add(handler);
+    return () => {
+      this.messageListeners.delete(handler);
+    };
   }
 
   public setStage(stageId: string, lang?: SupportedLanguage) {
