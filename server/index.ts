@@ -15,6 +15,7 @@ import { SupportedLanguage } from './types.js';
 import { logger } from './logger.js';
 import { scheduleManager } from './schedule.js';
 import { qaManager } from './qaManager.js';
+import { config } from './config.js';
 
 dotenv.config();
 
@@ -24,7 +25,7 @@ const distPath = path.resolve(__dirname, '../dist');
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server, path: '/ws' });
+const wss = new WebSocketServer({ server, path: config.server.wsPath });
 
 // Forward system warnings and errors in real-time to connected admin/telemetry clients
 logger.onLog((entry) => {
@@ -36,13 +37,13 @@ logger.onLog((entry) => {
   }
 });
 
-app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(cors({ origin: config.server.corsOrigin }));
+app.use(express.json({ limit: config.server.maxPayloadSize }));
+app.use(express.urlencoded({ extended: true, limit: config.server.maxPayloadSize }));
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024 } // 25MB max
+  limits: { fileSize: config.server.maxAudioUploadBytes }
 });
 
 /* ========================================================
@@ -91,8 +92,8 @@ function getLocalNetworkIp(): string {
   return 'localhost';
 }
 
-// Health & System Status
-app.get('/api/status', async (req: Request, res: Response) => {
+// Health & System Status (Supports both /api/status and /api/health)
+app.get(['/api/status', '/api/health'], async (req: Request, res: Response) => {
   const gemmaAvailable = await geminiService.checkGemmaAvailability();
   res.json({
     status: 'online',
@@ -638,12 +639,18 @@ if (fs.existsSync(distPath)) {
   });
 }
 
-const PORT = process.env.PORT || 3001;
+const PORT = config.server.port;
+const HOST = config.server.host;
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
+  const localIp = getLocalNetworkIp();
   console.log(`=======================================================`);
-  console.log(`🚀 NerdSub Core Server running on http://localhost:${PORT}`);
-  console.log(`📡 WebSocket server live on ws://localhost:${PORT}/ws`);
+  console.log(`🚀 Project Aura Core Server running on:`);
+  console.log(`   - Local:   http://localhost:${PORT}`);
+  if (localIp !== 'localhost') {
+    console.log(`   - Network: http://${localIp}:${PORT}`);
+  }
+  console.log(`📡 WebSocket server live on path: ${config.server.wsPath}`);
   console.log(`✨ Gemini Engine: ${geminiService.isConfigured() ? 'Connected' : 'Simulation Fallback Mode'}`);
   console.log(`=======================================================`);
 });

@@ -1,12 +1,21 @@
 version: '3.8'
 
 services:
-  nerdsub:
+  aura:
     build: .
+    container_name: project-aura
     ports:
-      - "3001:3001"
+      - "${PORT:-3001}:${PORT:-3001}"
     environment:
       - NODE_ENV=production
-      - PORT=3001
+      - PORT=${PORT:-3001}
+      - HOST=0.0.0.0
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_LIVE_MODEL=${GEMINI_LIVE_MODEL:-gemini-3.5-transcribe-live}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.5-flash}
+      - GEMINI_PRO_MODEL=${GEMINI_PRO_MODEL:-gemini-3.5-pro}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - GEMMA_MODEL=${GEMMA_MODEL:-gemma2:2b}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped

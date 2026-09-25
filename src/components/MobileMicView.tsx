@@ -213,7 +213,7 @@ export const MobileMicView: React.FC<MobileMicViewProps> = ({
 
   const currentOrigin = typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}` : '';
   const httpsAlternativeUrl = typeof window !== 'undefined'
-    ? `https://${window.location.hostname}:3000/?view=mic&stage=${selectedStageId}`
+    ? `https://${window.location.hostname}${window.location.port ? `:${window.location.port}` : ''}/?view=mic&stage=${selectedStageId}`
     : '';
 
   return (

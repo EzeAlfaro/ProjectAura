@@ -45,11 +45,28 @@ export const ScheduleModal: React.FC<ScheduleModalProps> = ({
   const now = new Date();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-  const stageOptions = [
-    { id: 'stage-1', name: 'Escenario Principal', icon: '🏛️' },
-    { id: 'stage-2', name: 'Cloud & DevOps', icon: '☁️' },
-    { id: 'stage-3', name: 'Data & AI', icon: '🧠' }
-  ];
+  const stageOptions = React.useMemo(() => {
+    const stageMap = new Map<string, string>();
+    talks.forEach(t => {
+      if (!stageMap.has(t.stageId)) {
+        stageMap.set(t.stageId, t.stageName);
+      }
+    });
+    if (stageMap.size === 0) {
+      return [
+        { id: 'stage-1', name: 'Escenario Principal', icon: '🏛️' },
+        { id: 'stage-2', name: 'Cloud & DevOps', icon: '☁️' },
+        { id: 'stage-3', name: 'Data & AI', icon: '🧠' }
+      ];
+    }
+    return Array.from(stageMap.entries()).map(([id, name]) => {
+      let icon = '🏛️';
+      if (/cloud|devops|infra/i.test(name + id)) icon = '☁️';
+      else if (/ai|data|intel/i.test(name + id)) icon = '🧠';
+      else if (/sec|seguridad/i.test(name + id)) icon = '🛡️';
+      return { id, name, icon };
+    });
+  }, [talks]);
 
   const filteredTalks = talks.filter(t => {
     const matchesStage = selectedStage === 'all' || t.stageId === selectedStage;

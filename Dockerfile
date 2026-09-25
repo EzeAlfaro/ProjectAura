@@ -19,8 +19,13 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server ./server
 COPY --from=builder /app/tsconfig.json ./
 
+RUN mkdir -p /app/server/logs && chown -R node:node /app
+
 ENV NODE_ENV=production
 ENV PORT=3001
+ENV HOST=0.0.0.0
+
+USER node
 
 EXPOSE 3001
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Copy, Check, Tv, ExternalLink, Sliders, Monitor, Radio, Sparkles } from 'lucide-react';
 import { Stage, SupportedLanguage } from '../types.js';
+import { APP_CONFIG } from '../config/env.js';
 
 interface VMixModalProps {
   isOpen: boolean;
@@ -24,7 +25,7 @@ export const VMixModal: React.FC<VMixModalProps> = ({
   if (!isOpen) return null;
 
   const currentStage = stages.find((s) => s.id === activeStageId) || stages[0];
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001';
+  const origin = APP_CONFIG.publicOrigin;
 
   const getOverlayUrl = (stageId: string, lang: SupportedLanguage) => {
     return `${origin}/?view=overlay&stage=${stageId}&lang=${lang}&theme=${theme}&lines=${lines}`;

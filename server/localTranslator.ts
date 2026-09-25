@@ -6,6 +6,8 @@
  * NEVER performs naive word-by-word token replacement to prevent Spanglish gibberish.
  */
 
+import { config } from './config.js';
+
 export interface TranslationResult {
   esText: string;
   enText: string;
@@ -65,7 +67,7 @@ function preserveTechTermsCasing(text: string): string {
 
 // In-Memory Fast LRU Cache
 const translationCache = new Map<string, TranslationResult>();
-const MAX_CACHE_SIZE = 1000;
+const MAX_CACHE_SIZE = config.translation.maxCacheSize;
 
 function getCached(key: string): TranslationResult | undefined {
   return translationCache.get(key);
@@ -85,10 +87,10 @@ function setCached(key: string, res: TranslationResult) {
 async function fetchNeuralTranslation(text: string, fromLang: string, toLang: string): Promise<string> {
   if (!text || text.length < 2) return text;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 1800);
+  const timeout = setTimeout(() => controller.abort(), config.translation.httpTimeoutMs);
 
   try {
-    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${fromLang}|${toLang}&de=tech@sysarmy.com`;
+    const url = `${config.translation.apiUrl}?q=${encodeURIComponent(text)}&langpair=${fromLang}|${toLang}&de=${encodeURIComponent(config.translation.contactEmail)}`;
     const res = await fetch(url, { signal: controller.signal });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data: any = await res.json();

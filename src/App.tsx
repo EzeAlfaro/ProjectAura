@@ -19,7 +19,14 @@ import { Stage, SubtitleChunk, StageTakeaway, StageQA, SupportedLanguage } from 
 export function App() {
   const [currentView, setCurrentView] = useState<'audience' | 'admin' | 'overlay' | 'kiosk' | 'mic'>('audience');
   const [stages, setStages] = useState<Stage[]>([]);
-  const [selectedStageId, setSelectedStageId] = useState<string>('stage-1');
+  const [selectedStageId, setSelectedStageId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const queryStage = params.get('stage');
+      if (queryStage) return queryStage;
+    }
+    return '';
+  });
   const [selectedLang, setSelectedLang] = useState<SupportedLanguage>('es');
   
   const [chunks, setChunks] = useState<SubtitleChunk[]>([]);
@@ -81,7 +88,7 @@ export function App() {
       .then((data) => {
         if (data && data.length > 0) {
           setStages(data);
-          if (!selectedStageId) setSelectedStageId(data[0].id);
+          setSelectedStageId((prev) => (prev && data.some(s => s.id === prev) ? prev : data[0].id));
         }
       })
       .catch((e) => console.warn('Fetch stages warning:', e));

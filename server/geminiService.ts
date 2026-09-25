@@ -3,6 +3,7 @@ import { SubtitleChunk, TechTerm, EngineMode, KeyPoolItem } from './types.js';
 import { extractTechTerms, TECH_GLOSSARY, normalizePhoneticTechTerms } from './glossary.js';
 import { translateConferenceText, translateConferenceTextLocally } from './localTranslator.js';
 import { logger } from './logger.js';
+import { config } from './config.js';
 
 function maskKey(key: string): string {
   if (!key) return '';
@@ -380,7 +381,7 @@ export class GeminiService {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 600);
-      const res = await fetch('http://127.0.0.1:11434/api/tags', { signal: controller.signal });
+      const res = await fetch(`${config.ai.ollamaBaseUrl}/api/tags`, { signal: controller.signal });
       clearTimeout(timeout);
       if (res.ok) {
         const data: any = await res.json();
@@ -398,7 +399,7 @@ export class GeminiService {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 2200);
-      const gemmaModel = process.env.GEMMA_MODEL || 'gemma2:2b';
+      const gemmaModel = config.ai.gemmaModel;
       const body: any = {
         model: gemmaModel,
         prompt,
@@ -408,7 +409,7 @@ export class GeminiService {
       if (systemInstruction) {
         body.system = systemInstruction;
       }
-      const res = await fetch('http://127.0.0.1:11434/api/generate', {
+      const res = await fetch(`${config.ai.ollamaBaseUrl}/api/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -622,11 +623,8 @@ export class GeminiService {
       const cleanMimeType = (mimeType || 'audio/webm').split(';')[0].trim();
       const candidateModels = [
         modelName,
-        'gemini-3.5-flash',
-        'gemini-2.5-flash',
-        'gemini-2.5-flash-lite',
-        'gemini-1.5-flash'
-      ].filter((m, i, arr) => arr.indexOf(m) === i);
+        ...config.ai.fallbackModels
+      ].filter((m, i, arr) => Boolean(m) && arr.indexOf(m) === i);
 
       let response: any = null;
       let lastError: any = null;

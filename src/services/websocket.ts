@@ -18,7 +18,7 @@ export interface WSCallbacks {
 export class WSClient {
   private ws: WebSocket | null = null;
   private callbacks: WSCallbacks = {};
-  private currentStageId: string = 'stage-1';
+  private currentStageId: string = '';
   private currentLang: SupportedLanguage = 'original';
   private reconnectTimer: NodeJS.Timeout | null = null;
   private isExplicitlyClosed: boolean = false;
@@ -28,8 +28,8 @@ export class WSClient {
     this.callbacks = callbacks;
   }
 
-  public connect(stageId: string = 'stage-1', lang: SupportedLanguage = 'original') {
-    this.currentStageId = stageId;
+  public connect(stageId: string = '', lang: SupportedLanguage = 'original') {
+    this.currentStageId = stageId || this.currentStageId;
     this.currentLang = lang;
     this.isExplicitlyClosed = false;
 

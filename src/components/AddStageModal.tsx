@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Plus, Radio, Globe, Mic, Cpu, Sparkles, Copy, Check, Tv, Smartphone } from 'lucide-react';
 import { Stage } from '../types.js';
 import { createStageApi } from '../services/api.js';
+import { APP_CONFIG } from '../config/env.js';
 
 interface AddStageModalProps {
   isOpen: boolean;
@@ -41,7 +42,7 @@ export const AddStageModal: React.FC<AddStageModalProps> = ({
 
   if (!isOpen) return null;
 
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+  const origin = APP_CONFIG.publicOrigin;
   const kioskUrl = `${origin}/kiosk?stage=${stageId}`;
   const audienceUrl = `${origin}/?stage=${stageId}`;
   const tvUrl = `${origin}/?view=overlay&mode=tv&stage=${stageId}`;
