@@ -836,11 +836,10 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
   // In Classic mode, format into 1 or 2 broadcast subtitle lines without orphan fragments
   const classicDisplay = React.useMemo(() => {
     const validChunks = effectiveChunks.filter((c) => getDisplayText(c).trim().length > 0);
-    if (validChunks.length === 0) return { current: '', previous: '' };
+    if (validChunks.length === 0) return { current: '' };
 
     const last = validChunks[validChunks.length - 1];
     let current = getDisplayText(last).trim();
-    let previous = '';
 
     if (validChunks.length > 1) {
       const prev = validChunks[validChunks.length - 2];
@@ -850,15 +849,10 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
       // If current is an orphan (< 4 words), merge them into one unified subtitle!
       if (currentWords < 4 && Math.abs(last.timestamp - prev.timestamp) < 12000) {
         current = `${prevText} ${current}`;
-        if (validChunks.length > 2) {
-          previous = getDisplayText(validChunks[validChunks.length - 3]).trim();
-        }
-      } else {
-        previous = prevText;
       }
     }
 
-    return { current, previous };
+    return { current };
   }, [effectiveChunks, selectedLang]);
 
   // Group chunks into coherent multi-word thoughts for clean teleprompter reading (Never display 1-word cards)
@@ -1222,84 +1216,53 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
       {displayMode === 'classic' && (
         <div className="flex-1 flex flex-col justify-end items-center p-6 sm:p-12 pb-16 relative max-w-6xl mx-auto w-full">
           
-          {!classicDisplay.current && !(liveInterimText && (selectedLang === spokenLang || selectedLang === 'original')) ? (
-            <div className="m-auto text-center space-y-4 max-w-lg">
-              <div className="w-16 h-16 rounded-full bg-[#111520] border-2 border-[#00f5ff]/30 flex items-center justify-center mx-auto text-[#00f5ff]">
-                <Tv className="w-8 h-8 animate-pulse" />
-              </div>
-              <div className="font-mono text-2xl font-black text-gray-200 uppercase">
-                {stage?.name || 'ESCENARIO PRINCIPAL'}
-              </div>
-              <p className="font-mono text-xs text-gray-400 leading-relaxed">
-                {inputSourceKind === 'tab' ? (
-                  <>
-                    MODO PESTAÑA ACTIVO • Presioná <strong className="text-[#00f5ff]">"CAPTURAR_PESTAÑA"</strong> para capturar el audio digital de otra pestaña (ej. YouTube, streaming de Nerdearla). Asegurate de tildar <em>"Compartir audio de la pestaña"</em> en Chrome.
-                  </>
-                ) : (
-                  <>
-                    MODO SUBTÍTULO CLÁSICO ACTIVO • Presioná <strong className="text-[#00f5ff]">"ARMAR_ENTRADA"</strong> arriba para transmitir desde el Jack 3.5mm o dispositivo USB conectado. Los subtítulos aparecerán en grande y centrados aquí.
-                  </>
-                )}
-              </p>
-            </div>
-          ) : (
-            <div className="w-full space-y-3 text-center">
-              
-              {/* Previous line (subtle and visible for context) */}
-              {classicDisplay.previous && !(liveInterimText && (selectedLang === spokenLang || selectedLang === 'original')) && (
-                <div className="text-gray-400 opacity-60 text-lg sm:text-xl lg:text-2xl font-medium tracking-wide max-w-4xl mx-auto break-words">
-                  {classicDisplay.previous}
-                </div>
+          <div className="w-full space-y-4 text-center">
+            
+            {/* Active subtitle box with high contrast broadcast styling (Full text, adaptive wrap) */}
+            <div 
+              className="bg-black/90 backdrop-blur-md border-2 border-white/20 rounded-2xl sm:rounded-3xl px-6 py-5 sm:px-10 sm:py-7 shadow-2xl max-w-5xl mx-auto w-full min-h-[110px] flex items-center justify-center text-center"
+              style={{
+                boxShadow: '0 10px 40px rgba(0,0,0,0.85), 0 0 25px rgba(0,245,255,0.1)'
+              }}
+            >
+              {classicDisplay.current ? (
+                <p 
+                  className={`${getAdaptiveFontClass(classicDisplay.current)} text-white drop-shadow-md max-w-4xl break-words`}
+                  style={{ textShadow: '0 2px 8px rgba(0,0,0,0.95)' }}
+                >
+                  {classicDisplay.current}
+                </p>
+              ) : (liveInterimText && (selectedLang === spokenLang || selectedLang === 'original')) ? (
+                <p 
+                  className={`${getAdaptiveFontClass(liveInterimText)} text-[#00f5ff] drop-shadow-md max-w-4xl break-words`}
+                  style={{ textShadow: '0 2px 8px rgba(0,0,0,0.95), 0 0 16px rgba(0,245,255,0.45)' }}
+                >
+                  <span>{liveInterimText}</span>
+                  <span className="inline-block w-2.5 h-5 bg-[#00f5ff] ml-2 animate-pulse align-middle rounded-sm" />
+                </p>
+              ) : (
+                <p className="text-gray-400 font-mono text-sm sm:text-base">
+                  {isRecording 
+                    ? '🎙️ Escuchando audio... (los subtítulos aparecerán aquí)'
+                    : 'Standby • Presioná TRANSCRIBIR o CAPTURAR arriba para iniciar'}
+                </p>
               )}
-
-              {/* Active subtitle box with high contrast broadcast styling (Full text, adaptive wrap) */}
-              <div 
-                className="bg-black/90 backdrop-blur-md border-2 border-white/20 rounded-2xl sm:rounded-3xl px-6 py-5 sm:px-10 sm:py-7 shadow-2xl transition-all max-w-5xl mx-auto w-full min-h-[90px] flex items-center justify-center text-center"
-                style={{
-                  boxShadow: '0 10px 40px rgba(0,0,0,0.85), 0 0 25px rgba(0,245,255,0.1)'
-                }}
-              >
-                {(liveInterimText && (selectedLang === spokenLang || selectedLang === 'original')) ? (
-                  <p 
-                    className={`${getAdaptiveFontClass(liveInterimText)} text-[#00f5ff] drop-shadow-md max-w-4xl break-words`}
-                    style={{ textShadow: '0 2px 8px rgba(0,0,0,0.95), 0 0 16px rgba(0,245,255,0.45)' }}
-                  >
-                    <span>{liveInterimText}</span>
-                    <span className="inline-block w-2.5 h-5 bg-[#00f5ff] ml-2 animate-pulse align-middle rounded-sm" />
-                  </p>
-                ) : (
-                  <p 
-                    className={`${getAdaptiveFontClass(classicDisplay.current)} text-white drop-shadow-md max-w-4xl break-words`}
-                    style={{ textShadow: '0 2px 8px rgba(0,0,0,0.95)' }}
-                  >
-                    {classicDisplay.current}
-                  </p>
-                )}
-              </div>
-
-              {/* Discreet Telemetry & Language Tag */}
-              <div className="flex items-center justify-center gap-2 sm:gap-4 text-[10px] sm:text-[11px] font-mono tracking-wider uppercase">
-                <span className="text-[#94a3b8] font-bold">{stage?.speaker || 'TALK'}</span>
-                <span className="text-[#334155]">•</span>
-                <span className="text-[#00f5ff] font-bold bg-[#00f5ff]/10 px-2 py-0.5 rounded border border-[#00f5ff]/30">
-                  SUBTÍTULOS: {selectedLang === 'en' ? 'ENGLISH (EN)' : selectedLang === 'pt' ? 'PORTUGUÊS (PT)' : selectedLang === 'original' ? 'ORIGINAL' : 'ESPAÑOL (ES)'}
-                </span>
-                <span className="text-[#334155]">•</span>
-                <span className="text-gray-400">
-                  MIC: {spokenLang.toUpperCase()}
-                </span>
-                {selectedLang !== spokenLang && selectedLang !== 'original' && liveInterimText && (
-                  <>
-                    <span className="text-[#334155]">•</span>
-                    <span className="text-amber-400 font-mono font-bold animate-pulse">
-                      🎙️ TRADUCIENDO...
-                    </span>
-                  </>
-                )}
-              </div>
-
             </div>
-          )}
+
+            {/* Static Telemetry & Language Tag (Fixed height, never shifts layout) */}
+            <div className="flex items-center justify-center gap-2 sm:gap-4 text-[10px] sm:text-[11px] font-mono tracking-wider uppercase h-6">
+              <span className="text-[#94a3b8] font-bold">{stage?.speaker || 'TALK'}</span>
+              <span className="text-[#334155]">•</span>
+              <span className="text-[#00f5ff] font-bold bg-[#00f5ff]/10 px-2 py-0.5 rounded border border-[#00f5ff]/30">
+                SUBTÍTULOS: {selectedLang === 'en' ? 'ENGLISH (EN)' : selectedLang === 'pt' ? 'PORTUGUÊS (PT)' : selectedLang === 'original' ? 'ORIGINAL' : 'ESPAÑOL (ES)'}
+              </span>
+              <span className="text-[#334155]">•</span>
+              <span className="text-gray-400">
+                MIC: {spokenLang.toUpperCase()}
+              </span>
+            </div>
+
+          </div>
 
         </div>
       )}
@@ -1313,7 +1276,7 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
           aria-relevant="additions"
           className="flex-1 p-6 sm:p-12 overflow-y-auto space-y-6 relative flex flex-col justify-end max-w-6xl mx-auto w-full"
         >
-          {prompterGroups.length === 0 && !(liveInterimText && (selectedLang === spokenLang || selectedLang === 'original')) ? (
+          {prompterGroups.length === 0 ? (
             <div className="m-auto text-center space-y-4 max-w-md">
               <div className="w-16 h-16 rounded-full bg-[#111520] border-2 border-[#00f5ff]/30 flex items-center justify-center mx-auto text-[#00f5ff]">
                 <Layers className="w-8 h-8 animate-pulse" />
@@ -1331,10 +1294,10 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
                 return (
                   <div
                     key={group.id}
-                    className={`p-5 rounded-2xl transition-all duration-500 ease-in-out ${
+                    className={`p-5 rounded-2xl transition-all duration-300 ${
                       group.isLatest
-                        ? 'bg-black/80 border-l-4 border-[#00f5ff] text-white shadow-2xl backdrop-blur-md'
-                        : 'opacity-60 text-gray-300'
+                        ? 'bg-black/90 border-l-4 border-[#00f5ff] text-white shadow-2xl backdrop-blur-md'
+                        : 'bg-[#0d121c]/80 border-l-4 border-transparent text-gray-200'
                     }`}
                   >
                     <p 
@@ -1346,18 +1309,7 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
                   </div>
                 );
               })}
-
-              {/* In-Flight Live Interim Speech Words (Only if viewing spoken language) */}
-              {liveInterimText && (selectedLang === spokenLang || selectedLang === 'original') && (
-                <div className="p-5 rounded-2xl border-l-4 border-[#00f5ff] bg-[#00f5ff]/15 animate-fade-in shadow-xl backdrop-blur-sm">
-                  <p className={`${getFontSizeClass()} text-[#00f5ff] font-bold tracking-wide leading-relaxed`}>
-                    "{liveInterimText}"
-                    <span className="inline-block w-2.5 h-6 bg-[#00f5ff] ml-2 animate-pulse align-middle rounded-sm" />
-                  </p>
-                </div>
-              )}
             </div>
-
           )}
         </div>
       )}
