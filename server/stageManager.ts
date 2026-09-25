@@ -369,10 +369,6 @@ export class StageManager {
         talkTitle: 'Transmisión de Conferencia'
       });
     }
-
-    this.stopDemo(stageId);
-    stage.isLive = true;
-    stage.currentAudioSource = 'mic';
     const startTime = Date.now();
 
     const chunk = await geminiService.processAudioChunk(audioBuffer, mimeType, stageId);
@@ -381,6 +377,9 @@ export class StageManager {
 
     // Only add and broadcast if chunk has valid transcribed speech
     if (chunk && chunk.originalText && chunk.originalText.trim().length > 0 && !chunk.originalText.startsWith('[')) {
+      this.stopDemo(stageId);
+      stage.isLive = true;
+      stage.currentAudioSource = 'mic';
       stage.detectedLang = chunk.sourceLang as 'es' | 'en' | 'pt';
       this.addChunkToStage(stageId, chunk);
     } else {
@@ -410,10 +409,7 @@ export class StageManager {
       });
     }
 
-    this.stopDemo(stageId);
-    stage.isLive = true;
-    stage.currentAudioSource = 'mic';
-
+    // Only switch away from demo if active live speech session is already established
     let session = this.liveSessions.get(stageId);
     const apiKey = geminiService.getApiKey();
 
@@ -423,6 +419,9 @@ export class StageManager {
         stageId,
         mode: 'SMART',
         onInterim: (text: string) => {
+          this.stopDemo(stageId);
+          stage!.isLive = true;
+          stage!.currentAudioSource = 'mic';
           this.broadcastToStage(stageId, {
             type: 'interim',
             stageId,
@@ -430,6 +429,9 @@ export class StageManager {
           });
         },
         onFinal: (chunk: SubtitleChunk) => {
+          this.stopDemo(stageId);
+          stage!.isLive = true;
+          stage!.currentAudioSource = 'mic';
           this.addChunkToStage(stageId, chunk);
         },
         onError: (err) => {

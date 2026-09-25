@@ -102,6 +102,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [youtubeVideoId, setYoutubeVideoId] = useState<string>('IdOO3R_1F08'); // Default: Pelado Nerd K8s
   const [customYoutubeUrl, setCustomYoutubeUrl] = useState<string>('');
   const [activeSyncDemoKey, setActiveSyncDemoKey] = useState<string>('talk-yt-peladonerd');
+  const [isDemoSyncRunning, setIsDemoSyncRunning] = useState<boolean>(false);
 
   const extractYoutubeId = (urlOrId: string): string | null => {
     const clean = urlOrId.trim();
@@ -839,14 +840,23 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
   const handleTriggerDemo = async (stageId: string, demoKey: string) => {
     try {
+      if (isRecording) {
+        stopMicStreaming();
+      }
+      setIsDemoSyncRunning(true);
       await triggerDemo(stageId, demoKey);
+      if (wsClient) {
+        wsClient.setStage(stageId);
+      }
     } catch (err: any) {
       setAudioError(`Error al activar demo: ${err.message}`);
+      setIsDemoSyncRunning(false);
     }
   };
 
   const handleStopStage = async (stageId: string) => {
     try {
+      setIsDemoSyncRunning(false);
       await stopStage(stageId);
       if (isRecording && selectedStageId === stageId) {
         stopMicStreaming();
@@ -1460,11 +1470,15 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleTriggerDemo(currentStage.id, activeSyncDemoKey)}
-                    className="hardware-btn-active px-3 py-1.5 bg-[#141b29] text-[#00f5ff] text-xs font-mono font-bold rounded-lg flex items-center gap-1.5 transition-all hover:shadow-[0_0_10px_rgba(0,245,255,0.4)]"
+                    className={`px-3 py-1.5 text-xs font-mono font-bold rounded-lg flex items-center gap-1.5 transition-all ${
+                      isDemoSyncRunning
+                        ? 'bg-[#00ff66]/20 border border-[#00ff66] text-[#00ff66] shadow-[0_0_12px_rgba(0,255,102,0.4)] animate-pulse'
+                        : 'hardware-btn-active bg-[#141b29] text-[#00f5ff] hover:shadow-[0_0_10px_rgba(0,245,255,0.4)]'
+                    }`}
                     title="Inicia el flujo de subtítulos y traducción simultánea para esta charla en la sala seleccionada"
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-[#00f5ff]" />
-                    <span>SINCRONIZAR_SUBTÍTULOS_SALA</span>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>{isDemoSyncRunning ? 'SINCRONIZANDO SUBTÍTULOS EN VIVO...' : 'SINCRONIZAR_SUBTÍTULOS_SALA'}</span>
                   </button>
 
                   <button
@@ -1487,6 +1501,15 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   <span>Abrir en YouTube ↗</span>
                 </a>
               </div>
+
+              {isDemoSyncRunning && (
+                <div className="flex items-center gap-2 bg-[#00ff66]/10 border border-[#00ff66]/30 px-3 py-2 rounded-lg text-xs font-mono text-[#00ff66] animate-pulse">
+                  <span className="w-2 h-2 rounded-full bg-[#00ff66] animate-ping shrink-0" />
+                  <span>
+                    Subtítulos emitiéndose en vivo en <strong>{currentStage.name}</strong> (Español, Inglés y Portugués). Mirá los subtítulos actualizándose en tiempo real abajo en el <strong>Rack 04</strong> y en <strong>TRANSMISIÓN & TV / OBS</strong>.
+                  </span>
+                </div>
+              )}
 
               <div className="text-[10px] font-mono text-[#64748b] bg-[#05070a] p-2.5 rounded-lg border border-[#141724] leading-relaxed">
                 💡 <span className="text-gray-300">Modo de Demostración & Jurado:</span> Podés reproducir el video directamente aquí con audio, o abrirlo en otra pestaña y usar <strong className="text-cyan-400">"Capturar Pestaña (PiP)"</strong> en la Pantalla de Sala para transcribir el audio en tiempo real con Gemini Live.
