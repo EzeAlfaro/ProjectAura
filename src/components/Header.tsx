@@ -11,6 +11,7 @@ interface HeaderProps {
   onOpenApiKeyModal: () => void;
   onOpenQrModal: () => void;
   onOpenVMixModal?: () => void;
+  onOpenLogModal?: () => void;
   isConnected: boolean;
   activeStageName?: string;
 }
@@ -25,6 +26,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenApiKeyModal,
   onOpenQrModal,
   onOpenVMixModal,
+  onOpenLogModal,
   isConnected,
   activeStageName,
 }) => {
@@ -169,6 +171,18 @@ export const Header: React.FC<HeaderProps> = ({
             <QrCode className="w-3.5 h-3.5 text-[#00f5ff]" />
             <span className="hidden sm:inline">QR_SALA</span>
           </button>
+
+          {/* Real-time Telemetry & Log Viewer */}
+          {onOpenLogModal && (
+            <button
+              onClick={onOpenLogModal}
+              className="hardware-btn flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded text-xs font-mono font-bold text-gray-300 hover:text-[#00f5ff] border border-[#222a3d] hover:border-[#00f5ff]/40 bg-[#10141e] transition-all"
+              title="Ver telemetría y registro de errores en vivo (Logs)"
+            >
+              <Terminal className="w-3.5 h-3.5 text-[#00f5ff]" />
+              <span className="hidden sm:inline">LOGS</span>
+            </button>
+          )}
 
           {/* Hybrid AI Engine Status Switch (Gemini Cloud + Gemma Edge + Standalone) */}
           <button

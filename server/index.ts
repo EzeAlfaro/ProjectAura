@@ -11,6 +11,7 @@ import { stageManager } from './stageManager.js';
 import { geminiService } from './geminiService.js';
 import { TECH_GLOSSARY, registerCustomTerm } from './glossary.js';
 import { SupportedLanguage } from './types.js';
+import { logger } from './logger.js';
 
 dotenv.config();
 
@@ -21,6 +22,16 @@ const distPath = path.resolve(__dirname, '../dist');
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
+
+// Forward system warnings and errors in real-time to connected admin/telemetry clients
+logger.onLog((entry) => {
+  if (entry.level === 'warn' || entry.level === 'error') {
+    stageManager.broadcast({
+      type: 'system_log',
+      entry
+    });
+  }
+});
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -232,12 +243,34 @@ app.post('/api/stages/:id/audio', upload.single('audio'), async (req: Request, r
   }
 
   try {
-    await stageManager.pushAudioChunk(id, req.file.buffer, req.file.mimetype || 'audio/webm');
-    res.json({ success: true });
+    const chunk = await stageManager.pushAudioChunk(id, req.file.buffer, req.file.mimetype || 'audio/webm');
+    const lastErr = geminiService.getLastError();
+    if ((!chunk || !chunk.originalText) && lastErr && Date.now() - lastErr.timestamp < 10000) {
+      return res.status(lastErr.code === 'API_KEY_SERVICE_BLOCKED' ? 403 : 400).json({
+        success: false,
+        error: lastErr.message,
+        code: lastErr.code
+      });
+    }
+    res.json({ success: true, text: chunk?.originalText || '' });
   } catch (error: any) {
-    console.error('Audio processing error:', error);
+    logger.error('audio', `Audio processing error for stage ${id}`, { error: error?.message });
     res.status(500).json({ error: error.message || 'Internal server error' });
   }
+});
+
+// Telemetry & Diagnostic Logs
+app.get('/api/logs', (req: Request, res: Response) => {
+  const level = req.query.level as any;
+  const subsystem = req.query.subsystem as any;
+  const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
+  const logs = logger.getRecent({ level, subsystem, limit });
+  res.json({ logs });
+});
+
+app.delete('/api/logs', (_req: Request, res: Response) => {
+  logger.clear();
+  res.json({ success: true });
 });
 
 // Direct Live Text Transcript (from Browser Speech Recognition or real-time mic)

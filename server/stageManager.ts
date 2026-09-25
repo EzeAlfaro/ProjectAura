@@ -4,6 +4,7 @@ import { geminiService } from './geminiService.js';
 import { SAMPLE_TALKS, SampleTalk } from './sampleAudios.js';
 import { extractTechTerms } from './glossary.js';
 import { LiveStageTranscriptionSession } from './geminiLiveTranscriber.js';
+import { logger } from './logger.js';
 
 export class StageManager {
   private stages: Map<string, Stage> = new Map();
@@ -262,7 +263,19 @@ export class StageManager {
     if (chunk && chunk.originalText && chunk.originalText.trim().length > 0 && !chunk.originalText.startsWith('[')) {
       stage.detectedLang = chunk.sourceLang as 'es' | 'en' | 'pt';
       this.addChunkToStage(stageId, chunk);
+    } else {
+      const lastErr = geminiService.getLastError();
+      if (lastErr && Date.now() - lastErr.timestamp < 10000) {
+        this.broadcast({
+          type: 'system_alert',
+          stageId,
+          level: 'error',
+          code: lastErr.code,
+          message: lastErr.message
+        });
+      }
     }
+    return chunk;
   }
 
   public async pushPcmChunk(stageId: string, pcmChunk: Buffer) {
@@ -602,6 +615,17 @@ export class StageManager {
     for (const { ws } of subs) {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(msg);
+      }
+    }
+  }
+
+  public broadcast(payload: any) {
+    const msg = JSON.stringify(payload);
+    for (const set of this.subscribers.values()) {
+      for (const { ws } of set) {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(msg);
+        }
       }
     }
   }

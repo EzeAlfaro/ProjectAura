@@ -2,6 +2,7 @@ import { GoogleGenAI, Type, Schema } from '@google/genai';
 import { SubtitleChunk, TechTerm, EngineMode, KeyPoolItem } from './types.js';
 import { extractTechTerms, TECH_GLOSSARY, normalizePhoneticTechTerms } from './glossary.js';
 import { translateConferenceText, translateConferenceTextLocally } from './localTranslator.js';
+import { logger } from './logger.js';
 
 function maskKey(key: string): string {
   if (!key) return '';
@@ -310,28 +311,56 @@ export class GeminiService {
     }
   }
 
-  public handleKeyError(err: any) {
+  private lastError: { code: string; message: string; timestamp: number } | null = null;
+
+  public getLastError(): { code: string; message: string; timestamp: number } | null {
+    return this.lastError;
+  }
+
+  public handleKeyError(err: any): { code: string; message: string } {
     const activeKey = this.keyPool.find(k => k.status === 'active');
     const msg = err?.message || String(err);
     const isRateLimit = err?.status === 429 || msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED');
     const isBlocked = err?.status === 403 || msg.includes('API_KEY_SERVICE_BLOCKED') || msg.includes('PERMISSION_DENIED');
+    const isNotFound = err?.status === 404 || msg.includes('404') || msg.includes('not found');
+
+    let code = 'GEMINI_ERROR';
+    let userMessage = msg;
+
+    if (isBlocked) {
+      code = 'API_KEY_SERVICE_BLOCKED';
+      userMessage = 'Error 403: API_KEY_SERVICE_BLOCKED. La API Key no tiene permisos para Generative Language API en Google Cloud. Genera una API Key sin restricciones en aistudio.google.com o habilita la API en console.cloud.google.com.';
+      logger.error('gemini', userMessage, { key: activeKey?.maskedKey, rawError: msg });
+    } else if (isRateLimit) {
+      code = '429_RATE_LIMIT';
+      userMessage = 'Error 429: Cuota de Gemini excedida (Rate Limit). Rotando a la siguiente API Key del pool...';
+      logger.warn('gemini', userMessage, { key: activeKey?.maskedKey });
+    } else if (isNotFound) {
+      code = 'MODEL_NOT_FOUND';
+      userMessage = `Error 404: El modelo solicitado no está habilitado en este endpoint.`;
+      logger.warn('gemini', userMessage, { key: activeKey?.maskedKey });
+    } else {
+      logger.error('gemini', `Error en llamada a Gemini API: ${msg}`, { key: activeKey?.maskedKey }, err);
+    }
+
+    this.lastError = { code, message: userMessage, timestamp: Date.now() };
 
     if (activeKey) {
       activeKey.requestsFailed++;
-      activeKey.lastError = isRateLimit ? '429 Quota Exceeded' : (isBlocked ? '403 Blocked' : 'Error');
+      activeKey.lastError = userMessage;
       if (isRateLimit) {
         activeKey.status = 'rate_limited';
         activeKey.cooldownUntil = Date.now() + 60000;
-        console.warn(`[GeminiService] Key ${activeKey.maskedKey} hit rate limit (429). Rotating to next key in pool...`);
         this.rotateKey();
       } else if (isBlocked) {
         activeKey.status = 'blocked';
-        console.warn(`[GeminiService] Key ${activeKey.maskedKey} is blocked (403). Rotating to next key in pool...`);
         this.rotateKey();
       }
     } else {
       if (isBlocked) this.isKeyBlocked = true;
     }
+
+    return { code, message: userMessage };
   }
 
   public isConfigured(): boolean {
@@ -557,8 +586,18 @@ export class GeminiService {
     const timestamp = Date.now();
     const modelName = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 
-    if (!this.client || !this.apiKey || this.forcedEngine === 'native-offline') {
-      console.warn(`[GeminiService] Audio chunk received (${(audioBuffer.length / 1024).toFixed(1)} KB) but Gemini API Key is not configured or engine is forced offline.`);
+    if (!this.client || !this.apiKey || this.forcedEngine === 'native-offline' || this.isKeyBlocked) {
+      const reason = this.isKeyBlocked 
+        ? 'Gemini API Key bloqueada (403 API_KEY_SERVICE_BLOCKED: Habilita Generative Language API en GCP o usa una clave de aistudio.google.com)' 
+        : !this.apiKey 
+        ? 'Gemini API Key no configurada para procesar audio en la nube' 
+        : 'Motor forzado en modo local/offline';
+      logger.warn('audio', `Audio digital recibido (${(audioBuffer.length / 1024).toFixed(1)} KB) en sala [${stageId}]: ${reason}`);
+      this.lastError = { 
+        code: this.isKeyBlocked ? 'API_KEY_SERVICE_BLOCKED' : 'NOT_CONFIGURED', 
+        message: reason, 
+        timestamp: Date.now() 
+      };
       return {
         id: chunkId,
         stageId,
@@ -581,32 +620,63 @@ export class GeminiService {
       const prompt = `Transcribe and translate this technical conference audio chunk. ${glossaryContext}`;
 
       const cleanMimeType = (mimeType || 'audio/webm').split(';')[0].trim();
+      const candidateModels = [
+        modelName,
+        'gemini-3.5-flash',
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
+        'gemini-1.5-flash'
+      ].filter((m, i, arr) => arr.indexOf(m) === i);
 
-      const response = await this.client.models.generateContent({
-        model: modelName,
-        contents: [
-          {
-            parts: [
+      let response: any = null;
+      let lastError: any = null;
+
+      for (const candidate of candidateModels) {
+        try {
+          response = await this.client.models.generateContent({
+            model: candidate,
+            contents: [
               {
-                inlineData: {
-                  mimeType: cleanMimeType,
-                  data: base64Audio
-                }
-              },
-              {
-                text: prompt
+                parts: [
+                  {
+                    inlineData: {
+                      mimeType: cleanMimeType,
+                      data: base64Audio
+                    }
+                  },
+                  {
+                    text: prompt
+                  }
+                ]
               }
-            ]
+            ],
+            config: {
+              systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
+              responseMimeType: 'application/json',
+              responseSchema: SUBTITLE_RESPONSE_SCHEMA,
+              temperature: 0.1
+            }
+          });
+
+          if (response) {
+            if (candidate !== modelName) {
+              logger.info('gemini', `Model fallback: processed audio chunk with ${candidate} instead of ${modelName}`);
+            }
+            break;
           }
-        ],
-        config: {
-          systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
-          responseMimeType: 'application/json',
-          responseSchema: SUBTITLE_RESPONSE_SCHEMA,
-          temperature: 0.1,
-          thinkingConfig: { thinkingBudget: 0 } as any
+        } catch (err: any) {
+          lastError = err;
+          const msg = err?.message || String(err);
+          // If 403 (blocked key) or 429 (quota), switching models on the same key won't help
+          if (err?.status === 403 || err?.status === 429 || msg.includes('API_KEY_SERVICE_BLOCKED') || msg.includes('PERMISSION_DENIED')) {
+            break;
+          }
         }
-      });
+      }
+
+      if (!response && lastError) {
+        throw lastError;
+      }
 
       this.recordKeySuccess();
       const responseText = response.text?.trim() || '{}';
@@ -621,6 +691,8 @@ export class GeminiService {
           combinedTerms.push(localTerm);
         }
       }
+
+      logger.info('audio', `Chunk processed (${(audioBuffer.length / 1024).toFixed(1)} KB) -> "${(parsed.originalText || '').substring(0, 40)}..." [stage: ${stageId}]`);
 
       return {
         id: chunkId,
@@ -637,8 +709,8 @@ export class GeminiService {
       };
 
     } catch (error: any) {
-      this.handleKeyError(error);
-      console.error('[GeminiService] Error processing audio with Gemini API:', error?.message || error);
+      const diag = this.handleKeyError(error);
+      logger.error('gemini', `Error en transcripción de audio (${(audioBuffer.length / 1024).toFixed(1)} KB): ${diag.message}`, { stageId, error: error?.message });
       return {
         id: chunkId,
         stageId,

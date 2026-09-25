@@ -7,6 +7,7 @@ import { StageKioskView } from './components/StageKioskView.js';
 import { ApiKeyModal } from './components/ApiKeyModal.js';
 import { QRCodeModal } from './components/QRCodeModal.js';
 import { VMixModal } from './components/VMixModal.js';
+import { LogViewerModal } from './components/LogViewerModal.js';
 import { WSClient } from './services/websocket.js';
 import { fetchStages, fetchStatus, triggerDeepIntel } from './services/api.js';
 import { Stage, SubtitleChunk, StageTakeaway, StageQA, SupportedLanguage } from './types.js';
@@ -33,6 +34,7 @@ export function App() {
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState<boolean>(false);
   const [isVMixModalOpen, setIsVMixModalOpen] = useState<boolean>(false);
+  const [isLogModalOpen, setIsLogModalOpen] = useState<boolean>(false);
   const [isConnected, setIsConnected] = useState<boolean>(false);
 
   const wsClientRef = useRef<WSClient | null>(null);
@@ -205,6 +207,7 @@ export function App() {
           geminiConfigured={geminiConfigured}
           activeEngine={activeEngine}
           onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
+          onOpenLogModal={() => setIsLogModalOpen(true)}
         />
 
         {/* API Key & Engine Manager Modal for Kiosk Operator */}
@@ -226,6 +229,12 @@ export function App() {
             setActiveEngine(newActive as any);
           }}
         />
+
+        {/* Telemetry Log Viewer in Kiosk Mode */}
+        <LogViewerModal
+          isOpen={isLogModalOpen}
+          onClose={() => setIsLogModalOpen(false)}
+        />
       </>
     );
   }
@@ -243,6 +252,7 @@ export function App() {
         onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
         onOpenQrModal={() => setIsQrModalOpen(true)}
         onOpenVMixModal={() => setIsVMixModalOpen(true)}
+        onOpenLogModal={() => setIsLogModalOpen(true)}
         isConnected={isConnected}
         activeStageName={currentStage?.name}
       />
@@ -342,6 +352,12 @@ export function App() {
         onClose={() => setIsVMixModalOpen(false)}
         stages={stages}
         selectedStageId={selectedStageId}
+      />
+
+      {/* Real-time Telemetry & Log Viewer Modal */}
+      <LogViewerModal
+        isOpen={isLogModalOpen}
+        onClose={() => setIsLogModalOpen(false)}
       />
     </div>
   );

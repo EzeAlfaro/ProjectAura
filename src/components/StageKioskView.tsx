@@ -26,7 +26,8 @@ import {
   Sliders,
   Download,
   FileText,
-  Key
+  Key,
+  Terminal
 } from 'lucide-react';
 import { HardwareVuMeter, HardwareOscilloscope } from './HardwareControls.js';
 import { WSClient } from '../services/websocket.js';
@@ -48,6 +49,7 @@ interface StageKioskViewProps {
   geminiConfigured?: boolean;
   activeEngine?: 'gemini-cloud' | 'gemma-local' | 'native-offline';
   onOpenApiKeyModal?: () => void;
+  onOpenLogModal?: () => void;
 }
 
 export const StageKioskView: React.FC<StageKioskViewProps> = ({
@@ -63,6 +65,7 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
   geminiConfigured = false,
   activeEngine = 'gemini-cloud',
   onOpenApiKeyModal,
+  onOpenLogModal,
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [spokenLang, setSpokenLang] = useState<'es' | 'en'>(() => {
@@ -140,6 +143,17 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
       }
     };
   }, []);
+
+  // Listen for backend system alerts (e.g. Gemini 403 API_KEY_SERVICE_BLOCKED)
+  useEffect(() => {
+    if (!wsClient) return;
+    const unsub = wsClient.onMessage((msg: any) => {
+      if (msg.type === 'system_alert') {
+        setAudioError(msg.message || 'Alerta del motor de transcripción');
+      }
+    });
+    return unsub;
+  }, [wsClient]);
 
   // Save display mode
   useEffect(() => {
@@ -508,9 +522,11 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
                   setLiveInterimText('Procesando audio digital con Gemini 3.5...');
                   await uploadAudioChunk(stage?.id || 'stage-1', completeBlob);
                   setLiveInterimText('');
+                  setAudioError(null);
                 } catch (e: any) {
                   console.warn('[TabAudio] Error al enviar chunk a Gemini:', e);
                   setLiveInterimText('');
+                  setAudioError(e.message || 'Error al procesar audio de la pestaña');
                 }
               }
 
@@ -969,6 +985,18 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
                   : 'NATIVO 0MS'}
               </span>
               <span className={`w-2 h-2 rounded-full ${geminiConfigured ? 'bg-[#00ff66]' : 'bg-[#ffba00]'}`} />
+            </button>
+          )}
+
+          {/* Real-time Telemetry & Log Viewer */}
+          {onOpenLogModal && (
+            <button
+              onClick={onOpenLogModal}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded font-mono text-[11px] font-bold border border-[#222a3d] hover:border-[#00f5ff]/40 bg-[#10141e] text-gray-300 hover:text-[#00f5ff] transition-all"
+              title="Ver telemetría y registro de errores en vivo (Logs)"
+            >
+              <Terminal className="w-3.5 h-3.5 text-[#00f5ff]" />
+              <span className="hidden sm:inline">LOGS</span>
             </button>
           )}
 

@@ -107,6 +107,23 @@ export async function uploadAudioChunk(stageId: string, audioBlob: Blob): Promis
     method: 'POST',
     body: formData,
   });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || `HTTP ${res.status}: Error al procesar audio en servidor`);
+  }
+  return res.json();
+}
+
+export async function fetchLogsApi(level?: string, limit?: number): Promise<{ logs: any[] }> {
+  const params = new URLSearchParams();
+  if (level) params.append('level', level);
+  if (limit) params.append('limit', String(limit));
+  const res = await fetch(`${API_BASE}/logs?${params.toString()}`);
+  return res.json();
+}
+
+export async function clearLogsApi(): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE}/logs`, { method: 'DELETE' });
   return res.json();
 }
 
