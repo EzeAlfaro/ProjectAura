@@ -309,7 +309,9 @@ export class GeminiService {
     if (activeKey) {
       activeKey.requestsSuccess++;
       activeKey.lastUsedAt = Date.now();
+      activeKey.lastError = undefined;
     }
+    this.lastError = null;
   }
 
   private lastError: { code: string; message: string; timestamp: number } | null = null;
@@ -372,7 +374,7 @@ export class GeminiService {
     return this.apiKey;
   }
 
-  public async testModelConnection(apiKey?: string, modelName: string = 'gemini-2.5-flash'): Promise<{ success: boolean; model: string; message: string; latencyMs: number }> {
+  public async testModelConnection(apiKey?: string, modelName: string = config.ai.flashModel || 'gemini-3.5-flash'): Promise<{ success: boolean; model: string; message: string; latencyMs: number }> {
     const keyToUse = apiKey?.trim() || this.apiKey;
     if (!keyToUse) {
       return { success: false, model: modelName, message: 'No hay API Key configurada para probar. Ingresá una clave.', latencyMs: 0 };
@@ -485,7 +487,7 @@ export class GeminiService {
     const timestamp = Date.now();
     const rawClean = spokenText.trim();
     const cleanText = normalizePhoneticTechTerms(rawClean);
-    const modelName = process.env.GEMINI_MODEL || config.ai.flashModel || 'gemini-2.5-flash';
+    const modelName = process.env.GEMINI_MODEL || config.ai.flashModel || 'gemini-3.5-flash';
 
     // 1. Detect technical terms locally first on the normalized text
     const detectedLocalTerms = extractTechTerms(cleanText);
@@ -621,7 +623,7 @@ export class GeminiService {
   ): Promise<SubtitleChunk> {
     const chunkId = `chunk-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const timestamp = Date.now();
-    const modelName = process.env.GEMINI_MODEL || config.ai.flashModel || 'gemini-2.5-flash';
+    const modelName = process.env.GEMINI_MODEL || config.ai.flashModel || 'gemini-3.5-flash';
 
     if (!this.client || !this.apiKey || this.forcedEngine === 'native-offline' || this.isKeyBlocked) {
       const reason = this.isKeyBlocked 
@@ -867,7 +869,7 @@ export class GeminiService {
       console.warn(`[GeminiService] Gemini Pro deep insights failed with ${proModel}, trying flash fallback:`, err);
       try {
         const fallbackResponse = await this.client!.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: config.ai.flashModel || 'gemini-3.5-flash',
           contents: [{ parts: [{ text: `Summarize technical talk: ${stageTitle}. Speaker: ${speaker}. Transcript: ${transcriptText}` }] }],
           config: {
             systemInstruction: { parts: [{ text: DEEP_PRO_SYSTEM_INSTRUCTION }] },

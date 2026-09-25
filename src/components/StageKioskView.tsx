@@ -217,6 +217,42 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
     return unsub;
   }, [wsClient]);
 
+  // Fullscreen state and change listener
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const handleFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  };
+
+  // Auto-dismiss audioError after 8 seconds
+  useEffect(() => {
+    if (audioError) {
+      const timer = setTimeout(() => {
+        setAudioError(null);
+      }, 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [audioError]);
+
+  // Clear audioError when new valid chunks arrive
+  useEffect(() => {
+    if (chunks.length > 0 && audioError) {
+      const last = chunks[chunks.length - 1];
+      if (last.esText || last.originalText) {
+        setAudioError(null);
+      }
+    }
+  }, [chunks.length]);
+
   // Save display mode
   useEffect(() => {
     localStorage.setItem('nerdsub_kiosk_display_mode', displayMode);
@@ -816,192 +852,93 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
   return (
     <div className="fixed inset-0 w-screen h-screen bg-[#06080d] text-white flex flex-col overflow-hidden select-none font-sans">
       
-      {/* Top Professional Telemetry & Control Bar */}
-      <div className="bg-[#0b0e14] border-b-2 border-[#1c2333] px-3 sm:px-4 py-2 flex items-center justify-between z-30 shadow-md">
+      {/* Top Broadcast Telemetry & Control Bar */}
+      <div className="bg-[#0b0e14] border-b-2 border-[#1c2333] px-3 sm:px-5 py-2 flex items-center justify-between z-30 shadow-lg gap-2">
         
-        {/* Left: Stage Ident & Quick Hardware Input Selector */}
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+        {/* Left: Sala & Speaker Info */}
+        <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
           <div className="flex items-center gap-2 shrink-0">
-            <span className={`w-2.5 h-2.5 rounded-full ${isRecording ? 'bg-[#00ff66] shadow-[0_0_10px_#00ff66] animate-pulse' : 'bg-[#ff1744]'}`} />
-            <span className="font-mono text-xs sm:text-sm font-black text-white uppercase tracking-wider hidden sm:inline">
-              NODO SALA //
-            </span>
-            <span className="font-mono text-xs sm:text-sm font-bold text-[#00f5ff] uppercase truncate max-w-[140px] sm:max-w-none">
-              {stage?.name || 'ESCENARIO'}
+            <span className={`w-2.5 h-2.5 rounded-full ${isRecording ? 'bg-[#00ff66] shadow-[0_0_10px_#00ff66] animate-pulse' : 'bg-[#ffb800]'}`} />
+            <span className={`text-[10px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${isRecording ? 'bg-emerald-950/60 border-emerald-700/60 text-emerald-400' : 'bg-amber-950/60 border-amber-700/60 text-amber-400'}`}>
+              {isRecording ? 'EN VIVO' : 'STANDBY'}
             </span>
           </div>
 
-          {/* Quick Hardware Audio Source Selector (USB / Jack / Speaker Mic) */}
-          <div className="flex items-center gap-1.5 pl-2 border-l border-[#1c2333]">
-            <select
-              value={selectedDeviceId}
-              onChange={(e) => handleDeviceSwitch(e.target.value)}
-              className="px-2 py-1 bg-[#10141e] border border-[#222a3d] rounded text-[11px] font-mono text-gray-200 focus:outline-none focus:border-[#00f5ff] max-w-[160px] sm:max-w-xs truncate"
-              title="Cambiar dispositivo de entrada de audio (Jack 3.5mm, Placa USB, Micrófono de orador)"
-            >
-              {audioDevices.length === 0 ? (
-                <option value="">Entrada de Audio Predeterminada</option>
-              ) : (
-                audioDevices.map((d, index) => (
-                  <option key={d.deviceId || index} value={d.deviceId}>
-                    {getDeviceBadge(d.label)} • {d.label || `Entrada ${index + 1}`}
-                  </option>
-                ))
-              )}
-            </select>
-
-            <button
-              onClick={refreshAudioDevices}
-              className="p-1 rounded bg-[#10141e] hover:bg-[#1a2030] border border-[#222a3d] text-gray-400 hover:text-[#00f5ff] transition-all"
-              title="Escanear nuevos dispositivos USB o cables conectados"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </button>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-mono text-xs sm:text-sm font-black text-[#00f5ff] uppercase tracking-wide truncate">
+              {stage?.name || 'ESCENARIO PRINCIPAL'}
+            </span>
+            {scheduleInfo.currentTalk && (
+              <button
+                onClick={() => onOpenScheduleModal?.()}
+                className="hidden xl:flex items-center gap-1.5 text-xs text-gray-300 hover:text-white bg-[#10141e] px-2 py-0.5 rounded border border-[#1e2535] hover:border-cyan-500/40 truncate max-w-sm transition-all"
+                title="Clic para ver la agenda oficial de Nerdearla"
+              >
+                <span className="text-[#ffb800] shrink-0">🎙️</span>
+                <span className="truncate">{scheduleInfo.currentTalk.speaker} — {scheduleInfo.currentTalk.title}</span>
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Center: Live Meter & Display Mode Switcher */}
-        <div className="hidden md:flex items-center gap-3">
-          
-          {/* Audio VU meter */}
-          <div className="flex items-center gap-2 bg-[#06080d] px-2.5 py-1 rounded border border-[#1b2230] font-mono text-xs">
-            <span className="text-[10px] text-gray-400">VU:</span>
-            <div className="w-20 bg-[#121622] h-2 rounded overflow-hidden">
-              <div 
-                className={`h-full transition-all duration-75 ${isClipping ? 'bg-[#ff1744]' : 'bg-[#00ff66]'}`}
-                style={{ width: `${Math.min(100, Math.max(0, ((currentDbfs + 60) / 60) * 100))}%` }}
-              />
-            </div>
-            <span className={`text-[9px] ${isClipping ? 'text-[#ff1744] font-bold' : 'text-gray-400'}`}>
-              {currentDbfs} dB
-            </span>
-          </div>
-
-          {/* Mic Boost / Gain Control */}
-          <div className="flex items-center bg-[#07090e] p-0.5 rounded border border-[#1b2230] text-[10px] font-mono font-bold" title="Amplificación Digital de Micrófono (Gain Boost)">
-            <span className="text-[9px] text-[#ffb800] px-1.5 hidden xl:inline font-bold">BOOST:</span>
-            {[
-              { label: '0dB', val: 0 },
-              { label: '+3.5dB', val: 3.5 },
-              { label: '+6dB', val: 6 },
-              { label: '+12dB', val: 12 }
-            ].map((b) => (
-              <button
-                key={b.val}
-                onClick={() => handleGainChange(b.val)}
-                className={`px-1.5 py-0.5 rounded transition-all text-[9px] ${
-                  micGainDb === b.val
-                    ? 'bg-[#ffb800] text-black font-black shadow-[0_0_8px_rgba(255,184,0,0.4)]'
-                    : 'text-[#64748b] hover:text-white'
-                }`}
-                title={`Ganancia digital: ${b.val > 0 ? '+' : ''}${b.val} dB`}
-              >
-                {b.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Display Mode Switcher: Clásico vs Teleprómpter */}
-          <div className="flex items-center bg-[#07090e] p-0.5 rounded border border-[#1b2230] text-[10px] font-mono font-bold">
+        {/* Center: Stage Presentation Mode & Subtitle Language */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Mode Switcher: Clásico vs Prompter */}
+          <div className="flex items-center bg-[#07090e] p-0.5 rounded-lg border border-[#1b2230] text-[11px] font-mono font-bold">
             <button
               onClick={() => setDisplayMode('classic')}
-              className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
+              className={`px-2.5 py-1 rounded transition-all flex items-center gap-1.5 ${
                 displayMode === 'classic'
                   ? 'bg-[#141b29] text-[#00f5ff] border border-[#00f5ff]/40 shadow-sm'
                   : 'text-[#64748b] hover:text-white'
               }`}
-              title="Modo Subtítulo Clásico: Muestra solo 1 o 2 líneas grandes y limpias tipo cine/escenario"
+              title="Modo Clásico: 1 o 2 líneas grandes tipo cine"
             >
-              <Tv className="w-3 h-3" />
-              <span>SUBTÍTULO CLÁSICO</span>
+              <Tv className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">CLÁSICO</span>
             </button>
-
             <button
               onClick={() => setDisplayMode('prompter')}
-              className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
+              className={`px-2.5 py-1 rounded transition-all flex items-center gap-1.5 ${
                 displayMode === 'prompter'
                   ? 'bg-[#141b29] text-[#00ff66] border border-[#00ff66]/40 shadow-sm'
                   : 'text-[#64748b] hover:text-white'
               }`}
-              title="Modo Teleprómpter: Muestra el historial corrido de los últimos subtítulos emitidos"
+              title="Modo Teleprómpter: Historial continuo en vivo"
             >
-              <Layers className="w-3 h-3" />
-              <span>TELEPRÓMPTER</span>
+              <Layers className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">PROMPTER</span>
             </button>
           </div>
 
-          {/* Spoken Language Selector (Orador ES / EN) */}
-          <div className="flex items-center bg-[#07090e] p-0.5 rounded border border-[#1b2230] text-[10px] font-mono font-bold" title="Idioma en que habla el orador al micrófono">
-            <span className="text-[9px] text-[#64748b] px-1.5 hidden xl:inline">ORADOR:</span>
-            <button
-              onClick={() => handleSpokenLangChange('es')}
-              className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
-                spokenLang === 'es'
-                  ? 'bg-[#141b29] text-[#00f5ff] border border-[#00f5ff]/40 shadow-sm'
-                  : 'text-[#64748b] hover:text-white'
-              }`}
-              title="Orador habla en Español (transcripción es-AR)"
-            >
-              <span>🇪🇸 ES</span>
-            </button>
-            <button
-              onClick={() => handleSpokenLangChange('en')}
-              className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
-                spokenLang === 'en'
-                  ? 'bg-[#141b29] text-[#00ff66] border border-[#00ff66]/40 shadow-sm'
-                  : 'text-[#64748b] hover:text-white'
-              }`}
-              title="Speaker speaks in English (transcription en-US)"
-            >
-              <span>🇬🇧 EN</span>
-            </button>
+          {/* Subtitle Language Switcher: ES / EN / PT */}
+          <div className="flex items-center bg-[#07090e] p-0.5 rounded-lg border border-[#1b2230] text-[11px] font-mono font-bold">
+            {[
+              { id: 'es', flag: '🇦🇷', label: 'ES' },
+              { id: 'en', flag: '🇬🇧', label: 'EN' },
+              { id: 'pt', flag: '🇧🇷', label: 'PT' }
+            ].map((lang) => (
+              <button
+                key={lang.id}
+                onClick={() => onSelectLang(lang.id as SupportedLanguage)}
+                className={`px-2.5 py-1 rounded transition-all flex items-center gap-1 ${
+                  selectedLang === lang.id
+                    ? 'bg-[#00f5ff] text-black font-black shadow-[0_0_8px_rgba(0,245,255,0.4)]'
+                    : 'text-[#64748b] hover:text-white'
+                }`}
+                title={`Subtítulos en pantalla en ${lang.label}`}
+              >
+                <span>{lang.flag}</span>
+                <span>{lang.label}</span>
+              </button>
+            ))}
           </div>
-
-          {/* Subtitle Output Language Selector (Traducción en pantalla) */}
-          <div className="flex items-center bg-[#07090e] p-0.5 rounded border border-[#1b2230] text-[10px] font-mono font-bold" title="Idioma en que se muestran los subtítulos en esta pantalla">
-            <span className="text-[9px] text-[#00f5ff] px-1.5 hidden lg:inline font-bold">SUBTÍTULO:</span>
-            <button
-              onClick={() => onSelectLang('es')}
-              className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
-                selectedLang === 'es'
-                  ? 'bg-[#00f5ff] text-black font-black shadow-[0_0_8px_rgba(0,245,255,0.4)]'
-                  : 'text-[#64748b] hover:text-white'
-              }`}
-              title="Mostrar subtítulos en Español"
-            >
-              <span>🇦🇷 ES</span>
-            </button>
-            <button
-              onClick={() => onSelectLang('en')}
-              className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
-                selectedLang === 'en'
-                  ? 'bg-[#00f5ff] text-black font-black shadow-[0_0_8px_rgba(0,245,255,0.4)]'
-                  : 'text-[#64748b] hover:text-white'
-              }`}
-              title="Mostrar subtítulos traducidos al Inglés"
-            >
-              <span>🇬🇧 EN</span>
-            </button>
-            <button
-              onClick={() => onSelectLang('pt')}
-              className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
-                selectedLang === 'pt'
-                  ? 'bg-[#00f5ff] text-black font-black shadow-[0_0_8px_rgba(0,245,255,0.4)]'
-                  : 'text-[#64748b] hover:text-white'
-              }`}
-              title="Mostrar subtítulos traducidos al Portugués"
-            >
-              <span>🇧🇷 PT</span>
-            </button>
-          </div>
-
         </div>
 
-        {/* Right: Stream Actions & Settings Toggle */}
+        {/* Right: Ingest Action & Hardware Drawer */}
         <div className="flex items-center gap-2 shrink-0">
-          
-          {/* Audio Input Mode Toggle: Mic/Line vs Tab/Stream */}
-          <div className="flex items-center bg-[#07090e] p-0.5 rounded border border-[#1b2230] text-[10px] font-mono font-bold">
+          {/* Input Source Selector Toggle: Mic vs Tab */}
+          <div className="hidden sm:flex items-center bg-[#07090e] p-0.5 rounded-lg border border-[#1b2230] text-[10px] font-mono font-bold">
             <button
               onClick={() => {
                 if (isRecording) stopIngest();
@@ -1009,13 +946,13 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
               }}
               className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
                 inputSourceKind === 'mic'
-                  ? 'bg-[#141b29] text-[#00f5ff] border border-[#00f5ff]/40 shadow-[0_0_8px_rgba(0,245,255,0.2)]'
+                  ? 'bg-[#141b29] text-[#00f5ff] border border-[#00f5ff]/40 shadow-sm'
                   : 'text-[#64748b] hover:text-white'
               }`}
-              title="Entrada física: Micrófono o Consola (Jack 3.5mm / USB Audio Interface)"
+              title="Entrada física: Micrófono / Interfaz USB / Jack 3.5mm"
             >
               <Mic className="w-3 h-3" />
-              <span>MIC / JACK</span>
+              <span>MIC</span>
             </button>
             <button
               onClick={() => {
@@ -1024,145 +961,100 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
               }}
               className={`px-2 py-1 rounded transition-all flex items-center gap-1 ${
                 inputSourceKind === 'tab'
-                  ? 'bg-[#141b29] text-[#ffba00] border border-[#ffba00]/40 shadow-[0_0_8px_rgba(255,186,0,0.2)]'
+                  ? 'bg-[#141b29] text-[#ffba00] border border-[#ffba00]/40 shadow-sm'
                   : 'text-[#64748b] hover:text-white'
               }`}
-              title="Entrada digital: Pestaña del navegador / Video de YouTube de Nerdearla"
+              title="Entrada digital: Pestaña con audio de YouTube"
             >
               <Tv className="w-3 h-3" />
               <span>PESTAÑA</span>
             </button>
           </div>
 
-          {/* Main Ingest Start/Stop Button */}
+          {/* Primary Action Button */}
           {isRecording ? (
             <button
               onClick={stopIngest}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#ff1744] hover:bg-[#ff1744]/90 text-white font-mono text-xs font-bold rounded shadow-[0_0_10px_#ff1744] animate-pulse"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#ff1744] hover:bg-[#ff1744]/90 text-white font-mono text-xs font-bold rounded-lg shadow-[0_0_12px_#ff1744] animate-pulse transition-all"
+              title="Detener captura de audio"
             >
-              <Square className="w-3.5 h-3.5" />
-              <span>DETENER_ENTRADA</span>
+              <Square className="w-3.5 h-3.5 fill-current" />
+              <span>DETENER</span>
             </button>
           ) : (
             <button
               onClick={() => startIngest()}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#00f5ff] hover:bg-[#00f5ff]/90 text-black font-mono text-xs font-black rounded shadow-[0_0_12px_rgba(0,245,255,0.4)] transition-all"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#00f5ff] hover:bg-[#00f5ff]/90 text-black font-mono text-xs font-black rounded-lg shadow-[0_0_12px_rgba(0,245,255,0.4)] transition-all hover:scale-105 active:scale-95"
+              title={inputSourceKind === 'tab' ? 'Capturar audio y video de pestaña' : 'Iniciar transcripción por micrófono'}
             >
               {inputSourceKind === 'tab' ? <Tv className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-              <span>{inputSourceKind === 'tab' ? 'CAPTURAR_PESTAÑA' : 'ARMAR_ENTRADA'}</span>
+              <span>{inputSourceKind === 'tab' ? 'CAPTURAR' : 'TRANSCRIBIR'}</span>
             </button>
           )}
 
-          {/* Toggle QR Corner */}
-          <button
-            onClick={() => setShowQrCorner(!showQrCorner)}
-            className={`p-1.5 rounded border text-xs font-mono transition-all ${showQrCorner ? 'bg-[#141b29] border-[#00f5ff] text-[#00f5ff]' : 'bg-[#090c14] border-[#1e2535] text-gray-400'}`}
-            title="Mostrar / Ocultar QR para celulares en pantalla"
-          >
-            <QrCode className="w-4 h-4" />
-          </button>
-
-          {/* Quick Download SRT for Stage Technician */}
-          <a
-            href={`/api/stages/${stage?.id || 'stage-1'}/export/srt?lang=${selectedLang}`}
-            download={`nerdsub-${stage?.id || 'stage-1'}-${selectedLang}.srt`}
-            className="flex items-center gap-1 px-2 py-1.5 rounded bg-[#090c14] hover:bg-[#141b29] border border-[#1e2535] hover:border-[#00ff66]/50 text-gray-400 hover:text-[#00ff66] font-mono text-[10px] font-bold transition-all"
-            title="Descargar subtítulos .SRT sincronizados para YouTube de esta charla"
-          >
-            <Download className="w-3.5 h-3.5 text-[#00ff66]" />
-            <span className="hidden md:inline">.SRT</span>
-          </a>
-
-          {/* Engine / API Key Trigger */}
+          {/* Engine Pill */}
           {onOpenApiKeyModal && (
             <button
               onClick={onOpenApiKeyModal}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded font-mono text-[11px] font-bold border transition-all ${
+              className={`hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-mono text-[11px] font-bold border transition-all ${
                 geminiConfigured
                   ? 'bg-[#00f5ff]/10 border-[#00f5ff]/40 text-[#00f5ff] hover:bg-[#00f5ff]/20'
                   : 'bg-[#ffba00]/10 border-[#ffba00]/40 text-[#ffba00] hover:bg-[#ffba00]/20'
               }`}
-              title="Configurar Gemini API Key, Cola de Keys o cambiar motor de IA"
+              title="Configurar Gemini API Key o cambiar motor de IA"
             >
               <Key className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">
-                {activeEngine === 'gemini-cloud'
-                  ? 'GEMINI LIVE'
-                  : activeEngine === 'gemma-local'
-                  ? 'GEMMA 2B'
-                  : 'NATIVO 0MS'}
-              </span>
+              <span>{activeEngine === 'gemini-cloud' ? 'GEMINI' : activeEngine === 'gemma-local' ? 'GEMMA' : 'NATIVO'}</span>
               <span className={`w-2 h-2 rounded-full ${geminiConfigured ? 'bg-[#00ff66]' : 'bg-[#ffba00]'}`} />
             </button>
           )}
 
-          {/* Live Talk Countdown */}
+          {/* Countdown Pill */}
           {scheduleInfo.remainingMinutes > 0 && (
-            <div 
+            <button
               onClick={() => onOpenScheduleModal?.()}
-              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-cyan-950/60 border border-cyan-700/60 text-cyan-300 font-mono text-[11px] font-bold cursor-pointer hover:bg-cyan-900/60 transition-all"
-              title="Tiempo restante para la charla actual. Clic para ver la agenda completa."
+              className="hidden lg:flex items-center gap-1 px-2 py-1 rounded bg-cyan-950/60 border border-cyan-700/60 text-cyan-300 font-mono text-[11px] font-bold hover:bg-cyan-900/60 transition-all"
+              title="Tiempo restante para la charla actual"
             >
               <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-              <span>⏱️ {scheduleInfo.remainingMinutes}M RESTANTES</span>
-            </div>
-          )}
-
-          {/* Conference Schedule & Agenda */}
-          {onOpenScheduleModal && (
-            <button
-              onClick={onOpenScheduleModal}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded font-mono text-[11px] font-bold border border-[#222a3d] hover:border-cyan-500/40 bg-[#10141e] text-gray-300 hover:text-white transition-all"
-              title="Ver agenda completa de charlas de Nerdearla 2026"
-            >
-              <Calendar className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden xl:inline">AGENDA</span>
+              <span>⏱️ {scheduleInfo.remainingMinutes}m</span>
             </button>
           )}
 
-          {/* Theme & Skins Switcher */}
-          {onOpenThemeModal && (
-            <button
-              onClick={onOpenThemeModal}
-              className="p-1.5 rounded font-mono text-[11px] font-bold border border-[#222a3d] hover:border-amber-500/40 bg-[#10141e] text-amber-400 hover:text-white transition-all"
-              title="Cambiar tema visual (Rack Pro-AV, Cyberpunk, Alto Contraste AAA, Daylight, Retro CRT)"
-            >
-              <Palette className="w-4 h-4" />
-            </button>
-          )}
-
-          {/* Real-time Telemetry & Log Viewer */}
-          {onOpenLogModal && (
-            <button
-              onClick={onOpenLogModal}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded font-mono text-[11px] font-bold border border-[#222a3d] hover:border-[#00f5ff]/40 bg-[#10141e] text-gray-300 hover:text-[#00f5ff] transition-all"
-              title="Ver telemetría y registro de errores en vivo (Logs)"
-            >
-              <Terminal className="w-3.5 h-3.5 text-[#00f5ff]" />
-              <span className="hidden sm:inline">LOGS</span>
-            </button>
-          )}
-
-          {/* Config Drawer Toggle */}
+          {/* Fullscreen Toggle */}
           <button
-            onClick={() => setShowConfigDrawer(!showConfigDrawer)}
-            className="p-1.5 rounded bg-[#090c14] border border-[#1e2535] text-gray-400 hover:text-white"
-            title="Configuración de sala y hardware"
+            onClick={toggleFullscreen}
+            className="p-1.5 rounded-lg bg-[#10141e] hover:bg-[#182030] border border-[#222a3d] text-gray-300 hover:text-white transition-all"
+            title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa para proyector'}
           >
-            <Settings className="w-4 h-4" />
+            {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>
 
           {/* Return to Control Room / Admin View */}
           {onExit && (
             <button
               onClick={onExit}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded bg-[#10141e] hover:bg-[#1a2030] border border-[#222a3d] text-gray-300 hover:text-white font-mono text-[11px] transition-all"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#10141e] hover:bg-[#1a2030] border border-[#222a3d] text-gray-300 hover:text-white font-mono text-[11px] transition-all"
               title="Volver a la Mesa Técnica (Control Room)"
             >
               <Sliders className="w-3.5 h-3.5 text-[#ffb800]" />
-              <span className="hidden sm:inline">CONTROL ROOM</span>
+              <span className="hidden xl:inline">CONTROL ROOM</span>
             </button>
           )}
+
+          {/* Config / Tools Drawer Toggle Button */}
+          <button
+            onClick={() => setShowConfigDrawer(!showConfigDrawer)}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-mono text-xs font-bold border transition-all ${
+              showConfigDrawer
+                ? 'bg-[#00f5ff]/20 border-[#00f5ff] text-[#00f5ff]'
+                : 'bg-[#10141e] hover:bg-[#182030] border-[#222a3d] text-gray-300 hover:text-white'
+            }`}
+            title="Abrir menú de herramientas, entradas de audio, ganancia y exportación"
+          >
+            <Settings className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">AJUSTES</span>
+          </button>
         </div>
 
       </div>
@@ -1180,7 +1072,7 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
         <div className="bg-[#ffba00]/15 border-b border-[#ffba00]/40 px-4 py-2 text-center text-xs font-mono text-[#ffba00] flex items-center justify-center gap-3 z-20">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>
-            El <strong>Modo Pestaña</strong> captura audio digital del navegador y requiere una Gemini API Key configurada para transcribir con Gemini Live (2.0/2.5 Flash).
+            El <strong>Modo Pestaña</strong> captura audio digital del navegador y requiere una Gemini API Key configurada para transcribir con Gemini Live (3.5 / 3.8 Flash).
           </span>
           {onOpenApiKeyModal && (
             <button
@@ -1193,11 +1085,20 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
         </div>
       )}
 
-      {/* Error Banner */}
+      {/* Error Banner with Dismiss */}
       {audioError && (
-        <div className="bg-[#ff1744]/20 border-b border-[#ff1744]/40 px-4 py-2 text-center text-xs font-mono text-[#ff1744] flex items-center justify-center gap-2 z-20">
-          <AlertCircle className="w-4 h-4" />
-          <span>{audioError}</span>
+        <div className="bg-[#ff1744]/20 border-b border-[#ff1744]/40 px-4 py-2 text-center text-xs font-mono text-[#ff1744] flex items-center justify-between gap-3 z-20 animate-in slide-in-from-top-1">
+          <div className="flex items-center gap-2 mx-auto">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{audioError}</span>
+          </div>
+          <button
+            onClick={() => setAudioError(null)}
+            className="p-1 hover:bg-[#ff1744]/30 rounded text-gray-300 hover:text-white transition-all shrink-0"
+            title="Descartar alerta"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
@@ -1500,8 +1401,9 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
           <div className="space-y-1">
             <div className="flex items-center justify-between">
               <label className="text-[10px] text-gray-400 uppercase">DISPOSITIVO DE AUDIO (JACK / USB / MIC):</label>
-              <button onClick={refreshAudioDevices} className="text-[9px] text-[#00f5ff] hover:underline">
-                ESCANEAR
+              <button onClick={refreshAudioDevices} className="text-[9px] text-[#00f5ff] hover:underline flex items-center gap-1">
+                <RefreshCw className="w-2.5 h-2.5" />
+                <span>ESCANEAR</span>
               </button>
             </div>
             <select
@@ -1509,12 +1411,78 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
               onChange={(e) => handleDeviceSwitch(e.target.value)}
               className="w-full px-2.5 py-1.5 bg-[#07090e] border border-[#202738] rounded text-white text-[11px]"
             >
-              {audioDevices.map((d, i) => (
-                <option key={d.deviceId || i} value={d.deviceId}>
-                  {getDeviceBadge(d.label)} • {d.label || `Entrada ${i + 1}`}
-                </option>
-              ))}
+              {audioDevices.length === 0 ? (
+                <option value="">Entrada de Audio Predeterminada</option>
+              ) : (
+                audioDevices.map((d, i) => (
+                  <option key={d.deviceId || i} value={d.deviceId}>
+                    {getDeviceBadge(d.label)} • {d.label || `Entrada ${i + 1}`}
+                  </option>
+                ))
+              )}
             </select>
+          </div>
+
+          {/* VU Meter & Mic Gain Boost */}
+          <div className="space-y-1.5 p-3 bg-[#07090e] border border-[#1b2230] rounded-lg">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-gray-400 uppercase font-bold">NIVEL & GANANCIA (VU METER):</span>
+              <span className={`text-[10px] font-bold ${isClipping ? 'text-[#ff1744]' : 'text-gray-300'}`}>
+                {currentDbfs} dBFS
+              </span>
+            </div>
+            <div className="w-full bg-[#121622] h-2.5 rounded overflow-hidden">
+              <div 
+                className={`h-full transition-all duration-75 ${isClipping ? 'bg-[#ff1744]' : 'bg-[#00ff66]'}`}
+                style={{ width: `${Math.min(100, Math.max(0, ((currentDbfs + 60) / 60) * 100))}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[9px] text-gray-400">BOOST DIGITAL:</span>
+              <div className="flex items-center gap-1">
+                {[
+                  { label: '0dB', val: 0 },
+                  { label: '+3.5dB', val: 3.5 },
+                  { label: '+6dB', val: 6 },
+                  { label: '+12dB', val: 12 }
+                ].map((b) => (
+                  <button
+                    key={b.val}
+                    onClick={() => handleGainChange(b.val)}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                      micGainDb === b.val
+                        ? 'bg-[#ffb800] text-black font-black shadow-[0_0_8px_rgba(255,184,0,0.4)]'
+                        : 'bg-[#10141e] text-gray-400 hover:text-white border border-[#222a3d]'
+                    }`}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Spoken Language (Orador) */}
+          <div className="space-y-1">
+            <label className="text-[10px] text-gray-400 uppercase">IDIOMA HABLADO POR EL ORADOR:</label>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                onClick={() => handleSpokenLangChange('es')}
+                className={`py-1.5 rounded border text-center uppercase font-bold flex items-center justify-center gap-1.5 ${
+                  spokenLang === 'es' ? 'bg-[#141b29] border-[#00f5ff] text-[#00f5ff]' : 'bg-[#07090e] border-[#1e2535] text-gray-400'
+                }`}
+              >
+                <span>🇪🇸 Español (es-AR)</span>
+              </button>
+              <button
+                onClick={() => handleSpokenLangChange('en')}
+                className={`py-1.5 rounded border text-center uppercase font-bold flex items-center justify-center gap-1.5 ${
+                  spokenLang === 'en' ? 'bg-[#141b29] border-[#00ff66] text-[#00ff66]' : 'bg-[#07090e] border-[#1e2535] text-gray-400'
+                }`}
+              >
+                <span>🇬🇧 English (en-US)</span>
+              </button>
+            </div>
           </div>
 
           {/* Language for On-Stage Display */}
@@ -1592,6 +1560,67 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
                 <FileText className="w-3 h-3 text-[#ffba00]" />
                 .TXT
               </a>
+            </div>
+          </div>
+
+          {/* Conference Tools & Overlays */}
+          <div className="space-y-1.5 pt-2 border-t border-[#181d2a]">
+            <label className="text-[10px] text-gray-400 uppercase">HERRAMIENTAS & ACCESOS:</label>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                onClick={() => setShowQrCorner(!showQrCorner)}
+                className={`p-2 rounded border text-left flex items-center gap-2 font-bold transition-all ${
+                  showQrCorner ? 'bg-[#141b29] border-[#00f5ff] text-[#00f5ff]' : 'bg-[#07090e] border-[#1e2535] text-gray-300'
+                }`}
+                title="Mostrar u ocultar código QR en la esquina para la audiencia móvil"
+              >
+                <QrCode className="w-4 h-4 shrink-0" />
+                <span className="truncate">{showQrCorner ? 'QR Pantalla: ON' : 'QR Pantalla: OFF'}</span>
+              </button>
+
+              {onOpenScheduleModal && (
+                <button
+                  onClick={onOpenScheduleModal}
+                  className="p-2 rounded bg-[#07090e] hover:bg-[#141b29] border border-[#1e2535] hover:border-cyan-500/40 text-gray-300 hover:text-white flex items-center gap-2 font-bold transition-all"
+                  title="Ver agenda completa de charlas oficiales"
+                >
+                  <Calendar className="w-4 h-4 text-cyan-400 shrink-0" />
+                  <span className="truncate">Agenda Charlas</span>
+                </button>
+              )}
+
+              {onOpenThemeModal && (
+                <button
+                  onClick={onOpenThemeModal}
+                  className="p-2 rounded bg-[#07090e] hover:bg-[#141b29] border border-[#1e2535] hover:border-amber-500/40 text-gray-300 hover:text-white flex items-center gap-2 font-bold transition-all"
+                  title="Cambiar skins y temas visuales"
+                >
+                  <Palette className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="truncate">Temas Visuales</span>
+                </button>
+              )}
+
+              {onOpenLogModal && (
+                <button
+                  onClick={onOpenLogModal}
+                  className="p-2 rounded bg-[#07090e] hover:bg-[#141b29] border border-[#1e2535] hover:border-[#00f5ff]/40 text-gray-300 hover:text-[#00f5ff] flex items-center gap-2 font-bold transition-all"
+                  title="Ver telemetría y logs técnicos en vivo"
+                >
+                  <Terminal className="w-4 h-4 text-[#00f5ff] shrink-0" />
+                  <span className="truncate">Logs & Telemetría</span>
+                </button>
+              )}
+
+              {onOpenApiKeyModal && (
+                <button
+                  onClick={onOpenApiKeyModal}
+                  className="p-2 rounded bg-[#07090e] hover:bg-[#141b29] border border-[#1e2535] hover:border-[#00f5ff]/40 text-gray-300 hover:text-[#00f5ff] flex items-center gap-2 font-bold transition-all col-span-2"
+                  title="Gestionar API Keys, rotación y modelos de IA"
+                >
+                  <Key className="w-4 h-4 text-[#ffba00] shrink-0" />
+                  <span className="truncate">Configurar API Key / Modelos de IA</span>
+                </button>
+              )}
             </div>
           </div>
 

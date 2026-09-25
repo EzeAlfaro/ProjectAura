@@ -17,12 +17,12 @@ export const config = {
   },
   ai: {
     geminiApiKey: process.env.GEMINI_API_KEY || '',
-    liveModel: process.env.GEMINI_LIVE_MODEL || 'gemini-2.0-flash-exp',
-    flashModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+    liveModel: process.env.GEMINI_LIVE_MODEL || 'gemini-3.5-transcribe-live',
+    flashModel: process.env.GEMINI_MODEL || 'gemini-3.5-flash',
     proModel: process.env.GEMINI_ENABLE_35PRO === 'true' 
       ? (process.env.GEMINI_PRO_MODEL || 'gemini-3.5-pro') 
       : (process.env.GEMINI_PRO_MODEL || 'gemini-2.5-pro'),
-    fallbackModels: (process.env.GEMINI_FALLBACK_MODELS || 'gemini-2.5-flash,gemini-2.0-flash,gemini-1.5-flash').split(',').map(m => m.trim()),
+    fallbackModels: (process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.5-flash,gemini-3.8-flash,gemini-3.1-flash-lite,gemini-2.5-flash').split(',').map(m => m.trim()),
     ollamaBaseUrl: (process.env.OLLAMA_BASE_URL || process.env.OLLAMA_HOST || 'http://127.0.0.1:11434').replace(/\/$/, ''),
     gemmaModel: process.env.GEMMA_MODEL || 'gemma2:2b',
     keyCooldownMs: Number(process.env.KEY_COOLDOWN_MS) || 60000,

@@ -2,6 +2,7 @@ import { GoogleGenAI, Modality } from '@google/genai';
 import { SubtitleChunk, TechTerm } from './types.js';
 import { extractTechTerms, TECH_GLOSSARY } from './glossary.js';
 import { translateConferenceText } from './localTranslator.js';
+import { config } from './config.js';
 
 export interface LiveTranscriberOptions {
   apiKey: string;
@@ -38,10 +39,11 @@ export class LiveStageTranscriptionSession {
 
   public async connect(): Promise<void> {
     const candidateModels = [
-      process.env.GEMINI_LIVE_MODEL || 'gemini-2.0-flash-exp',
-      'gemini-2.5-flash',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash'
+      process.env.GEMINI_LIVE_MODEL || config.ai.liveModel || 'gemini-3.5-transcribe-live',
+      'gemini-3.5-live-translate-preview',
+      'gemini-3.1-flash-live-preview',
+      'gemini-3.5-flash',
+      'gemini-3.8-flash'
     ];
 
     const vocab = this.options.customVocabulary && this.options.customVocabulary.length > 0
@@ -189,7 +191,7 @@ export class LiveStageTranscriptionSession {
   }> {
     try {
       const response = await this.ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: config.ai.flashModel || 'gemini-3.5-flash',
         contents: [
           {
             parts: [

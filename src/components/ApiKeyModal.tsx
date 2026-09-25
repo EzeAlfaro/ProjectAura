@@ -25,7 +25,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   onKeyUpdated,
   onEngineChanged,
 }) => {
-  const [selectedModel, setSelectedModel] = useState<string>('gemini-2.5-flash');
+  const [selectedModel, setSelectedModel] = useState<string>('gemini-3.5-flash');
   const [newApiKey, setNewApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -440,20 +440,23 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                   onChange={(e) => setSelectedModel(e.target.value)}
                   className="w-full px-3 py-2 bg-[#06080d] border border-[#202738] rounded-xl text-xs text-gray-200 focus:outline-none focus:border-[#00f0ff] font-mono"
                 >
-                  <option value="gemini-2.0-flash-exp">
-                    ✨ gemini-2.0-flash-exp (Google Live Bidirectional Audio API — GA Default)
+                  <option value="gemini-3.5-flash">
+                    ⚡ gemini-3.5-flash (Google Multimodal & Audio — Ultra Rápido ~1.9s)
                   </option>
-                  <option value="gemini-2.5-flash">
-                    ⚡ gemini-2.5-flash (Google Flagship Audio & Sub-200ms Multimodal — GA)
+                  <option value="gemini-3.8-flash">
+                    🏆 gemini-3.8-flash (Google Flagship Audio — Recomendado por Google AI Studio)
+                  </option>
+                  <option value="gemini-3.5-transcribe-live">
+                    ✨ gemini-3.5-transcribe-live (Google Live WebSocket Stream)
                   </option>
                   <option value="gemini-2.5-pro">
-                    🧠 gemini-2.5-pro (Google Deep Reasoning & Q&A — GA Oficial)
+                    🧠 gemini-2.5-pro (Google Deep Reasoning & Q&A)
                   </option>
-                  <option value="gemini-3.5-pro">
-                    🔮 gemini-3.5-pro (Preview / Opt-in vía GEMINI_ENABLE_35PRO)
+                  <option value="gemini-3.1-flash-lite">
+                    🚀 gemini-3.1-flash-lite (Speech Stream)
                   </option>
-                  <option value="gemini-2.0-flash">
-                    🚀 gemini-2.0-flash (Ultra Low-Latency Speech Stream — GA)
+                  <option value="gemini-2.5-flash">
+                    📦 gemini-2.5-flash (Legacy GA)
                   </option>
                 </select>
 

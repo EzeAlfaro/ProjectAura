@@ -187,7 +187,7 @@ app.post('/api/config/key', requireAdminAuth, (req: Request, res: Response) => {
   res.json({
     success: true,
     geminiConfigured: geminiService.isConfigured(),
-    model: process.env.GEMINI_MODEL || config.ai.liveModel || 'gemini-2.0-flash-exp',
+    model: process.env.GEMINI_MODEL || config.ai.flashModel || 'gemini-3.5-flash',
     activeEngine: geminiService.getActiveEngineName(),
     keyPool: geminiService.getKeyPoolInfo(),
     message: 'API Key and model updated successfully'
@@ -197,7 +197,7 @@ app.post('/api/config/key', requireAdminAuth, (req: Request, res: Response) => {
 // Test Gemini Model Connection & Latency (Ping Verification)
 app.post('/api/config/test-model', requireAdminAuth, async (req: Request, res: Response) => {
   const { apiKey, modelName } = req.body;
-  const result = await geminiService.testModelConnection(apiKey, modelName || 'gemini-2.5-flash');
+  const result = await geminiService.testModelConnection(apiKey, modelName || config.ai.flashModel || 'gemini-3.5-flash');
   res.json(result);
 });
 
