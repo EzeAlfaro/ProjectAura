@@ -78,6 +78,7 @@ export interface EngineStatus {
   status: string;
   appName: string;
   version: string;
+  networkIp?: string;
   geminiConfigured: boolean;
   gemmaAvailable: boolean;
   activeEngine: 'gemini-cloud' | 'gemma-local' | 'native-offline';

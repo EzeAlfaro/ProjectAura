@@ -19,8 +19,25 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [copied, setCopied] = useState(false);
   const [mode, setMode] = useState<'attendee' | 'projector'>('attendee');
+  const [networkIp, setNetworkIp] = useState<string>('');
+  const [useLocalhost, setUseLocalhost] = useState<boolean>(false);
 
-  const shareUrl = `${window.location.origin}/?stage=${stage.id}&lang=${selectedLang}`;
+  useEffect(() => {
+    fetch('/api/status')
+      .then(res => res.json())
+      .then(data => {
+        if (data.networkIp && data.networkIp !== 'localhost') {
+          setNetworkIp(data.networkIp);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const effectiveHost = useLocalhost || !networkIp
+    ? window.location.hostname
+    : networkIp;
+  const effectivePort = window.location.port ? `:${window.location.port}` : '';
+  const shareUrl = `${window.location.protocol}//${effectiveHost}${effectivePort}/?stage=${stage.id}&lang=${selectedLang}`;
 
   useEffect(() => {
     if (isOpen) {
@@ -119,6 +136,34 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({
               <span>•</span>
               <span className="uppercase text-purple-400 font-bold">{selectedLang}</span>
             </div>
+
+            {/* Network Host Toggle (Wi-Fi vs Localhost) */}
+            {networkIp && (
+              <div className="flex items-center gap-1.5 text-[10px] font-mono">
+                <span className="text-gray-400">HOST:</span>
+                <button
+                  onClick={() => setUseLocalhost(false)}
+                  className={`px-2 py-0.5 rounded font-bold transition-all ${
+                    !useLocalhost
+                      ? 'bg-[#00f5ff]/20 text-[#00f5ff] border border-[#00f5ff]/40 shadow-sm'
+                      : 'text-gray-400 bg-[#0c0f17] border border-[#1e2535]'
+                  }`}
+                  title="Ideal para que la cámara del celular conecte directo"
+                >
+                  Wi-Fi ({networkIp})
+                </button>
+                <button
+                  onClick={() => setUseLocalhost(true)}
+                  className={`px-2 py-0.5 rounded font-bold transition-all ${
+                    useLocalhost
+                      ? 'bg-[#00f5ff]/20 text-[#00f5ff] border border-[#00f5ff]/40 shadow-sm'
+                      : 'text-gray-400 bg-[#0c0f17] border border-[#1e2535]'
+                  }`}
+                >
+                  Localhost
+                </button>
+              </div>
+            )}
 
             {/* Copyable Link */}
             <div className="w-full flex items-center gap-2 bg-[#0c0f17] border border-[#2a344f] rounded-xl p-2 text-xs">

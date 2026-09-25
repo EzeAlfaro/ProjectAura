@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import { fileURLToPath } from 'url';
 import { stageManager } from './stageManager.js';
 import { geminiService } from './geminiService.js';
@@ -76,6 +77,20 @@ function syncEnvFile(keyToSet?: string, modelToSet?: string) {
   }
 }
 
+function getLocalNetworkIp(): string {
+  try {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      for (const net of interfaces[name] || []) {
+        if (net.family === 'IPv4' && !net.internal && !net.address.startsWith('192.168.56.')) {
+          return net.address;
+        }
+      }
+    }
+  } catch (e) {}
+  return 'localhost';
+}
+
 // Health & System Status
 app.get('/api/status', async (req: Request, res: Response) => {
   const gemmaAvailable = await geminiService.checkGemmaAvailability();
@@ -83,6 +98,7 @@ app.get('/api/status', async (req: Request, res: Response) => {
     status: 'online',
     appName: 'Project Aura',
     version: '1.0.0',
+    networkIp: getLocalNetworkIp(),
     geminiConfigured: geminiService.isConfigured(),
     gemmaAvailable,
     activeEngine: geminiService.getActiveEngineName(),
