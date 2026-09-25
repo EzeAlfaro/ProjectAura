@@ -28,6 +28,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenQrModal,
   onOpenVMixModal,
   onOpenLogModal,
+  onOpenScheduleModal,
+  onOpenThemeModal,
   isConnected,
   activeStageName,
 }) => {

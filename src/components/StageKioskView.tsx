@@ -1032,7 +1032,7 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
           {/* Live Talk Countdown */}
           {scheduleInfo.remainingMinutes > 0 && (
             <div 
-              onClick={onOpenScheduleModal}
+              onClick={() => onOpenScheduleModal?.()}
               className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-cyan-950/60 border border-cyan-700/60 text-cyan-300 font-mono text-[11px] font-bold cursor-pointer hover:bg-cyan-900/60 transition-all"
               title="Tiempo restante para la charla actual. Clic para ver la agenda completa."
             >
