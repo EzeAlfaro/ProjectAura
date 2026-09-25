@@ -39,6 +39,7 @@ import { RackUnit, HexScrew } from './HardwareControls.js';
 import { normalizePhoneticTechTerms } from '../utils/broadcastSegmenter.js';
 import { ttsService } from '../services/ttsService.js';
 import { WSClient } from '../services/websocket.js';
+import { useIsMobile } from '../hooks/useIsMobile.js';
 
 interface AudienceViewProps {
   stages: Stage[];
@@ -77,6 +78,8 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
   interimText,
   wsClient,
 }) => {
+  const isMobile = useIsMobile(1024);
+  const [mobileActiveTab, setMobileActiveTab] = useState<'prompter' | 'qa' | 'glossary' | 'takeaways'>('prompter');
   const [autoScroll, setAutoScroll] = useState(true);
   const [fontSize, setFontSize] = useState<'normal' | 'large' | 'cinema'>('large');
   const [activeSidebarTab, setActiveSidebarTab] = useState<'glossary' | 'takeaways' | 'qa' | 'export'>('glossary');
@@ -314,6 +317,7 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
             onClick={() => {
               setSelectedTerm(matched);
               setActiveSidebarTab('glossary');
+              if (isMobile) setMobileActiveTab('glossary');
             }}
             className="cursor-pointer inline-flex items-baseline mx-1 px-1.5 py-0.5 rounded smd-chip text-[#00f5ff] border border-[#00f5ff]/40 hover:bg-[#00f5ff]/15 hover:border-[#00f5ff] transition-all font-mono font-bold text-[0.88em]"
             title={`Definición de ${matched.term}`}
@@ -329,8 +333,142 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
   return (
     <div className={`max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 space-y-4 transition-all ${isFocusMode ? 'fixed inset-0 z-50 bg-[#07090e] max-w-none p-4 sm:p-8' : ''}`}>
       
-      {/* 19" RACK CHASSIS: STAGE MATRIX & AUDIO BUS ROUTING */}
-      {!isFocusMode && (
+      {/* MOBILE CONTROL HUD (< 1024px) */}
+      {isMobile && !isFocusMode && (
+        <div className="space-y-2.5">
+          {/* Mobile Stage Selector Carousel */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+            {stages.map((stage, idx) => {
+              const isSelected = stage.id === selectedStageId;
+              return (
+                <button
+                  key={stage.id}
+                  onClick={() => onSelectStage(stage.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold shrink-0 flex items-center gap-1.5 border transition-all ${
+                    isSelected
+                      ? 'bg-[#121c2d] border-[#00f5ff] text-white shadow-[0_0_8px_rgba(0,245,255,0.3)]'
+                      : 'bg-[#0d1017] border-[#1e2535] text-gray-400'
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${stage.isLive ? 'bg-red-500 animate-pulse' : 'bg-gray-600'}`} />
+                  <span>0{idx + 1} {stage.name.replace(/Escenario\s*/i, '')}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Mobile Language Switcher Row */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+            {[
+              { id: 'es', label: 'Español', flag: '🇦🇷' },
+              { id: 'en', label: 'English', flag: '🇬🇧' },
+              { id: 'pt', label: 'Português', flag: '🇧🇷' },
+              { id: 'original', label: 'Original', flag: '🎙️' },
+            ].map((lang) => {
+              const isSelected = selectedLang === lang.id;
+              return (
+                <button
+                  key={lang.id}
+                  onClick={() => onSelectLang(lang.id as SupportedLanguage)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold shrink-0 flex items-center gap-1 border transition-all ${
+                    isSelected
+                      ? 'bg-[#121c2d] border-[#00f5ff] text-white shadow-[0_0_8px_rgba(0,245,255,0.3)]'
+                      : 'bg-[#0d1017] border-[#1e2535] text-gray-400'
+                  }`}
+                >
+                  <span>{lang.flag}</span>
+                  <span>{lang.label}</span>
+                </button>
+              );
+            })}
+
+            <button
+              onClick={() => setShowOriginal(!showOriginal)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold shrink-0 border transition-all ${
+                showOriginal
+                  ? 'bg-[#00f5ff]/20 border-[#00f5ff] text-[#00f5ff]'
+                  : 'bg-[#0d1017] border-[#1e2535] text-gray-400'
+              }`}
+            >
+              DUAL {showOriginal ? 'ON' : 'OFF'}
+            </button>
+          </div>
+
+          {/* Compact Speaker / Talk Card */}
+          {currentStage && (
+            <div className="bg-[#0b0e14] border border-[#1b2230] rounded-xl px-3 py-2 flex items-center justify-between text-xs font-mono">
+              <div className="truncate mr-2">
+                <span className="text-[#00f5ff] font-bold">{currentStage.speaker}: </span>
+                <span className="text-gray-200">{currentStage.talkTitle}</span>
+              </div>
+              <span className="text-[10px] text-[#00ff66] font-bold shrink-0">{currentStage.latencyMs}ms</span>
+            </div>
+          )}
+
+          {/* Mobile Segmented Module Switcher */}
+          <div className="grid grid-cols-4 bg-[#0d1017] p-1 rounded-xl border border-[#1e2535] gap-1 text-xs font-mono font-bold">
+            <button
+              onClick={() => setMobileActiveTab('prompter')}
+              className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+                mobileActiveTab === 'prompter'
+                  ? 'bg-[#00f5ff]/20 text-[#00f5ff] border border-[#00f5ff]/40 shadow-sm'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <span>💬</span>
+              <span>Subtítulos</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setMobileActiveTab('qa');
+                setActiveSidebarTab('qa');
+              }}
+              className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+                mobileActiveTab === 'qa'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <span>❓</span>
+              <span>Q&A ({audienceQuestions.length})</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setMobileActiveTab('glossary');
+                setActiveSidebarTab('glossary');
+              }}
+              className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+                mobileActiveTab === 'glossary'
+                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <span>📖</span>
+              <span>Glosario ({allDetectedTerms.length})</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setMobileActiveTab('takeaways');
+                setActiveSidebarTab('takeaways');
+              }}
+              className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+                mobileActiveTab === 'takeaways'
+                  ? 'bg-green-500/20 text-green-300 border border-green-500/40 shadow-sm'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <span>💡</span>
+              <span>Claves</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* DESKTOP 19" RACK CHASSIS: STAGE MATRIX & AUDIO BUS ROUTING (>= 1024px) */}
+      {!isMobile && !isFocusMode && (
         <RackUnit
           unitId="RACK_01"
           uHeight="1U"
@@ -444,8 +582,8 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
         </RackUnit>
       )}
 
-      {/* Stage Live Status Telemetry Bar */}
-      {currentStage && !isFocusMode && (
+      {/* Stage Live Status Telemetry Bar (>= 1024px) */}
+      {!isMobile && currentStage && !isFocusMode && (
         <div className="bg-[#0b0e14] border border-[#1b2230] rounded p-3 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-lg">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -482,9 +620,10 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
       <div className={`grid grid-cols-1 ${isFocusMode ? 'lg:grid-cols-12' : 'lg:grid-cols-12'} gap-4 items-start`}>
         
         {/* STUDIO TELEPROMPTER SCREEN (8 COLS or 12 in Cinema) */}
-        <div className={`${isFocusMode ? 'lg:col-span-12' : 'lg:col-span-8'} bg-[#080a0f] border-2 border-[#1c2333] rounded shadow-2xl flex flex-col overflow-hidden`}>
-          
-          {/* Teleprompter Faceplate Control Strip */}
+        {(!isMobile || mobileActiveTab === 'prompter') && (
+          <div className={`${isFocusMode ? 'lg:col-span-12' : 'lg:col-span-8'} bg-[#080a0f] border-2 border-[#1c2333] rounded shadow-2xl flex flex-col overflow-hidden`}>
+            
+            {/* Teleprompter Faceplate Control Strip */}
           <div className="bg-[#0d1017] border-b border-[#181d2a] px-3 sm:px-4 py-2 flex items-center justify-between text-xs font-mono">
             <div className="flex items-center gap-2 sm:gap-3 text-gray-300">
               <div className="flex items-center gap-1.5">
@@ -625,7 +764,7 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
             aria-relevant="additions"
             aria-label="Subtítulos en vivo para accesibilidad"
             className={`p-4 sm:p-6 overflow-y-auto dual-fade-mask space-y-4 transition-all ${
-              isFocusMode ? 'h-[75vh]' : 'h-[500px]'
+              isFocusMode ? 'h-[75vh]' : isMobile ? 'h-[calc(100vh-290px)] min-h-[360px]' : 'h-[500px]'
             }`}
           >
             {chunks.length === 0 ? (
@@ -724,15 +863,19 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
             </div>
           </div>
         </div>
+      )}
 
         {/* HARDWARE HUD SIDEBAR: GLOSSARY, TAKEAWAYS, Q&A, EXPORT (4 COLS) */}
-        {!isFocusMode && (
-          <div className="lg:col-span-4 bg-[#080a0f] border-2 border-[#1c2333] rounded shadow-2xl flex flex-col h-[565px] overflow-hidden">
+        {!isFocusMode && (!isMobile || mobileActiveTab !== 'prompter') && (
+          <div className={`lg:col-span-4 bg-[#080a0f] border-2 border-[#1c2333] rounded shadow-2xl flex flex-col ${isMobile ? 'h-[calc(100vh-290px)] min-h-[360px]' : 'h-[565px]'} overflow-hidden`}>
             
             {/* Hardware Module Switcher Tabs */}
             <div className="grid grid-cols-4 bg-[#0d1017] border-b border-[#181d2a] p-1 gap-1">
               <button
-                onClick={() => setActiveSidebarTab('glossary')}
+                onClick={() => {
+                  setActiveSidebarTab('glossary');
+                  if (isMobile) setMobileActiveTab('glossary');
+                }}
                 className={`py-1.5 rounded text-[10px] font-mono font-bold flex flex-col items-center gap-0.5 ${
                   activeSidebarTab === 'glossary'
                     ? 'hardware-btn-active text-[#00f5ff]'
@@ -744,7 +887,10 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
               </button>
 
               <button
-                onClick={() => setActiveSidebarTab('takeaways')}
+                onClick={() => {
+                  setActiveSidebarTab('takeaways');
+                  if (isMobile) setMobileActiveTab('takeaways');
+                }}
                 className={`py-1.5 rounded text-[10px] font-mono font-bold flex flex-col items-center gap-0.5 ${
                   activeSidebarTab === 'takeaways'
                     ? 'hardware-btn-active text-[#00ff66]'
@@ -756,7 +902,10 @@ export const AudienceView: React.FC<AudienceViewProps> = ({
               </button>
 
               <button
-                onClick={() => setActiveSidebarTab('qa')}
+                onClick={() => {
+                  setActiveSidebarTab('qa');
+                  if (isMobile) setMobileActiveTab('qa');
+                }}
                 className={`py-1.5 rounded text-[10px] font-mono font-bold flex flex-col items-center gap-0.5 ${
                   activeSidebarTab === 'qa'
                     ? 'hardware-btn-active text-[#ffb800]'
