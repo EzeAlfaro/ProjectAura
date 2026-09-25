@@ -109,15 +109,86 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [glossaryTerms, setGlossaryTerms] = useState<TechTerm[]>([]);
   const [remoteReloadFeedback, setRemoteReloadFeedback] = useState<string | null>(null);
 
-  // YouTube Video Demo State & Presets
-  const [youtubeVideoId, setYoutubeVideoId] = useState<string>('IdOO3R_1F08'); // Default: Pelado Nerd K8s
+  // YouTube Video Demo State & Presets per Stage
+  interface StageYoutubeConfig {
+    videoId: string;
+    customUrl: string;
+    customTitle: string;
+    customSpeaker: string;
+    isCustom: boolean;
+    activeDemoKey: string | null;
+  }
+
+  const DEFAULT_STAGE_YOUTUBE_CONFIGS: Record<string, StageYoutubeConfig> = {
+    'stage-1': {
+      videoId: 'IdOO3R_1F08',
+      customUrl: 'https://www.youtube.com/watch?v=IdOO3R_1F08',
+      customTitle: 'Pelado Nerd - Kubernetes en Prod',
+      customSpeaker: 'Pablo Fredrikson',
+      isCustom: false,
+      activeDemoKey: 'talk-yt-peladonerd'
+    },
+    'stage-2': {
+      videoId: 'sIprvJ2i1lg',
+      customUrl: 'https://www.youtube.com/watch?v=sIprvJ2i1lg',
+      customTitle: 'Lucas Blanco - Argo Rollouts',
+      customSpeaker: 'Lucas Blanco',
+      isCustom: false,
+      activeDemoKey: 'talk-yt-argorollouts'
+    },
+    'stage-3': {
+      videoId: 'iqVGWI1Y880',
+      customUrl: 'https://www.youtube.com/watch?v=iqVGWI1Y880',
+      customTitle: 'Carlos Gauto - Testing K8s & Chaos',
+      customSpeaker: 'Carlos Gauto',
+      isCustom: false,
+      activeDemoKey: 'talk-yt-testingk8s'
+    }
+  };
+
+  const getStoredStageYoutubeConfigs = (): Record<string, StageYoutubeConfig> => {
+    if (typeof window === 'undefined') return DEFAULT_STAGE_YOUTUBE_CONFIGS;
+    try {
+      const raw = localStorage.getItem('aura_stage_youtube_configs');
+      if (raw) {
+        return { ...DEFAULT_STAGE_YOUTUBE_CONFIGS, ...JSON.parse(raw) };
+      }
+    } catch (e) {}
+    return DEFAULT_STAGE_YOUTUBE_CONFIGS;
+  };
+
+  const saveStoredStageYoutubeConfigs = (configs: Record<string, StageYoutubeConfig>) => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('aura_stage_youtube_configs', JSON.stringify(configs));
+      } catch (e) {}
+    }
+  };
+
+  const [stageYoutubeConfigs, setStageYoutubeConfigs] = useState<Record<string, StageYoutubeConfig>>(
+    () => getStoredStageYoutubeConfigs()
+  );
+
+  const [youtubeTargetStageId, setYoutubeTargetStageId] = useState<string>(stages[0]?.id || 'stage-1');
+  const currentYoutubeConfig: StageYoutubeConfig =
+    stageYoutubeConfigs[youtubeTargetStageId] ||
+    DEFAULT_STAGE_YOUTUBE_CONFIGS[youtubeTargetStageId] ||
+    DEFAULT_STAGE_YOUTUBE_CONFIGS['stage-1'];
+
   const [customYoutubeUrl, setCustomYoutubeUrl] = useState<string>('');
   const [customVideoTitle, setCustomVideoTitle] = useState<string>('');
   const [customVideoSpeaker, setCustomVideoSpeaker] = useState<string>('');
-  const [isCustomVideo, setIsCustomVideo] = useState<boolean>(false);
   const [customVideoFeedback, setCustomVideoFeedback] = useState<string | null>(null);
-  const [activeSyncDemoKey, setActiveSyncDemoKey] = useState<string | null>('talk-yt-peladonerd');
   const [isDemoSyncRunning, setIsDemoSyncRunning] = useState<boolean>(false);
+  const [syncingYoutubeStageId, setSyncingYoutubeStageId] = useState<string | null>(null);
+
+  // Sync input fields when target stage changes
+  useEffect(() => {
+    const cfg = stageYoutubeConfigs[youtubeTargetStageId] || DEFAULT_STAGE_YOUTUBE_CONFIGS[youtubeTargetStageId] || DEFAULT_STAGE_YOUTUBE_CONFIGS['stage-1'];
+    setCustomYoutubeUrl(cfg.customUrl || (cfg.videoId ? `https://www.youtube.com/watch?v=${cfg.videoId}` : ''));
+    setCustomVideoTitle(cfg.customTitle || '');
+    setCustomVideoSpeaker(cfg.customSpeaker || '');
+  }, [youtubeTargetStageId, stageYoutubeConfigs]);
 
   // Tab Audio Streaming State (Direct Browser Audio Capture for YouTube/Video)
   const [isTabAudioCapturing, setIsTabAudioCapturing] = useState<boolean>(false);
@@ -130,8 +201,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
   // Audio Patchbay & Routing Matrix State (Rack 02)
   const [stageAudioSource, setStageAudioSource] = useState<Record<string, 'mic' | 'stream' | 'demo' | 'idle'>>({});
   const [stageMicDevice, setStageMicDevice] = useState<Record<string, string>>({});
-  const [youtubeTargetStageId, setYoutubeTargetStageId] = useState<string>(stages[0]?.id || 'stage-1');
-  const [syncingYoutubeStageId, setSyncingYoutubeStageId] = useState<string | null>(null);
 
   const extractYoutubeId = (urlOrId: string): string | null => {
     const clean = urlOrId.trim();
@@ -143,7 +212,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
   const handleLoadCustomYoutube = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const id = extractYoutubeId(customYoutubeUrl);
+    const targetStageId = youtubeTargetStageId || selectedStageId;
+    const currentCfg = stageYoutubeConfigs[targetStageId] || DEFAULT_STAGE_YOUTUBE_CONFIGS[targetStageId] || DEFAULT_STAGE_YOUTUBE_CONFIGS['stage-1'];
+    const id = extractYoutubeId(customYoutubeUrl || currentCfg.customUrl);
     if (!id) {
       window.alert('Enlace de YouTube no reconocido. Ingresá una URL válida como https://www.youtube.com/watch?v=... o https://youtu.be/...');
       return;
@@ -151,11 +222,21 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
     const titleToUse = customVideoTitle.trim() || 'Video YouTube en Vivo';
     const speakerToUse = customVideoSpeaker.trim() || 'Orador Invitado';
-    const targetStageId = youtubeTargetStageId || selectedStageId;
 
-    setYoutubeVideoId(id);
-    setIsCustomVideo(true);
-    setActiveSyncDemoKey(null); // CRITICAL: Clear Pelado Nerd demo key for custom videos!
+    const updatedCfg: StageYoutubeConfig = {
+      videoId: id,
+      customUrl: customYoutubeUrl || `https://www.youtube.com/watch?v=${id}`,
+      customTitle: titleToUse,
+      customSpeaker: speakerToUse,
+      isCustom: true,
+      activeDemoKey: null
+    };
+
+    setStageYoutubeConfigs((prev) => {
+      const next = { ...prev, [targetStageId]: updatedCfg };
+      saveStoredStageYoutubeConfigs(next);
+      return next;
+    });
 
     try {
       // 1. Stop any currently running demo on the target stage
@@ -171,7 +252,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
         track: 'Video en Vivo'
       });
 
-      setCustomVideoFeedback(`¡Video cargado! Sala "${targetStageId}" configurada con "${titleToUse}" (${speakerToUse}).`);
+      const stgName = stages.find(s => s.id === targetStageId)?.name || targetStageId;
+      setCustomVideoFeedback(`¡Video asignado a ${stgName}! ID: ${id} ("${titleToUse}").`);
       setTimeout(() => setCustomVideoFeedback(null), 5000);
     } catch (err: any) {
       console.warn('Error updating stage for custom video:', err);
@@ -208,18 +290,30 @@ export const AdminView: React.FC<AdminViewProps> = ({
   ];
 
   const handleSelectPresetTalk = async (t: typeof YOUTUBE_NERDEARLA_TALKS[0]) => {
-    setIsCustomVideo(false);
-    setYoutubeVideoId(t.id);
-    setActiveSyncDemoKey(t.demoKey);
-
     const targetStageId = youtubeTargetStageId || selectedStageId;
+    const updatedCfg: StageYoutubeConfig = {
+      videoId: t.id,
+      customUrl: `https://www.youtube.com/watch?v=${t.id}`,
+      customTitle: t.title,
+      customSpeaker: t.speaker,
+      isCustom: false,
+      activeDemoKey: t.demoKey
+    };
+
+    setStageYoutubeConfigs((prev) => {
+      const next = { ...prev, [targetStageId]: updatedCfg };
+      saveStoredStageYoutubeConfigs(next);
+      return next;
+    });
+
     try {
       await updateStageApi(targetStageId, {
         talkTitle: t.title,
         speaker: t.speaker,
         track: t.tag
       });
-      if (isDemoSyncRunning) {
+      const stg = stages.find(s => s.id === targetStageId);
+      if (stg?.isLive && (stg.currentAudioSource === 'demo' || stg.currentAudioSource === 'stream')) {
         await handleTriggerDemo(targetStageId, t.demoKey);
       }
     } catch (err: any) {
@@ -1271,7 +1365,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
         stopTabAudioCapture();
       }
       setIsDemoSyncRunning(true);
-      if (demoKey === activeSyncDemoKey) {
+      const isYoutubeStreamDemo = demoKey && stageYoutubeConfigs[stageId]?.activeDemoKey === demoKey;
+      if (isYoutubeStreamDemo) {
         setSyncingYoutubeStageId(stageId);
         updateStageSourceKind(stageId, 'youtube');
       } else {
@@ -1279,7 +1374,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
       }
       setStageAudioSource((prev) => ({
         ...prev,
-        [stageId]: demoKey === activeSyncDemoKey ? 'stream' : 'demo'
+        [stageId]: isYoutubeStreamDemo ? 'stream' : 'demo'
       }));
       await triggerDemo(stageId, demoKey);
       if (wsClient) {
@@ -1386,7 +1481,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
       if (isRecording && selectedStageId === stageId) {
         stopMicStreaming(stageId);
       }
-      await handleTriggerDemo(stageId, activeSyncDemoKey);
+      const targetDemoKey = stageYoutubeConfigs[stageId]?.activeDemoKey || 'talk-yt-peladonerd';
+      await handleTriggerDemo(stageId, targetDemoKey);
     } else if (source === 'demo') {
       if (isRecording && selectedStageId === stageId) {
         stopMicStreaming(stageId);
@@ -2018,8 +2114,11 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       )}
                     </div>
                     <div className="text-white font-bold truncate">
-                      {YOUTUBE_NERDEARLA_TALKS.find((t) => t.demoKey === activeSyncDemoKey)?.title ||
-                        'Video YouTube Sincronizado'}
+                      {stageYoutubeConfigs[stage.id]?.isCustom
+                        ? (stageYoutubeConfigs[stage.id]?.customTitle || 'Video YouTube Personalizado')
+                        : (YOUTUBE_NERDEARLA_TALKS.find((t) => t.id === stageYoutubeConfigs[stage.id]?.videoId)?.title ||
+                           stage.talkTitle ||
+                           'Video YouTube Sincronizado')}
                     </div>
                   </div>
                 )}
@@ -2328,9 +2427,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
                         type="button"
                         onClick={() => {
                           setYoutubeTargetStageId(stg.id);
-                          if (isDemoSyncRunning) {
-                            handleTriggerDemo(stg.id, activeSyncDemoKey);
-                          }
                         }}
                         className={`p-2.5 rounded-lg border text-left transition-all flex flex-col justify-between ${
                           isTarget
@@ -2401,7 +2497,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {YOUTUBE_NERDEARLA_TALKS.map((t) => {
-                    const isSelected = !isCustomVideo && youtubeVideoId === t.id;
+                    const isSelected = !currentYoutubeConfig.isCustom && currentYoutubeConfig.videoId === t.id;
                     return (
                       <button
                         key={t.id}
@@ -2463,10 +2559,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
                 <div className="flex items-center justify-between pt-1">
                   <div className="text-[10px] font-mono text-gray-400">
-                    {isCustomVideo ? (
+                    {currentYoutubeConfig.isCustom ? (
                       <span className="text-emerald-400 font-bold">✓ Modo video personalizado activo (sin textos pregrabados)</span>
                     ) : (
-                      <span>Cargá tu propio video y transcribilo en tiempo real</span>
+                      <span>Cargá un video distinto para cada sala y transcribilo en tiempo real</span>
                     )}
                   </div>
                   <button
@@ -2474,7 +2570,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                     className="px-4 py-2 bg-[#141b29] hover:bg-[#1e273b] border border-[#00f5ff] text-[#00f5ff] text-xs font-mono font-bold rounded-lg flex items-center gap-1.5 shrink-0 transition-all shadow-[0_0_10px_rgba(0,245,255,0.2)] hover:shadow-[0_0_15px_rgba(0,245,255,0.4)]"
                   >
                     <Play className="w-3.5 h-3.5" />
-                    <span>CARGAR VIDEO Y ACTUALIZAR SALA</span>
+                    <span>CARGAR EN {youtubeTargetStage.name.toUpperCase()}</span>
                   </button>
                 </div>
 
@@ -2491,14 +2587,14 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 <div className="flex items-center gap-2 truncate">
                   <span className="text-[#00f5ff] font-bold">EN SALA ({youtubeTargetStage.name}):</span>
                   <span className="text-white font-bold truncate">
-                    {isCustomVideo
-                      ? (customVideoTitle || youtubeTargetStage.talkTitle || 'Video YouTube en Vivo')
-                      : (youtubeTargetStage.talkTitle || 'Charla')}
+                    {currentYoutubeConfig.isCustom
+                      ? (currentYoutubeConfig.customTitle || youtubeTargetStage.talkTitle || 'Video YouTube en Vivo')
+                      : (youtubeTargetStage.talkTitle || currentYoutubeConfig.customTitle || 'Charla')}
                   </span>
                   <span className="text-gray-400 truncate">
-                    • {isCustomVideo
-                      ? (customVideoSpeaker || youtubeTargetStage.speaker || 'Orador')
-                      : (youtubeTargetStage.speaker || 'Orador')}
+                    • {currentYoutubeConfig.isCustom
+                      ? (currentYoutubeConfig.customSpeaker || youtubeTargetStage.speaker || 'Orador')
+                      : (youtubeTargetStage.speaker || currentYoutubeConfig.customSpeaker || 'Orador')}
                   </span>
                 </div>
                 <button
@@ -2522,7 +2618,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               <div className="relative aspect-video rounded-xl overflow-hidden border-2 border-[#1c2436] bg-black shadow-inner">
                 <iframe
                   className="w-full h-full"
-                  src={`https://www.youtube-nocookie.com/embed/${youtubeVideoId}?enablejsapi=1&rel=0`}
+                  src={`https://www.youtube-nocookie.com/embed/${currentYoutubeConfig.videoId}?enablejsapi=1&rel=0`}
                   title="Nerdearla Talk YouTube Player"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowFullScreen
@@ -2533,7 +2629,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                 <div className="flex flex-wrap items-center gap-2">
                   {/* If custom video: offer real tab audio capture & mic streaming */}
-                  {isCustomVideo || !activeSyncDemoKey ? (
+                  {currentYoutubeConfig.isCustom || !currentYoutubeConfig.activeDemoKey ? (
                     <>
                       <button
                         type="button"
@@ -2590,16 +2686,22 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       <button
                         type="button"
                         onClick={async () => {
-                          if (isDemoSyncRunning) {
+                          const isCurrentlyLive = Boolean(
+                            (youtubeTargetStage.isLive && (youtubeTargetStage.currentAudioSource === 'demo' || youtubeTargetStage.currentAudioSource === 'stream')) ||
+                            syncingYoutubeStageId === youtubeTargetStage.id
+                          );
+                          if (isCurrentlyLive) {
                             await handleStopStage(youtubeTargetStage.id);
                             setIsDemoSyncRunning(false);
                             setSyncingYoutubeStageId(null);
                           } else {
-                            await handleTriggerDemo(youtubeTargetStage.id, activeSyncDemoKey);
+                            setIsDemoSyncRunning(true);
+                            setSyncingYoutubeStageId(youtubeTargetStage.id);
+                            await handleTriggerDemo(youtubeTargetStage.id, currentYoutubeConfig.activeDemoKey);
                           }
                         }}
                         className={`px-3.5 py-2 text-xs font-mono font-bold rounded-lg flex items-center gap-2 transition-all ${
-                          isDemoSyncRunning
+                          Boolean((youtubeTargetStage.isLive && (youtubeTargetStage.currentAudioSource === 'demo' || youtubeTargetStage.currentAudioSource === 'stream')) || syncingYoutubeStageId === youtubeTargetStage.id)
                             ? 'bg-[#ff1744] hover:bg-[#ff1744]/90 text-white shadow-[0_0_15px_rgba(255,23,68,0.5)] animate-pulse'
                             : 'hardware-btn-active bg-[#141b29] text-[#00f5ff] hover:shadow-[0_0_15px_rgba(0,245,255,0.4)] border border-[#00f5ff]/60'
                         }`}
@@ -2607,7 +2709,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       >
                         <Sparkles className="w-3.5 h-3.5" />
                         <span>
-                          {isDemoSyncRunning
+                          {Boolean((youtubeTargetStage.isLive && (youtubeTargetStage.currentAudioSource === 'demo' || youtubeTargetStage.currentAudioSource === 'stream')) || syncingYoutubeStageId === youtubeTargetStage.id)
                             ? `🛑 DETENER EN ${youtubeTargetStage.name.toUpperCase()}`
                             : `🚀 SINCRONIZAR DEMO EN ${youtubeTargetStage.name.toUpperCase()}`}
                         </span>
@@ -2647,7 +2749,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 </div>
 
                 <a
-                  href={`https://www.youtube.com/watch?v=${youtubeVideoId}`}
+                  href={`https://www.youtube.com/watch?v=${currentYoutubeConfig.videoId}`}
                   target="_blank"
                   rel="noreferrer"
                   className="text-[10px] font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1 hover:underline"

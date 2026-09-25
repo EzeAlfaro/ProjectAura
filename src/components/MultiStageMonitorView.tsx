@@ -49,8 +49,49 @@ export const MultiStageMonitorView: React.FC<MultiStageMonitorViewProps> = ({
   activeEngine = 'native-offline'
 }) => {
   const [globalLang, setGlobalLang] = useState<SupportedLanguage>('es');
+  const [stageLangs, setStageLangs] = useState<Record<string, SupportedLanguage>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('aura_multiview_stage_langs');
+        if (raw) return JSON.parse(raw);
+      } catch (e) {}
+    }
+    return {
+      'stage-1': 'es',
+      'stage-2': 'en',
+      'stage-3': 'pt'
+    };
+  });
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [allStageChunks, setAllStageChunks] = useState<Record<string, SubtitleChunk[]>>({});
+
+  const handleSetStageLang = (stageId: string, lang: SupportedLanguage) => {
+    setStageLangs((prev) => {
+      const next = { ...prev, [stageId]: lang };
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('aura_multiview_stage_langs', JSON.stringify(next));
+        } catch (e) {}
+      }
+      return next;
+    });
+  };
+
+  const handleSetAllStagesLang = (lang: SupportedLanguage) => {
+    setGlobalLang(lang);
+    setStageLangs((prev) => {
+      const next: Record<string, SupportedLanguage> = { ...prev };
+      stages.forEach((s) => {
+        next[s.id] = lang;
+      });
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('aura_multiview_stage_langs', JSON.stringify(next));
+        } catch (e) {}
+      }
+      return next;
+    });
+  };
 
   // Fullscreen change listener
   useEffect(() => {
@@ -117,7 +158,8 @@ export const MultiStageMonitorView: React.FC<MultiStageMonitorViewProps> = ({
   // Open all stages in separate browser tabs
   const handleOpenAllTabs = () => {
     stages.forEach((stg) => {
-      window.open(`/?view=kiosk&stage=${stg.id}&lang=${globalLang}`, '_blank');
+      const sLang = stageLangs[stg.id] || globalLang;
+      window.open(`/?view=kiosk&stage=${stg.id}&lang=${sLang}`, '_blank');
     });
   };
 
@@ -246,8 +288,9 @@ export const MultiStageMonitorView: React.FC<MultiStageMonitorViewProps> = ({
 
           {/* Right: Actions & Language Selector */}
           <div className="flex items-center gap-2 w-full md:w-auto justify-end flex-wrap">
-            {/* Global Language Selector */}
-            <div className="flex items-center bg-[#070910] p-0.5 rounded-lg border border-[#1d263b] font-mono text-xs font-bold">
+            {/* Global Language Batch Preset */}
+            <div className="flex items-center gap-1.5 bg-[#070910] px-2 py-1 rounded-lg border border-[#1d263b] font-mono text-xs">
+              <span className="text-[10px] text-gray-400 font-bold uppercase hidden xl:inline">TODAS:</span>
               {[
                 { id: 'es', flag: '🇦🇷', label: 'ES' },
                 { id: 'en', flag: '🇬🇧', label: 'EN' },
@@ -255,13 +298,13 @@ export const MultiStageMonitorView: React.FC<MultiStageMonitorViewProps> = ({
               ].map(lang => (
                 <button
                   key={lang.id}
-                  onClick={() => setGlobalLang(lang.id as SupportedLanguage)}
-                  className={`px-2.5 py-1 rounded transition-all flex items-center gap-1 ${
+                  onClick={() => handleSetAllStagesLang(lang.id as SupportedLanguage)}
+                  className={`px-2 py-0.5 rounded transition-all flex items-center gap-1 ${
                     globalLang === lang.id
                       ? 'bg-[#00f5ff] text-black font-black shadow-[0_0_8px_rgba(0,245,255,0.4)]'
                       : 'text-gray-400 hover:text-white'
                   }`}
-                  title={`Ver todas las salas en ${lang.label}`}
+                  title={`Cambiar todas las salas a ${lang.label}`}
                 >
                   <span>{lang.flag}</span>
                   <span>{lang.label}</span>
@@ -352,26 +395,56 @@ export const MultiStageMonitorView: React.FC<MultiStageMonitorViewProps> = ({
                   </div>
                 </div>
 
-                {/* Subtitle Telemetry & Live Audio Meter */}
-                <div className="px-3.5 py-2 bg-[#090c14] border-b border-[#171e30] flex items-center justify-between text-[11px] font-mono">
+                {/* Subtitle Telemetry, Independent Language & Live Audio Meter */}
+                <div className="px-3.5 py-2 bg-[#090c14] border-b border-[#171e30] flex items-center justify-between text-[11px] font-mono gap-2 flex-wrap">
                   {/* Assigned Audio Input Badge */}
-                  <div className="flex items-center gap-1.5 text-gray-400 truncate max-w-[200px]">
+                  <div className="flex items-center gap-1.5 text-gray-400 truncate max-w-[140px]">
                     <Mic className="w-3 h-3 text-[#00f5ff] shrink-0" />
                     <span className="truncate" title={stg.assignedDeviceLabel || 'Entrada de Audio Mini-PC'}>
-                      {stg.assignedDeviceLabel || 'Jack 3.5mm / USB Line-In'}
+                      {stg.assignedDeviceLabel || 'Audio Line-In'}
                     </span>
+                  </div>
+
+                  {/* Independent Language Selector per Stage */}
+                  <div className="flex items-center gap-1 bg-[#070910] p-0.5 rounded-lg border border-[#1e273c] text-[10px] font-mono font-bold">
+                    {[
+                      { id: 'es', flag: '🇦🇷', label: 'ES' },
+                      { id: 'en', flag: '🇬🇧', label: 'EN' },
+                      { id: 'pt', flag: '🇧🇷', label: 'PT' }
+                    ].map(l => {
+                      const isSelected = (stageLangs[stg.id] || 'es') === l.id;
+                      return (
+                        <button
+                          key={l.id}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSetStageLang(stg.id, l.id as SupportedLanguage);
+                          }}
+                          className={`px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5 ${
+                            isSelected
+                              ? 'bg-[#00f5ff] text-black font-black shadow-[0_0_6px_rgba(0,245,255,0.4)]'
+                              : 'text-gray-400 hover:text-white'
+                          }`}
+                          title={`Subtítulos de ${stg.name} en ${l.label}`}
+                        >
+                          <span>{l.flag}</span>
+                          <span>{l.label}</span>
+                        </button>
+                      );
+                    })}
                   </div>
 
                   {/* Live Audio Level dBFS Meter */}
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] text-gray-400">VU:</span>
-                    <div className="w-16 bg-[#121626] h-2 rounded-full overflow-hidden">
+                    <div className="w-14 bg-[#121626] h-2 rounded-full overflow-hidden">
                       <div 
                         className={`h-full transition-all duration-100 ${stg.audioLevel && stg.audioLevel > 80 ? 'bg-red-500' : 'bg-emerald-400'}`}
                         style={{ width: `${Math.min(100, (stg.audioLevel || 0))}%` }}
                       />
                     </div>
-                    <span className="text-[10px] text-gray-300 w-7 text-right">
+                    <span className="text-[10px] text-gray-300 w-6 text-right">
                       {stg.audioLevel ? `${stg.audioLevel}%` : '0%'}
                     </span>
                   </div>
@@ -392,7 +465,8 @@ export const MultiStageMonitorView: React.FC<MultiStageMonitorViewProps> = ({
                   ) : (
                     recentChunks.map((chunk, idx) => {
                       const isLatest = idx === recentChunks.length - 1;
-                      const text = getChunkText(chunk, globalLang);
+                      const stageLang = stageLangs[stg.id] || globalLang || 'es';
+                      const text = getChunkText(chunk, stageLang);
 
                       return (
                         <div 
@@ -435,7 +509,7 @@ export const MultiStageMonitorView: React.FC<MultiStageMonitorViewProps> = ({
                   <div className="flex items-center gap-1">
                     {/* Launch Kiosk in New Tab */}
                     <a
-                      href={`/?view=kiosk&stage=${stg.id}&lang=${globalLang}`}
+                      href={`/?view=kiosk&stage=${stg.id}&lang=${stageLangs[stg.id] || globalLang || 'es'}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="px-2 py-1 bg-[#121626] hover:bg-[#1a2238] border border-[#232f48] hover:border-[#00f5ff] rounded text-[11px] font-mono font-bold text-gray-200 hover:text-white flex items-center gap-1 transition-all"
@@ -448,7 +522,7 @@ export const MultiStageMonitorView: React.FC<MultiStageMonitorViewProps> = ({
 
                     {/* Launch OBS Overlay in New Tab */}
                     <a
-                      href={`/overlay?stage=${stg.id}&lang=${globalLang}`}
+                      href={`/overlay?stage=${stg.id}&lang=${stageLangs[stg.id] || globalLang || 'es'}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="px-2 py-1 bg-[#121626] hover:bg-[#1a2238] border border-[#232f48] hover:border-red-500 rounded text-[11px] font-mono font-bold text-gray-200 hover:text-white flex items-center gap-1 transition-all"
@@ -461,7 +535,7 @@ export const MultiStageMonitorView: React.FC<MultiStageMonitorViewProps> = ({
 
                     {/* Launch Mobile Audience View in New Tab */}
                     <a
-                      href={`/?view=audience&stage=${stg.id}&lang=${globalLang}`}
+                      href={`/?view=audience&stage=${stg.id}&lang=${stageLangs[stg.id] || globalLang || 'es'}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="px-2 py-1 bg-[#121626] hover:bg-[#1a2238] border border-[#232f48] hover:border-emerald-500 rounded text-[11px] font-mono font-bold text-gray-200 hover:text-white flex items-center gap-1 transition-all"
@@ -476,8 +550,8 @@ export const MultiStageMonitorView: React.FC<MultiStageMonitorViewProps> = ({
                   <div className="flex items-center gap-1">
                     {/* Quick Download SRT */}
                     <a
-                      href={`/api/stages/${stg.id}/export/srt?lang=${globalLang}`}
-                      download={`nerdsub-${stg.id}-${globalLang}.srt`}
+                      href={`/api/stages/${stg.id}/export/srt?lang=${stageLangs[stg.id] || globalLang || 'es'}`}
+                      download={`nerdsub-${stg.id}-${stageLangs[stg.id] || globalLang || 'es'}.srt`}
                       className="p-1 rounded bg-[#101422] hover:bg-[#182035] border border-[#232d45] hover:border-emerald-400 text-gray-300 hover:text-emerald-400 transition-all"
                       title="Descargar subtítulos .SRT sincronizados de esta sala"
                     >
