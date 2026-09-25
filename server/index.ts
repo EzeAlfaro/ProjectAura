@@ -283,6 +283,15 @@ app.post('/api/stages', requireAdminAuth, (req: Request, res: Response) => {
   res.status(201).json({ stage: newStage });
 });
 
+// Delete Stage
+app.delete('/api/stages/:id', requireAdminAuth, (req: Request, res: Response) => {
+  const success = stageManager.deleteStage(req.params.id);
+  if (!success) {
+    return res.status(400).json({ error: 'No se puede eliminar la sala (debe quedar al menos una o no existe).' });
+  }
+  res.json({ success: true, message: `Sala ${req.params.id} eliminada con éxito` });
+});
+
 // Start Demo on Stage
 app.post('/api/stages/:id/demo/:talkId', requireAdminAuth, (req: Request, res: Response) => {
   const { id, talkId } = req.params;
@@ -541,6 +550,24 @@ app.post('/api/stages/:id/questions/:questionId/status', requireAdminAuth, (req:
   });
   logger.info('stage', `Question ${questionId} updated to status '${status}' on stage ${id}`);
   res.json({ question: q });
+});
+
+// Clear all questions for a stage (Operator Panic/Reset)
+app.delete('/api/stages/:id/questions', requireAdminAuth, (req: Request, res: Response) => {
+  const { id } = req.params;
+  qaManager.clearStageQuestions(id);
+  stageManager.broadcastToStage(id, {
+    type: 'qa_cleared',
+    stageId: id
+  });
+  res.json({ success: true, message: `Preguntas de la sala ${id} eliminadas con éxito` });
+});
+
+// Seed demo questions for a stage (Operator Demo Request)
+app.post('/api/stages/:id/questions/seed', requireAdminAuth, (req: Request, res: Response) => {
+  const { id } = req.params;
+  qaManager.seedQuestionsForStage(id);
+  res.json({ success: true, message: `Preguntas demo cargadas para la sala ${id}` });
 });
 
 /* ========================================================

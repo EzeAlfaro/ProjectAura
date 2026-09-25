@@ -215,6 +215,29 @@ export class StageManager {
     return newStage;
   }
 
+  public deleteStage(id: string): boolean {
+    if (this.stages.size <= 1) {
+      return false;
+    }
+    const cleanId = id.trim().toLowerCase();
+    if (!this.stages.has(cleanId)) return false;
+
+    const timer = this.activeDemoTimers.get(cleanId);
+    if (timer) {
+      clearInterval(timer);
+      this.activeDemoTimers.delete(cleanId);
+    }
+
+    this.stages.delete(cleanId);
+    this.stageChunks.delete(cleanId);
+    this.stageTakeaways.delete(cleanId);
+    this.stageQuestions.delete(cleanId);
+    this.stageSummaries.delete(cleanId);
+    this.subscribers.delete(cleanId);
+    this.broadcastSystemUpdate();
+    return true;
+  }
+
   public getStageData(stageId: string): StageData | null {
     let stage = this.stages.get(stageId);
     if (!stage) {

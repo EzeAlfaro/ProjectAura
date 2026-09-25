@@ -67,6 +67,14 @@ export async function createStageApi(stageData: Partial<Stage>): Promise<{ stage
   return res.json();
 }
 
+export async function deleteStageApi(stageId: string): Promise<{ success: boolean; message?: string; error?: string }> {
+  const res = await fetch(`${API_BASE}/stages/${stageId}`, {
+    method: 'DELETE',
+    headers: { ...getAuthHeaders() },
+  });
+  return res.json();
+}
+
 export async function updateApiKey(apiKey: string, modelName?: string): Promise<{ success: boolean; geminiConfigured: boolean; model?: string; activeEngine?: string; keyPool?: any[] }> {
   const res = await fetch(`${API_BASE}/config/key`, {
     method: 'POST',
@@ -257,6 +265,22 @@ export async function triggerDeepIntel(stageId: string): Promise<any> {
   const res = await fetch(`${API_BASE}/stages/${stageId}/deep-intel`, {
     method: 'POST',
     headers: { ...getAuthHeaders() }
+  });
+  return res.json();
+}
+
+export async function clearStageQuestionsApi(stageId: string): Promise<{ success: boolean; message?: string }> {
+  const res = await fetch(`${API_BASE}/stages/${stageId}/questions`, {
+    method: 'DELETE',
+    headers: { ...getAuthHeaders() },
+  });
+  return res.json();
+}
+
+export async function seedStageQuestionsApi(stageId: string): Promise<{ success: boolean; message?: string }> {
+  const res = await fetch(`${API_BASE}/stages/${stageId}/questions/seed`, {
+    method: 'POST',
+    headers: { ...getAuthHeaders() },
   });
   return res.json();
 }

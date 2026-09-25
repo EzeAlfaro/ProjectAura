@@ -52,7 +52,10 @@ import {
   addGlossaryTerm, 
   fetchGlossary,
   getAdminToken,
-  setAdminToken
+  setAdminToken,
+  deleteStageApi,
+  clearStageQuestionsApi,
+  seedStageQuestionsApi
 } from '../services/api.js';
 import { 
   RackUnit, 
@@ -1814,10 +1817,35 @@ export const AdminView: React.FC<AdminViewProps> = ({
                     </span>
                     <span className="text-xs font-mono font-bold text-white uppercase">{stg.name}</span>
                   </div>
-                  <span className="flex items-center gap-1 text-[9px] font-mono text-[#00ff66]">
-                    <span className="w-2 h-2 rounded-full bg-[#00ff66] animate-pulse" />
-                    ONLINE
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="flex items-center gap-1 text-[9px] font-mono text-[#00ff66]">
+                      <span className="w-2 h-2 rounded-full bg-[#00ff66] animate-pulse" />
+                      ONLINE
+                    </span>
+                    {stages.length > 1 && (
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (window.confirm(`¿Estás seguro de eliminar la sala "${stg.name}" (${stg.id})?`)) {
+                            try {
+                              const res = await deleteStageApi(stg.id);
+                              if (res.success) {
+                                window.location.reload();
+                              } else {
+                                alert(res.error || 'No se pudo eliminar la sala');
+                              }
+                            } catch (err: any) {
+                              alert(`Error: ${err.message}`);
+                            }
+                          }
+                        }}
+                        className="p-1 rounded text-gray-500 hover:text-red-400 hover:bg-red-950/40 transition-colors ml-1"
+                        title={`Eliminar sala ${stg.name}`}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Telemetry info */}
@@ -1908,13 +1936,45 @@ export const AdminView: React.FC<AdminViewProps> = ({
               ))}
             </div>
 
-            <button
-              onClick={fetchAdminQuestions}
-              className="text-[10px] text-gray-400 hover:text-white flex items-center gap-1 font-mono"
-            >
-              <RefreshCw className="w-3 h-3" />
-              <span>ACTUALIZAR COLA</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {adminQuestions.length > 0 && (
+                <button
+                  onClick={async () => {
+                    if (window.confirm('¿Deseas vaciar todas las preguntas de esta sala?')) {
+                      await clearStageQuestionsApi(selectedStageId);
+                      fetchAdminQuestions();
+                    }
+                  }}
+                  className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-1 font-mono px-2 py-1 rounded bg-red-950/30 border border-red-800/40 transition-colors"
+                  title="Vaciar lista de preguntas de este escenario"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>VACIAR PREGUNTAS</span>
+                </button>
+              )}
+
+              {adminQuestions.length === 0 && (
+                <button
+                  onClick={async () => {
+                    await seedStageQuestionsApi(selectedStageId);
+                    fetchAdminQuestions();
+                  }}
+                  className="text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-mono px-2 py-1 rounded bg-cyan-950/30 border border-cyan-800/40 transition-colors"
+                  title="Cargar preguntas de prueba para este escenario"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  <span>CARGAR PREGUNTAS DEMO</span>
+                </button>
+              )}
+
+              <button
+                onClick={fetchAdminQuestions}
+                className="text-[10px] text-gray-400 hover:text-white flex items-center gap-1 font-mono px-2 py-1 rounded bg-[#10141e] border border-[#202738] transition-colors"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>ACTUALIZAR COLA</span>
+              </button>
+            </div>
           </div>
 
           {/* Questions Grid */}

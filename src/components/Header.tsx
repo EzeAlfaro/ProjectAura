@@ -109,6 +109,17 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="text-[10px] hidden sm:inline">MIC</span>
             </button>
 
+            {/* Quick vMix/OBS Modal Button */}
+            {onOpenVMixModal && (
+              <button
+                onClick={onOpenVMixModal}
+                className="p-2 rounded-lg bg-[#10141e] border border-[#222a3d] text-[#00f5ff] hover:text-white"
+                title="Generador de links vMix y OBS Studio"
+              >
+                <Tv className="w-4 h-4" />
+              </button>
+            )}
+
             {/* Quick Themes Button */}
             {onOpenThemeModal && (
               <button
@@ -255,6 +266,18 @@ export const Header: React.FC<HeaderProps> = ({
                 <Tv className="w-3.5 h-3.5 text-[#ff1744]" />
                 <span>TRANSMISIÓN & TV</span>
               </button>
+
+              {/* 4. GENERADOR LINKS vMIX / OBS */}
+              {onOpenVMixModal && (
+                <button
+                  onClick={onOpenVMixModal}
+                  className="hardware-btn flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-mono font-bold text-[#00f5ff] hover:text-white border border-[#00f5ff]/40 bg-[#00f5ff]/10 transition-all"
+                  title="Generador de links y overlays por sala para vMix y OBS Studio"
+                >
+                  <Tv className="w-3.5 h-3.5 text-[#00f5ff]" />
+                  <span>LINKS vMIX / OBS</span>
+                </button>
+              )}
             </nav>
 
             {/* Right Console Actions: Mic, Manual, Agenda, Temas, Motor AI */}

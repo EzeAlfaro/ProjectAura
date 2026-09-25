@@ -245,30 +245,23 @@ export const MobileMicView: React.FC<MobileMicViewProps> = ({
 
       <div className="flex-1 max-w-md w-full mx-auto p-4 flex flex-col justify-between space-y-4">
         
-        {/* Stage Selector Pill */}
-        <div className="space-y-1.5">
-          <label className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider">
-            TRANSMITIR AUDIO A LA SALA:
-          </label>
-          <div className="grid grid-cols-3 gap-2">
-            {stages.map((st, idx) => {
-              const isSelected = st.id === selectedStageId;
-              return (
-                <button
-                  key={st.id}
-                  onClick={() => onSelectStage(st.id)}
-                  className={`p-2.5 rounded-xl border text-center transition-all ${
-                    isSelected
-                      ? 'bg-cyan-950/80 border-cyan-400 text-white shadow-[0_0_12px_rgba(0,245,255,0.25)]'
-                      : 'bg-[#0d1017] border-[#1e2535] text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  <div className="text-[10px] font-mono text-cyan-400 font-bold">SALA 0{idx + 1}</div>
-                  <div className="text-xs font-bold truncate">{st.name.replace(/Escenario\s*/i, '')}</div>
-                </button>
-              );
-            })}
-          </div>
+        {/* Sala Destino (Selector Limpio & Directo) */}
+        <div className="bg-[#0d1017] border border-[#1b2230] p-2.5 rounded-xl flex items-center justify-between text-xs font-mono">
+          <span className="text-gray-400 font-bold flex items-center gap-1.5">
+            <Radio className="w-3.5 h-3.5 text-[#00f5ff]" />
+            SALA DESTINO:
+          </span>
+          <select
+            value={selectedStageId}
+            onChange={(e) => onSelectStage(e.target.value)}
+            className="bg-[#141926] border border-[#2a364a] text-white rounded-lg px-2.5 py-1 text-xs font-bold focus:outline-none focus:border-[#00f5ff] font-mono cursor-pointer"
+          >
+            {stages.map((st, idx) => (
+              <option key={st.id} value={st.id}>
+                CH 0{idx + 1}: {st.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Spoken Language Switch */}

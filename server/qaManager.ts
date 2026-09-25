@@ -4,14 +4,26 @@ export class QAManager {
   private questions: Map<string, AudienceQuestion> = new Map();
 
   constructor() {
-    this.seedDefaultQuestions();
+    if (process.env.SEED_DEMO_QUESTIONS === 'true') {
+      this.seedDefaultQuestions();
+    }
   }
 
-  private seedDefaultQuestions() {
+  public clearStageQuestions(stageId?: string) {
+    if (stageId) {
+      for (const [id, q] of this.questions.entries()) {
+        if (q.stageId === stageId) this.questions.delete(id);
+      }
+    } else {
+      this.questions.clear();
+    }
+  }
+
+  public seedQuestionsForStage(targetStageId: string = 'stage-1') {
     const seed: AudienceQuestion[] = [
       {
-        id: 'qa-1',
-        stageId: 'stage-1',
+        id: `qa-${Date.now()}-1`,
+        stageId: targetStageId,
         author: 'Nico @ Mercado Libre',
         text: '¿Cómo resolvieron el rebalanceo de particiones en Kafka cuando tienen picos de 5x tráfico sin frenar el flujo de eventos?',
         timestamp: Date.now() - 15 * 60 * 1000,
@@ -19,8 +31,8 @@ export class QAManager {
         status: 'approved'
       },
       {
-        id: 'qa-2',
-        stageId: 'stage-1',
+        id: `qa-${Date.now()}-2`,
+        stageId: targetStageId,
         author: 'Flor @ Sysarmy',
         text: 'Para eBPF: ¿tuvieron que actualizar la versión del kernel de Linux en todos los nodos de producción o usaron CO-RE (Compile Once - Run Everywhere)?',
         timestamp: Date.now() - 8 * 60 * 1000,
@@ -28,37 +40,22 @@ export class QAManager {
         status: 'on_stage'
       },
       {
-        id: 'qa-3',
-        stageId: 'stage-1',
+        id: `qa-${Date.now()}-3`,
+        stageId: targetStageId,
         author: 'Matías B.',
         text: '¿Qué latencia extra añade la validación de TLS post-cuántica en microservicios internos?',
         timestamp: Date.now() - 3 * 60 * 1000,
         votes: 7,
         status: 'pending'
-      },
-      {
-        id: 'qa-4',
-        stageId: 'stage-2',
-        author: 'Ana SRE',
-        text: '¿Cómo garantizan que Patroni no tenga split-brain si se cae un switch de red en el datacenter?',
-        timestamp: Date.now() - 12 * 60 * 1000,
-        votes: 15,
-        status: 'approved'
-      },
-      {
-        id: 'qa-5',
-        stageId: 'stage-3',
-        author: 'Lucas AI Dev',
-        text: '¿Recomiendan cuantización Q4_K_M o Q8_0 para mantener precisión técnica en Spanglish?',
-        timestamp: Date.now() - 10 * 60 * 1000,
-        votes: 19,
-        status: 'on_stage'
       }
     ];
-
     for (const q of seed) {
       this.questions.set(q.id, q);
     }
+  }
+
+  private seedDefaultQuestions() {
+    this.seedQuestionsForStage('stage-1');
   }
 
   public getByStage(stageId: string): AudienceQuestion[] {
