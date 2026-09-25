@@ -85,6 +85,7 @@ const DEEP_INSIGHTS_SCHEMA: Schema = {
 export class GeminiService {
   private client: GoogleGenAI | null = null;
   private apiKey: string | null = null;
+  private isKeyBlocked: boolean = false;
   private recentContext: Map<string, string[]> = new Map();
 
   constructor() {
@@ -93,6 +94,7 @@ export class GeminiService {
 
   public reloadKey() {
     this.apiKey = process.env.GEMINI_API_KEY || null;
+    this.isKeyBlocked = false;
     if (this.apiKey && this.apiKey.trim().length > 0) {
       try {
         this.client = new GoogleGenAI({ apiKey: this.apiKey });
@@ -108,7 +110,7 @@ export class GeminiService {
   }
 
   public isConfigured(): boolean {
-    return this.client !== null && !!this.apiKey;
+    return this.client !== null && !!this.apiKey && !this.isKeyBlocked;
   }
 
   public getApiKey(): string | null {
@@ -134,7 +136,7 @@ export class GeminiService {
     // 1. Detect technical terms locally first on the normalized text
     const detectedLocalTerms = extractTechTerms(cleanText);
 
-    if (this.client && this.apiKey) {
+    if (this.client && this.apiKey && !this.isKeyBlocked) {
       try {
         const prevContext = (this.recentContext.get(stageId) || []).slice(-2).join(' ');
         const contextLine = prevContext ? `Previous context: "${prevContext}". ` : '';
@@ -179,8 +181,13 @@ export class GeminiService {
           confidence: parsed.confidence || 0.98,
           isFinal: true
         };
-      } catch (err) {
-        console.warn('[GeminiService] Live text translation API call failed, using local translation:', err);
+      } catch (err: any) {
+        if (err?.message?.includes('API_KEY_SERVICE_BLOCKED') || err?.status === 403) {
+          console.warn('[GeminiService] API key blocked by Google Cloud (403: API_KEY_SERVICE_BLOCKED). Disabling cloud calls to prevent lag; using fast local engine.');
+          this.isKeyBlocked = true;
+        } else {
+          console.warn('[GeminiService] Live text translation API call failed, using local translation:', err);
+        }
       }
     }
 

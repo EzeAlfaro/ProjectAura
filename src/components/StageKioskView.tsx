@@ -82,6 +82,7 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
   const [showConfigDrawer, setShowConfigDrawer] = useState(false);
   const [watchdogStatus, setWatchdogStatus] = useState<'healthy' | 'recovering'>('healthy');
   const [deviceChangeNotice, setDeviceChangeNotice] = useState<string | null>(null);
+  const [localChunks, setLocalChunks] = useState<SubtitleChunk[]>([]);
 
   // Audio & Speech Recognition Refs
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -219,6 +220,22 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
 
     lastCommittedTextRef.current = clean;
     lastCommittedTimeRef.current = now;
+
+    // 1. Instant 0ms Native Local Display: Show subtitle on screen immediately!
+    const optimisticChunk: SubtitleChunk = {
+      id: `local-${now}`,
+      stageId: stage?.id || 'stage-1',
+      timestamp: now,
+      originalText: clean,
+      sourceLang: lang,
+      esText: clean,
+      enText: clean,
+      ptText: clean,
+      techTerms: [],
+      confidence: 0.99,
+      isFinal: true
+    };
+    setLocalChunks((prev) => [...prev.slice(-15), optimisticChunk]);
 
     if (onPushLiveTranscript) {
       onPushLiveTranscript(clean, lang);
@@ -592,12 +609,28 @@ export const StageKioskView: React.FC<StageKioskViewProps> = ({
 
   const activeDeviceLabel = audioDevices.find((d) => d.deviceId === selectedDeviceId)?.label || 'Entrada Predeterminada';
 
+  // Merge server chunks with optimistic local chunks for 0ms zero-lag instant feedback
+  const effectiveChunks = React.useMemo(() => {
+    if (localChunks.length === 0) return chunks;
+    const combined = [...chunks];
+    for (const lc of localChunks) {
+      const alreadyInServer = chunks.some(
+        (sc) => Math.abs(sc.timestamp - lc.timestamp) < 6000 ||
+        sc.originalText.toLowerCase().trim() === lc.originalText.toLowerCase().trim()
+      );
+      if (!alreadyInServer) {
+        combined.push(lc);
+      }
+    }
+    return combined.sort((a, b) => a.timestamp - b.timestamp);
+  }, [chunks, localChunks]);
+
   // In Classic mode, take only the last 2 chunks
-  const classicChunks = chunks.slice(-2);
+  const classicChunks = effectiveChunks.slice(-2);
 
   // Group chunks into coherent multi-word thoughts for clean teleprompter reading (Never display 1-word cards)
   const prompterGroups = React.useMemo(() => {
-    const raw = chunks.slice(-10);
+    const raw = effectiveChunks.slice(-10);
     const groups: { id: string; text: string; isLatest: boolean }[] = [];
     let currentText = '';
     let currentId = '';
