@@ -58,7 +58,7 @@ export function App() {
     const queryView = params.get('view');
     if (queryView === 'kiosk' || path.includes('kiosk') || params.has('kiosk')) {
       setCurrentView('kiosk');
-    } else if (queryView === 'overlay' || path.includes('overlay') || params.has('overlay') || window.location.hash.includes('overlay')) {
+    } else if (queryView === 'overlay' || queryView === 'tv' || params.get('mode') === 'tv' || params.has('tv') || path.includes('overlay') || path.includes('/tv') || params.has('overlay') || window.location.hash.includes('overlay')) {
       setCurrentView('overlay');
     } else if (queryView === 'mic' || path.includes('mic') || params.has('mic')) {
       setCurrentView('mic');
