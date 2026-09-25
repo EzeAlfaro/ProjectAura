@@ -16,6 +16,7 @@ import { logger } from './logger.js';
 import { scheduleManager } from './schedule.js';
 import { qaManager } from './qaManager.js';
 import { config } from './config.js';
+import { SAMPLE_TALKS } from './sampleAudios.js';
 
 dotenv.config();
 
@@ -290,6 +291,15 @@ app.delete('/api/stages/:id', requireAdminAuth, (req: Request, res: Response) =>
     return res.status(400).json({ error: 'No se puede eliminar la sala (debe quedar al menos una o no existe).' });
   }
   res.json({ success: true, message: `Sala ${req.params.id} eliminada con éxito` });
+});
+
+// Get Available Sample & YouTube Demo Talks
+app.get('/api/sample-talks', (_req: Request, res: Response) => {
+  const talks = Object.values(SAMPLE_TALKS).map(({ chunks, ...rest }) => ({
+    ...rest,
+    chunkCount: chunks.length
+  }));
+  res.json({ talks });
 });
 
 // Start Demo on Stage

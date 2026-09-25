@@ -43,7 +43,9 @@ import {
   Languages,
   Pin,
   ThumbsUp,
-  Key
+  Key,
+  Video,
+  ExternalLink
 } from 'lucide-react';
 import { 
   triggerDemo, 
@@ -95,6 +97,57 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [audioError, setAudioError] = useState<string | null>(null);
   const [glossaryTerms, setGlossaryTerms] = useState<TechTerm[]>([]);
   const [remoteReloadFeedback, setRemoteReloadFeedback] = useState<string | null>(null);
+
+  // YouTube Video Demo State & Presets
+  const [youtubeVideoId, setYoutubeVideoId] = useState<string>('IdOO3R_1F08'); // Default: Pelado Nerd K8s
+  const [customYoutubeUrl, setCustomYoutubeUrl] = useState<string>('');
+  const [activeSyncDemoKey, setActiveSyncDemoKey] = useState<string>('talk-yt-peladonerd');
+
+  const extractYoutubeId = (urlOrId: string): string | null => {
+    const clean = urlOrId.trim();
+    if (!clean) return null;
+    if (/^[a-zA-Z0-9_-]{11}$/.test(clean)) return clean;
+    const match = clean.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+    return match ? match[1] : null;
+  };
+
+  const handleLoadCustomYoutube = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const id = extractYoutubeId(customYoutubeUrl);
+    if (id) {
+      setYoutubeVideoId(id);
+      setCustomYoutubeUrl('');
+    } else {
+      window.alert('Enlace de YouTube no reconocido. Ingresá una URL válida como https://www.youtube.com/watch?v=... o https://youtu.be/...');
+    }
+  };
+
+  const YOUTUBE_NERDEARLA_TALKS = [
+    {
+      id: 'IdOO3R_1F08',
+      demoKey: 'talk-yt-peladonerd',
+      title: 'Pelado Nerd - Kubernetes en Prod',
+      speaker: 'Pablo Fredrikson',
+      tag: 'K8S & CLOUD',
+      color: '#00f5ff'
+    },
+    {
+      id: 'sIprvJ2i1lg',
+      demoKey: 'talk-yt-argorollouts',
+      title: 'Lucas Blanco - Argo Rollouts',
+      speaker: 'Lucas Blanco',
+      tag: 'DEVOPS & CI/CD',
+      color: '#00ff66'
+    },
+    {
+      id: 'iqVGWI1Y880',
+      demoKey: 'talk-yt-testingk8s',
+      title: 'Carlos Gauto - Testing K8s & Chaos',
+      speaker: 'Carlos Gauto',
+      tag: 'SRE & CHAOS',
+      color: '#ffb800'
+    }
+  ];
 
   // Audience Q&A Moderation State
   const [adminQuestions, setAdminQuestions] = useState<AudienceQuestion[]>([]);
@@ -1333,6 +1386,110 @@ export const AdminView: React.FC<AdminViewProps> = ({
                   <div className="text-xs font-bold text-white mt-0.5 truncate">Gemini Live Audio</div>
                   <div className="text-[9px] font-mono text-[#64748b]">Federico Balbi</div>
                 </button>
+              </div>
+            </div>
+
+            {/* REPRODUCTOR YOUTUBE & DEMOS DE CHARLAS NERDEARLA */}
+            <div className="p-3.5 bg-[#07090e] border-2 border-[#1c2436] rounded-xl space-y-3 shadow-xl">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#171b26] pb-2">
+                <span className="text-xs font-mono font-bold text-[#00f5ff] flex items-center gap-1.5 uppercase">
+                  <Video className="w-3.5 h-3.5 text-[#ff1744]" />
+                  REPRODUCTOR DE VIDEO YOUTUBE // DEMOS NERDEARLA
+                </span>
+                <span className="text-[10px] font-mono text-gray-400">
+                  Transmisión y Sincronización en Sala {currentStage.name}
+                </span>
+              </div>
+
+              {/* Preloaded Real Nerdearla Talks Selector */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {YOUTUBE_NERDEARLA_TALKS.map((t) => {
+                  const isSelected = youtubeVideoId === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => {
+                        setYoutubeVideoId(t.id);
+                        setActiveSyncDemoKey(t.demoKey);
+                      }}
+                      className={`p-2.5 rounded-lg text-left transition-all border font-mono ${
+                        isSelected
+                          ? 'bg-[#121c2d] border-[#00f5ff] text-white shadow-[0_0_8px_rgba(0,245,255,0.3)]'
+                          : 'bg-[#0a0d14] border-[#1b2230] text-gray-400 hover:text-white hover:border-gray-500'
+                      }`}
+                    >
+                      <div className="text-[9px] font-bold" style={{ color: t.color }}>{t.tag}</div>
+                      <div className="text-xs font-bold truncate mt-0.5">{t.title}</div>
+                      <div className="text-[9px] text-[#64748b]">{t.speaker}</div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Custom YouTube URL Form */}
+              <form onSubmit={handleLoadCustomYoutube} className="flex gap-2">
+                <input
+                  type="text"
+                  value={customYoutubeUrl}
+                  onChange={(e) => setCustomYoutubeUrl(e.target.value)}
+                  placeholder="Pegar enlace de YouTube (ej: https://www.youtube.com/watch?v=... o https://youtu.be/...)"
+                  className="flex-1 bg-[#0b0e15] border border-[#1e2535] rounded-lg px-3 py-1.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-[#00f5ff]"
+                />
+                <button
+                  type="submit"
+                  className="px-3 py-1.5 bg-[#141b29] hover:bg-[#1e273b] border border-[#00f5ff]/40 text-[#00f5ff] text-xs font-mono font-bold rounded-lg flex items-center gap-1.5 shrink-0 transition-all"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                  <span>CARGAR_VIDEO</span>
+                </button>
+              </form>
+
+              {/* Embedded 16:9 YouTube Player */}
+              <div className="relative aspect-video rounded-xl overflow-hidden border-2 border-[#1c2436] bg-black shadow-inner">
+                <iframe
+                  className="w-full h-full"
+                  src={`https://www.youtube-nocookie.com/embed/${youtubeVideoId}?enablejsapi=1&rel=0`}
+                  title="Nerdearla Talk YouTube Player"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                />
+              </div>
+
+              {/* Sync Controls & External Link */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleTriggerDemo(currentStage.id, activeSyncDemoKey)}
+                    className="hardware-btn-active px-3 py-1.5 bg-[#141b29] text-[#00f5ff] text-xs font-mono font-bold rounded-lg flex items-center gap-1.5 transition-all hover:shadow-[0_0_10px_rgba(0,245,255,0.4)]"
+                    title="Inicia el flujo de subtítulos y traducción simultánea para esta charla en la sala seleccionada"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-[#00f5ff]" />
+                    <span>SINCRONIZAR_SUBTÍTULOS_SALA</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleStopStage(currentStage.id)}
+                    className="hardware-btn px-2.5 py-1.5 text-xs font-mono font-bold text-gray-400 hover:text-red-400 rounded-lg flex items-center gap-1 transition-all"
+                    title="Detener subtítulos y audio de demo"
+                  >
+                    <Square className="w-3 h-3" />
+                    <span>DETENER</span>
+                  </button>
+                </div>
+
+                <a
+                  href={`https://www.youtube.com/watch?v=${youtubeVideoId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[10px] font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1 hover:underline"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  <span>Abrir en YouTube ↗</span>
+                </a>
+              </div>
+
+              <div className="text-[10px] font-mono text-[#64748b] bg-[#05070a] p-2.5 rounded-lg border border-[#141724] leading-relaxed">
+                💡 <span className="text-gray-300">Modo de Demostración & Jurado:</span> Podés reproducir el video directamente aquí con audio, o abrirlo en otra pestaña y usar <strong className="text-cyan-400">"Capturar Pestaña (PiP)"</strong> en la Pantalla de Sala para transcribir el audio en tiempo real con Gemini Live.
               </div>
             </div>
 

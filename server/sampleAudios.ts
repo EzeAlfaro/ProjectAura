@@ -8,6 +8,8 @@ export interface SampleTalk {
   speaker: string;
   sourceLang: 'en' | 'es';
   track: string;
+  youtubeId?: string;
+  youtubeUrl?: string;
   chunks: {
     originalText: string;
     esText: string;
@@ -223,6 +225,157 @@ export const SAMPLE_TALKS: Record<string, SampleTalk> = {
         enText: "By pairing low-latency streaming PCM with Gemini 2.5 Flash, we get instant multilingual translation without losing technical context.",
         ptText: "Ao combinar streaming PCM de baixa latência com o Gemini 2.5 Flash, obtemos tradução multilíngue instantânea sem perder o contexto técnico.",
         delayMs: 4100
+      }
+    ]
+  },
+
+  'talk-yt-peladonerd': {
+    id: 'talk-yt-peladonerd',
+    stageId: 'stage-1',
+    title: 'Kubernetes en Producción: Desmitificando Clusters y Microservicios',
+    speaker: 'Pablo Fredrikson (Pelado Nerd)',
+    sourceLang: 'es',
+    track: 'Escenario Principal (Keynote)',
+    youtubeId: 'IdOO3R_1F08',
+    youtubeUrl: 'https://www.youtube.com/watch?v=IdOO3R_1F08',
+    chunks: [
+      {
+        originalText: "Hola gente de Nerdearla, bienvenidos a esta charla sobre Kubernetes en producción sin morir en el intento.",
+        esText: "Hola gente de Nerdearla, bienvenidos a esta charla sobre Kubernetes en producción sin morir en el intento.",
+        enText: "Hello Nerdearla folks, welcome to this talk about Kubernetes in production without losing your mind.",
+        ptText: "Olá pessoal do Nerdearla, bem-vindos a esta palestra sobre Kubernetes em produção sem desespero.",
+        delayMs: 3400
+      },
+      {
+        originalText: "Cuando empezamos a trabajar con microservicios, el primer error es pensar que necesitamos cincuenta pods para una API simple.",
+        esText: "Cuando empezamos a trabajar con microservicios, el primer error es pensar que necesitamos cincuenta pods para una API simple.",
+        enText: "When we start working with microservices, the first mistake is thinking we need fifty pods for a simple API.",
+        ptText: "Quando começamos a trabalhar com microsserviços, o primeiro erro é achar que precisamos de cinquenta pods para uma API simples.",
+        delayMs: 3800
+      },
+      {
+        originalText: "Vamos a ver cómo configurar réplicas, límites de memoria y recursos en nuestros deployment manifests con YAML.",
+        esText: "Vamos a ver cómo configurar réplicas, límites de memoria y recursos en nuestros deployment manifests con YAML.",
+        enText: "Let's see how to configure replicas, memory limits, and resources in our YAML deployment manifests.",
+        ptText: "Vamos ver como configurar réplicas, limites de memória e recursos em nossos deployment manifests com YAML.",
+        delayMs: 3900
+      },
+      {
+        originalText: "Si un pod se queda sin memoria en el nodo, el OOMKilled de Linux lo va a matar instantáneamente.",
+        esText: "Si un pod se queda sin memoria en el nodo, el OOMKilled de Linux lo va a matar instantáneamente.",
+        enText: "If a pod runs out of memory on the node, the Linux OOMKilled mechanism will terminate it instantly.",
+        ptText: "Se um pod ficar sem memória no nó, o OOMKilled do Linux vai matá-lo instantaneamente.",
+        delayMs: 3600
+      },
+      {
+        originalText: "Implementamos probes de liveness y readiness para garantizar que el ingress controller no envíe tráfico a instancias caídas.",
+        esText: "Implementamos probes de liveness y readiness para garantizar que el ingress controller no envíe tráfico a instancias caídas.",
+        enText: "We implement liveness and readiness probes to guarantee that the ingress controller doesn't route traffic to unhealthy instances.",
+        ptText: "Implementamos probes de liveness e readiness para garantir que o ingress controller não envie tráfego para instâncias inoperantes.",
+        delayMs: 4000
+      },
+      {
+        originalText: "En conclusión: mantengan sus configuraciones simples, monitoreen con Prometheus y automaticen sus despliegues con GitOps.",
+        esText: "En conclusión: mantengan sus configuraciones simples, monitoreen con Prometheus y automaticen sus despliegues con GitOps.",
+        enText: "In conclusion: keep your configurations simple, monitor with Prometheus, and automate your deployments with GitOps.",
+        ptText: "Em conclusão: mantenham suas configurações simples, monitorem com Prometheus e automatizem seus deploys com GitOps.",
+        delayMs: 4200
+      }
+    ]
+  },
+
+  'talk-yt-argorollouts': {
+    id: 'talk-yt-argorollouts',
+    stageId: 'stage-2',
+    title: 'Argo Rollouts y Progressive Delivery en Entornos Críticos',
+    speaker: 'Lucas Blanco (Cloud & DevOps Architect)',
+    sourceLang: 'es',
+    track: 'Escenario Cloud & DevOps',
+    youtubeId: 'sIprvJ2i1lg',
+    youtubeUrl: 'https://www.youtube.com/watch?v=sIprvJ2i1lg',
+    chunks: [
+      {
+        originalText: "Buenas tardes a todos en Nerdearla. Hoy vamos a hablar de cómo implementar Argo Rollouts para progressive delivery.",
+        esText: "Buenas tardes a todos en Nerdearla. Hoy vamos a hablar de cómo implementar Argo Rollouts para progressive delivery.",
+        enText: "Good afternoon everyone at Nerdearla. Today we are talking about implementing Argo Rollouts for progressive delivery.",
+        ptText: "Boa tarde a todos no Nerdearla. Hoje vamos falar sobre como implementar Argo Rollouts para progressive delivery.",
+        delayMs: 3300
+      },
+      {
+        originalText: "El despliegue tradicional tipo recreación o rolling update estándar a veces no es suficiente para evitar caídas masivas en producción.",
+        esText: "El despliegue tradicional tipo recreación o rolling update estándar a veces no es suficiente para evitar caídas masivas en producción.",
+        enText: "Traditional deployment like recreation or standard rolling update is sometimes not enough to avoid massive outages in production.",
+        ptText: "O deploy tradicional do tipo recreação ou rolling update padrão às vezes não é suficiente para evitar quedas em massa na produção.",
+        delayMs: 3900
+      },
+      {
+        originalText: "Con Canary deployments podemos enviar sólo el cinco por ciento del tráfico de producción a la nueva versión candidata.",
+        esText: "Con Canary deployments podemos enviar sólo el cinco por ciento del tráfico de producción a la nueva versión candidata.",
+        enText: "With Canary deployments we can route just five percent of production traffic to the new candidate release.",
+        ptText: "Com Canary deployments podemos enviar apenas cinco por cento do tráfego de produção para a nova versão candidata.",
+        delayMs: 3800
+      },
+      {
+        originalText: "Si las métricas de error rate en Datadog o Prometheus aumentan, Argo ejecuta un rollback automático en milisegundos.",
+        esText: "Si las métricas de error rate en Datadog o Prometheus aumentan, Argo ejecuta un rollback automático en milisegundos.",
+        enText: "If error rate metrics in Datadog or Prometheus increase, Argo triggers an automated rollback in milliseconds.",
+        ptText: "Se as métricas de taxa de erro no Datadog ou Prometheus aumentarem, o Argo executa um rollback automático em milissegundos.",
+        delayMs: 4000
+      },
+      {
+        originalText: "Esto nos permite iterar con total confianza y sin riesgo de interrumpir el servicio a los usuarios finales.",
+        esText: "Esto nos permite iterar con total confianza y sin riesgo de interrumpir el servicio a los usuarios finales.",
+        enText: "This allows us to iterate with absolute confidence and without risk of disrupting service for end users.",
+        ptText: "Isso nos permite iterar com total confiança e sem risco de interromper o serviço aos usuários finais.",
+        delayMs: 3600
+      }
+    ]
+  },
+
+  'talk-yt-testingk8s': {
+    id: 'talk-yt-testingk8s',
+    stageId: 'stage-3',
+    title: 'Testing y Chaos Engineering en Clusters de Kubernetes',
+    speaker: 'Carlos Gauto (Lead SRE)',
+    sourceLang: 'es',
+    track: 'Escenario QA & SRE',
+    youtubeId: 'iqVGWI1Y880',
+    youtubeUrl: 'https://www.youtube.com/watch?v=iqVGWI1Y880',
+    chunks: [
+      {
+        originalText: "Hola comunidad. En esta sesión vamos a explorar cómo testear infraestructura antes de que llegue a producción.",
+        esText: "Hola comunidad. En esta sesión vamos a explorar cómo testear infraestructura antes de que llegue a producción.",
+        enText: "Hello community. In this session we will explore how to test infrastructure before it hits production.",
+        ptText: "Olá comunidade. Nesta sessão vamos explorar como testar infraestrutura antes de chegar em produção.",
+        delayMs: 3400
+      },
+      {
+        originalText: "El testing moderno de contenedores va mucho más allá de simples pruebas unitarias en el pipeline de CI.",
+        esText: "El testing moderno de contenedores va mucho más allá de simples pruebas unitarias en el pipeline de CI.",
+        enText: "Modern container testing goes far beyond simple unit tests inside the CI pipeline.",
+        ptText: "O teste moderno de contêineres vai muito além de simples testes unitários na esteira de CI.",
+        delayMs: 3700
+      },
+      {
+        originalText: "Utilizamos Chaos Mesh para inyectar fallas de red, latencia de disco y caída aleatoria de nodos y pods.",
+        esText: "Utilizamos Chaos Mesh para inyectar fallas de red, latencia de disco y caída aleatoria de nodos y pods.",
+        enText: "We use Chaos Mesh to inject network failures, disk latency, and random node or pod termination.",
+        ptText: "Utilizamos Chaos Mesh para injetar falhas de rede, latência de disco e queda aleatória de nós e pods.",
+        delayMs: 3800
+      },
+      {
+        originalText: "Así descubrimos cuellos de botella antes de que un evento con miles de usuarios concurrentes colapse la plataforma.",
+        esText: "Así descubrimos cuellos de botella antes de que un evento con miles de usuarios concurrentes colapse la plataforma.",
+        enText: "That's how we discover bottlenecks before a massive event with thousands of concurrent users crashes the platform.",
+        ptText: "Assim descobrimos gargalos antes que um evento com milhares de usuários simultâneos colapse a plataforma.",
+        delayMs: 4100
+      },
+      {
+        originalText: "La resiliencia no se asume; se prueba empíricamente en cada commit y en cada despliegue.",
+        esText: "La resiliencia no se asume; se prueba empíricamente en cada commit y en cada despliegue.",
+        enText: "Resilience is never assumed; it is empirically proven on every commit and deployment.",
+        ptText: "A resiliência não se presume; é comprovada empiricamente em cada commit e em cada deploy.",
+        delayMs: 3500
       }
     ]
   }

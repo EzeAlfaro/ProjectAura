@@ -94,64 +94,20 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Quick Mobile Action Buttons */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             {/* Direct Switch to Emergency Mobile Mic */}
             <button
               onClick={() => onSelectView('mic')}
-              className={`p-2 rounded-lg text-xs font-mono font-bold flex items-center gap-1 transition-all border ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all border ${
                 currentView === 'mic'
                   ? 'bg-red-500/20 text-red-400 border-red-500 shadow-[0_0_8px_rgba(239,68,68,0.3)] animate-pulse'
-                  : 'bg-[#10141e] text-cyan-400 border-[#222a3d] hover:border-cyan-500/50'
+                  : 'bg-[#10141e] text-red-400 border-red-900/40 hover:border-red-500/50'
               }`}
-              title="Micrófono de Emergencia"
+              title="Micrófono Móvil de Emergencia"
             >
-              <Mic className="w-4 h-4" />
-              <span className="text-[10px] hidden sm:inline">MIC</span>
+              <Mic className="w-3.5 h-3.5" />
+              <span className="text-[11px]">MIC</span>
             </button>
-
-            {/* Quick vMix/OBS Modal Button */}
-            {onOpenVMixModal && (
-              <button
-                onClick={onOpenVMixModal}
-                className="p-2 rounded-lg bg-[#10141e] border border-[#222a3d] text-[#00f5ff] hover:text-white"
-                title="Generador de links vMix y OBS Studio"
-              >
-                <Tv className="w-4 h-4" />
-              </button>
-            )}
-
-            {/* Quick Themes Button */}
-            {onOpenThemeModal && (
-              <button
-                onClick={onOpenThemeModal}
-                className="p-2 rounded-lg bg-[#10141e] border border-[#222a3d] text-amber-400 hover:text-white"
-                title="Temas visuales"
-              >
-                <Palette className="w-4 h-4" />
-              </button>
-            )}
-
-            {/* Quick Schedule Button */}
-            {onOpenScheduleModal && (
-              <button
-                onClick={onOpenScheduleModal}
-                className="p-2 rounded-lg bg-[#10141e] border border-[#222a3d] text-cyan-300 hover:text-white"
-                title="Agenda de charlas"
-              >
-                <Calendar className="w-4 h-4" />
-              </button>
-            )}
-
-            {/* Quick Manual Button */}
-            {onOpenManualModal && (
-              <button
-                onClick={onOpenManualModal}
-                className="p-2 rounded-lg bg-[#10141e] border border-[#222a3d] text-cyan-300 hover:text-white"
-                title="Manual de Operaciones y Guía de Despliegue (Bilingüe)"
-              >
-                <BookOpen className="w-4 h-4" />
-              </button>
-            )}
 
             {/* Mobile Hamburger Toggle */}
             <button
@@ -266,21 +222,9 @@ export const Header: React.FC<HeaderProps> = ({
                 <Tv className="w-3.5 h-3.5 text-[#ff1744]" />
                 <span>TRANSMISIÓN & TV</span>
               </button>
-
-              {/* 4. GENERADOR LINKS vMIX / OBS */}
-              {onOpenVMixModal && (
-                <button
-                  onClick={onOpenVMixModal}
-                  className="hardware-btn flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-mono font-bold text-[#00f5ff] hover:text-white border border-[#00f5ff]/40 bg-[#00f5ff]/10 transition-all"
-                  title="Generador de links y overlays por sala para vMix y OBS Studio"
-                >
-                  <Tv className="w-3.5 h-3.5 text-[#00f5ff]" />
-                  <span>LINKS vMIX / OBS</span>
-                </button>
-              )}
             </nav>
 
-            {/* Right Console Actions: Mic, Manual, Agenda, Temas, Motor AI */}
+            {/* Right Console Actions: Mic, vMix/OBS, Manual, Agenda, Temas, Motor AI */}
             <div className="flex items-center gap-2">
               {/* Micrófono Móvil de Emergencia */}
               <button
@@ -293,6 +237,18 @@ export const Header: React.FC<HeaderProps> = ({
                 <Mic className="w-3.5 h-3.5 text-red-400" />
                 <span className="hidden xl:inline">MIC MÓVIL</span>
               </button>
+
+              {/* Generador Links vMix / OBS */}
+              {onOpenVMixModal && (
+                <button
+                  onClick={onOpenVMixModal}
+                  className="hardware-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-mono font-bold text-[#00f5ff] hover:text-white border border-[#00f5ff]/30 bg-[#00f5ff]/10 hover:bg-[#00f5ff]/20 transition-all"
+                  title="Generador de links y overlays por sala para vMix y OBS Studio"
+                >
+                  <Tv className="w-3.5 h-3.5 text-[#00f5ff]" />
+                  <span className="hidden xl:inline">vMIX / OBS</span>
+                </button>
+              )}
 
               {/* Manual de Operaciones */}
               {onOpenManualModal && (
@@ -453,6 +409,22 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
 
               <div className="space-y-2">
+                {onOpenVMixModal && (
+                  <button
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      onOpenVMixModal();
+                    }}
+                    className="w-full p-3 rounded-xl bg-[#121622] border border-[#00f5ff]/40 hover:border-[#00f5ff] text-left font-mono text-xs font-bold text-gray-200 flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Tv className="w-4 h-4 text-[#00f5ff]" />
+                      <span className="text-[#00f5ff]">Links vMix / OBS Studio por Sala</span>
+                    </div>
+                    <span className="text-gray-500">→</span>
+                  </button>
+                )}
+
                 {onOpenScheduleModal && (
                   <button
                     onClick={() => {
