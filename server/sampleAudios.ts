@@ -232,7 +232,7 @@ export const SAMPLE_TALKS: Record<string, SampleTalk> = {
   'talk-yt-peladonerd': {
     id: 'talk-yt-peladonerd',
     stageId: 'stage-1',
-    title: 'Kubernetes en Producción: Desmitificando Clusters y Microservicios',
+    title: 'Kubernetes: ¿Tu solución o tu problema?',
     speaker: 'Pablo Fredrikson (Pelado Nerd)',
     sourceLang: 'es',
     track: 'Escenario Principal (Keynote)',
@@ -240,46 +240,46 @@ export const SAMPLE_TALKS: Record<string, SampleTalk> = {
     youtubeUrl: 'https://www.youtube.com/watch?v=IdOO3R_1F08',
     chunks: [
       {
-        originalText: "Hola gente de Nerdearla, bienvenidos a esta charla sobre Kubernetes en producción sin morir en el intento.",
-        esText: "Hola gente de Nerdearla, bienvenidos a esta charla sobre Kubernetes en producción sin morir en el intento.",
-        enText: "Hello Nerdearla folks, welcome to this talk about Kubernetes in production without losing your mind.",
-        ptText: "Olá pessoal do Nerdearla, bem-vindos a esta palestra sobre Kubernetes em produção sem desespero.",
-        delayMs: 3400
-      },
-      {
-        originalText: "Cuando empezamos a trabajar con microservicios, el primer error es pensar que necesitamos cincuenta pods para una API simple.",
-        esText: "Cuando empezamos a trabajar con microservicios, el primer error es pensar que necesitamos cincuenta pods para una API simple.",
-        enText: "When we start working with microservices, the first mistake is thinking we need fifty pods for a simple API.",
-        ptText: "Quando começamos a trabalhar com microsserviços, o primeiro erro é achar que precisamos de cinquenta pods para uma API simples.",
+        originalText: "Buenas tardes a todos, bienvenidos. Hoy vamos a charlar sobre Kubernetes: ¿es realmente tu solución o se convirtió en tu problema?",
+        esText: "Buenas tardes a todos, bienvenidos. Hoy vamos a charlar sobre Kubernetes: ¿es realmente tu solución o se convirtió en tu problema?",
+        enText: "Good afternoon everyone, welcome. Today we're going to talk about Kubernetes: is it really your solution or has it become your problem?",
+        ptText: "Boa tarde a todos, bem-vindos. Hoje vamos falar sobre Kubernetes: é realmente sua solução ou se tornou o seu problema?",
         delayMs: 3800
       },
       {
-        originalText: "Vamos a ver cómo configurar réplicas, límites de memoria y recursos en nuestros deployment manifests con YAML.",
-        esText: "Vamos a ver cómo configurar réplicas, límites de memoria y recursos en nuestros deployment manifests con YAML.",
-        enText: "Let's see how to configure replicas, memory limits, and resources in our YAML deployment manifests.",
-        ptText: "Vamos ver como configurar réplicas, limites de memória e recursos em nossos deployment manifests com YAML.",
-        delayMs: 3900
-      },
-      {
-        originalText: "Si un pod se queda sin memoria en el nodo, el OOMKilled de Linux lo va a matar instantáneamente.",
-        esText: "Si un pod se queda sin memoria en el nodo, el OOMKilled de Linux lo va a matar instantáneamente.",
-        enText: "If a pod runs out of memory on the node, the Linux OOMKilled mechanism will terminate it instantly.",
-        ptText: "Se um pod ficar sem memória no nó, o OOMKilled do Linux vai matá-lo instantaneamente.",
-        delayMs: 3600
-      },
-      {
-        originalText: "Implementamos probes de liveness y readiness para garantizar que el ingress controller no envíe tráfico a instancias caídas.",
-        esText: "Implementamos probes de liveness y readiness para garantizar que el ingress controller no envíe tráfico a instancias caídas.",
-        enText: "We implement liveness and readiness probes to guarantee that the ingress controller doesn't route traffic to unhealthy instances.",
-        ptText: "Implementamos probes de liveness e readiness para garantir que o ingress controller não envie tráfego para instâncias inoperantes.",
+        originalText: "Muchas veces vemos equipos y empresas que quieren meter Kubernetes en producción simplemente porque es la tecnología de moda.",
+        esText: "Muchas veces vemos equipos y empresas que quieren meter Kubernetes en producción simplemente porque es la tecnología de moda.",
+        enText: "We often see teams and companies wanting to adopt Kubernetes in production simply because it's the trendy technology.",
+        ptText: "Muitas vezes vemos equipes e empresas querendo colocar o Kubernetes em produção só porque é a tecnologia da moda.",
         delayMs: 4000
       },
       {
-        originalText: "En conclusión: mantengan sus configuraciones simples, monitoreen con Prometheus y automaticen sus despliegues con GitOps.",
-        esText: "En conclusión: mantengan sus configuraciones simples, monitoreen con Prometheus y automaticen sus despliegues con GitOps.",
-        enText: "In conclusion: keep your configurations simple, monitor with Prometheus, and automate your deployments with GitOps.",
-        ptText: "Em conclusão: mantenham suas configurações simples, monitorem com Prometheus e automatizem seus deploys com GitOps.",
+        originalText: "Pero cuando empezás a gestionar clusters, te chocás con la complejidad operativa: etcd, ingress controllers, service mesh y networking.",
+        esText: "Pero cuando empezás a gestionar clusters, te chocás con la complejidad operativa: etcd, ingress controllers, service mesh y networking.",
+        enText: "But when you start managing clusters, you hit the operational complexity: etcd, ingress controllers, service mesh, and networking.",
+        ptText: "Mas quando você começa a gerenciar clusters, esbarra na complexidade operacional: etcd, ingress controllers, service mesh e networking.",
         delayMs: 4200
+      },
+      {
+        originalText: "Si tu aplicación es un monolito sencillo o tenés dos microservicios, probablemente un contenedor en Docker sea más que suficiente.",
+        esText: "Si tu aplicación es un monolito sencillo o tenés dos microservicios, probablemente un contenedor en Docker sea más que suficiente.",
+        enText: "If your application is a simple monolith or you have two microservices, a container in Docker is probably more than enough.",
+        ptText: "Se a sua aplicação for um monólito simples ou tiver dois microsserviços, provavelmente um contêiner no Docker seja mais do que suficiente.",
+        delayMs: 4100
+      },
+      {
+        originalText: "Kubernetes tiene sentido cuando necesitás autoscaling real, alta disponibilidad distribuida y gestión declarativa a gran escala.",
+        esText: "Kubernetes tiene sentido cuando necesitás autoscaling real, alta disponibilidad distribuida y gestión declarativa a gran escala.",
+        enText: "Kubernetes makes sense when you need real autoscaling, distributed high availability, and declarative management at scale.",
+        ptText: "Kubernetes faz sentido quando você precisa de autoscaling real, alta disponibilidade distribuída e gestão declarativa em larga escala.",
+        delayMs: 4200
+      },
+      {
+        originalText: "La clave como ingenieros no es usar la herramienta más compleja, sino la arquitectura que mejor resuelve el problema del negocio.",
+        esText: "La clave como ingenieros no es usar la herramienta más compleja, sino la arquitectura que mejor resuelve el problema del negocio.",
+        enText: "The key as engineers is not using the most complex tool, but the architecture that best solves the business problem.",
+        ptText: "A chave como engenheiros não é usar a ferramenta mais complexa, mas a arquitetura que melhor resolve o problema do negócio.",
+        delayMs: 4300
       }
     ]
   },

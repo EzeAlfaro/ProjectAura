@@ -123,7 +123,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     'stage-1': {
       videoId: 'IdOO3R_1F08',
       customUrl: 'https://www.youtube.com/watch?v=IdOO3R_1F08',
-      customTitle: 'Pelado Nerd - Kubernetes en Prod',
+      customTitle: 'Pelado Nerd - Kubernetes: ¿Solución o Problema?',
       customSpeaker: 'Pablo Fredrikson',
       isCustom: false,
       activeDemoKey: 'talk-yt-peladonerd'
@@ -266,9 +266,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
     {
       id: 'IdOO3R_1F08',
       demoKey: 'talk-yt-peladonerd',
-      title: 'Pelado Nerd - Kubernetes en Prod',
+      title: 'Pelado Nerd - Kubernetes: ¿Solución o Problema?',
       speaker: 'Pablo Fredrikson',
-      tag: 'K8S & CLOUD',
+      tag: 'K8S & ARCHITECTURE',
       color: '#00f5ff'
     },
     {
@@ -1065,27 +1065,37 @@ export const AdminView: React.FC<AdminViewProps> = ({
       // 3. Launch resilient speech recognition
       createAndStartAdminRecognition();
 
-      // 4. MediaRecorder chunk backup
-      let mimeType = 'audio/webm;codecs=opus';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'audio/webm';
-      }
+      // 4. MediaRecorder chunk backup (audio-only stream wrapped safely)
+      try {
+        const audioTracks = stream.getAudioTracks();
+        if (audioTracks.length > 0 && typeof MediaRecorder !== 'undefined') {
+          const audioOnlyStream = new MediaStream(audioTracks);
+          let mimeType = 'audio/webm;codecs=opus';
+          if (!MediaRecorder.isTypeSupported(mimeType)) {
+            mimeType = 'audio/webm';
+          }
+          if (MediaRecorder.isTypeSupported(mimeType)) {
+            const mediaRecorder = new MediaRecorder(audioOnlyStream, { mimeType });
+            mediaRecorderRef.current = mediaRecorder;
 
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
-      mediaRecorderRef.current = mediaRecorder;
+            mediaRecorder.ondataavailable = async (event) => {
+              const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+              if (event.data && event.data.size > 0 && !SpeechRec) {
+                try {
+                  await uploadAudioChunk(targetStageId, event.data);
+                } catch (e: any) {
+                  console.warn('Audio chunk upload failed:', e);
+                }
+              }
+            };
 
-      mediaRecorder.ondataavailable = async (event) => {
-        const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (event.data && event.data.size > 0 && !SpeechRec) {
-          try {
-            await uploadAudioChunk(targetStageId, event.data);
-          } catch (e: any) {
-            console.warn('Audio chunk upload failed:', e);
+            mediaRecorder.start(4000);
           }
         }
-      };
+      } catch (mrErr) {
+        console.warn('[AdminView] MediaRecorder fallback warning (AudioWorklet & WebSpeech still active):', mrErr);
+      }
 
-      mediaRecorder.start(4000);
       setIsRecording(true);
     } catch (err: any) {
       setAudioError(`No se pudo acceder al micrófono: ${err.message}`);
@@ -1239,23 +1249,33 @@ export const AdminView: React.FC<AdminViewProps> = ({
         }
       }
 
-      // MediaRecorder fallback chunk ingest
-      let mimeType = 'audio/webm;codecs=opus';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'audio/webm';
-      }
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
-      tabMediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.ondataavailable = async (event) => {
-        if (event.data && event.data.size > 0) {
-          try {
-            await uploadAudioChunk(targetStageId, event.data);
-          } catch (e) {
-            console.warn('[AdminView] Tab chunk upload failed:', e);
+      // MediaRecorder fallback chunk ingest (audio-only stream wrapped safely)
+      try {
+        const audioTracks = stream.getAudioTracks();
+        if (audioTracks.length > 0 && typeof MediaRecorder !== 'undefined') {
+          const audioOnlyStream = new MediaStream(audioTracks);
+          let mimeType = 'audio/webm;codecs=opus';
+          if (!MediaRecorder.isTypeSupported(mimeType)) {
+            mimeType = 'audio/webm';
+          }
+          if (MediaRecorder.isTypeSupported(mimeType)) {
+            const mediaRecorder = new MediaRecorder(audioOnlyStream, { mimeType });
+            tabMediaRecorderRef.current = mediaRecorder;
+            mediaRecorder.ondataavailable = async (event) => {
+              if (event.data && event.data.size > 0) {
+                try {
+                  await uploadAudioChunk(targetStageId, event.data);
+                } catch (e) {
+                  console.warn('[AdminView] Tab chunk upload failed:', e);
+                }
+              }
+            };
+            mediaRecorder.start(4000);
           }
         }
-      };
-      mediaRecorder.start(4000);
+      } catch (mrErr) {
+        console.warn('[AdminView] Tab MediaRecorder fallback warning (AudioWorklet still active):', mrErr);
+      }
     } catch (err: any) {
       console.error('startTabAudioCapture error:', err);
       setAudioError(err.message || 'Error al capturar audio de pestaña');
